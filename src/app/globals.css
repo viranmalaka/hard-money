@@ -1,0 +1,78 @@
+@import "tailwindcss";
+
+:root {
+  --bg: #FFFFFF;
+  --surface: #F5F6F7;
+  --border: #E4E6E8;
+  --text: #1B1D1F;
+  --text-muted: #6B7075;
+  --accent: #E8505B;
+  --income: #2F6FDE;
+  --expense: #E5484D;
+  --transfer: #6B7075;
+  --warning: #D98E04;
+}
+
+.dark, [data-theme="dark"] {
+  --bg: #121212;
+  --surface: #1C1C1E;
+  --border: #2C2C2E;
+  --text: #ECECEC;
+  --text-muted: #9A9EA3;
+  --accent: #E8505B;
+  --income: #5B93F0;
+  --expense: #F06A6E;
+  --transfer: #9A9EA3;
+  --warning: #F0A92A;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #121212;
+    --surface: #1C1C1E;
+    --border: #2C2C2E;
+    --text: #ECECEC;
+    --text-muted: #9A9EA3;
+    --accent: #E8505B;
+    --income: #5B93F0;
+    --expense: #F06A6E;
+    --transfer: #9A9EA3;
+    --warning: #F0A92A;
+  }
+}
+
+body {
+  background-color: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+.text-income {
+  color: var(--income);
+}
+
+.text-expense {
+  color: var(--expense);
+}
+
+.text-transfer {
+  color: var(--transfer);
+}
+
+.text-warning {
+  color: var(--warning);
+}
+
+.bg-surface {
+  background-color: var(--surface);
+}
+
+.border-hairline {
+  border-color: var(--border);
+}
