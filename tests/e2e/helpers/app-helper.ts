@@ -16,6 +16,7 @@ export class AppHelper {
   async go(destination: NavDestination) {
     const isMobile = this.page.viewportSize() ? this.page.viewportSize()!.width < 768 : false;
 
+    const path = destination === "trans" ? "/" : `/${destination}`;
     if (isMobile) {
       const bottomTab = this.page.locator(`[data-testid="bottom-nav-${destination}"]`);
       await bottomTab.click();
@@ -23,6 +24,11 @@ export class AppHelper {
       const sidebarItem = this.page.locator(`[data-testid="sidebar-nav-${destination}"]`);
       await sidebarItem.click();
     }
+
+    await this.page.waitForURL((url) => {
+      const pathname = url.pathname;
+      return destination === "trans" ? pathname === "/" : pathname.startsWith(path);
+    });
   }
 
   /**

@@ -62,7 +62,7 @@
 | #   | Step                                                           | Spec refs               | Status |
 | --- | -------------------------------------------------------------- | ----------------------- | ------ |
 | 0   | Repo, tooling & test harness                                   | Sec 1, A (this doc)     | ☑      |
-| 1   | App shell & flat design system                                 | Sec 5.0                 | ☐      |
+| 1   | App shell & flat design system                                 | Sec 5.0                 | ☑      |
 | 2   | Auth & user settings                                           | Sec 1 (Auth), 3.A       | ☐      |
 | 3   | Offline data layer & sync engine (with Accounts/Categories)    | Sec 2.6, 2.7, 3.B, 4.S6 | ☐      |
 | 4   | Accounts & Categories management UI                            | Sec 3.B, 3.D            | ☐      |
