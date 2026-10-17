@@ -1,0 +1,68 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                           String            @id @default(uuid())
+  name                         String
+  email                        String            @unique
+  passwordHash                 String?
+  defaultCurrency              String            @default("LKR")
+  timezone                     String            @default("Asia/Colombo")
+  countryCode                  String?
+  defaultWithholdingTaxRateBps Int               @default(0)
+  apiKeyHash                   String?
+  apiKeyPrefix                 String?
+  geminiApiKeyEncrypted        String?
+  geminiModel                  String?
+  smsAutoPostMode              String            @default("AUTO_VALIDATED")
+  createdAt                    DateTime          @default(now())
+  updatedAt                    DateTime          @updatedAt
+
+  ownedHouseholds              Household[]       @relation("HouseholdOwner")
+  householdMembers             HouseholdMember[]
+  categories                   Category[]
+}
+
+model Household {
+  id        String            @id @default(uuid())
+  name      String
+  ownerId   String
+  owner     User              @relation("HouseholdOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  members   HouseholdMember[]
+  createdAt DateTime          @default(now())
+}
+
+model HouseholdMember {
+  id          String    @id @default(uuid())
+  householdId String
+  userId      String
+  role        String    @default("OWNER")
+  household   Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt   DateTime  @default(now())
+
+  @@unique([householdId, userId])
+}
+
+model Category {
+  id          String    @id @default(uuid())
+  userId      String?
+  householdId String?
+  name        String
+  icon        String    @default("Tag")
+  color       String    @default("#6B7075")
+  serverSeq   BigInt    @default(0)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  user        User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}

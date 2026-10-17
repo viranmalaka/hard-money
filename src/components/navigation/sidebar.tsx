@@ -31,6 +31,8 @@ export function Sidebar() {
     }
   }, []);
 
+  if (pathname === "/login" || pathname === "/register") return null;
+
   const handleToggle = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();

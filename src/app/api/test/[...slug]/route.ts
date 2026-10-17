@@ -19,6 +19,15 @@ export async function POST(
     case "reset": {
       resetServerClock();
       queuedGeminiResponses.length = 0;
+      try {
+        const { prisma } = await import("@/lib/prisma");
+        await prisma.householdMember.deleteMany();
+        await prisma.household.deleteMany();
+        await prisma.category.deleteMany();
+        await prisma.user.deleteMany();
+      } catch (e) {
+        console.error("Failed to reset database:", e);
+      }
       return NextResponse.json({ ok: true, message: "Reset successful" });
     }
 

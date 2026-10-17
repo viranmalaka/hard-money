@@ -54,11 +54,17 @@ html[data-theme="dark"][data-color-swap="true"] {
   .mobile-only {
     display: none !important;
   }
+  .desktop-only {
+    display: flex !important;
+  }
 }
 
-@media (max-width: 767px) {
+@media (max-width: 767.98px) {
   .desktop-only {
     display: none !important;
+  }
+  .mobile-only {
+    display: flex !important;
   }
 }
 

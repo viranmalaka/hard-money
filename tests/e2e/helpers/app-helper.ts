@@ -3,11 +3,44 @@ import { TestApiClient } from "./test-api";
 
 export type NavDestination = "trans" | "stats" | "budget" | "accounts" | "more" | "dashboard";
 
+export class AuthHelper {
+  constructor(public page: Page) {}
+
+  async register(data: { name: string; email: string; password?: string }) {
+    await this.page.goto("/register");
+    await this.page.fill('[data-testid="register-name"]', data.name);
+    await this.page.fill('[data-testid="register-email"]', data.email);
+    await this.page.fill(
+      '[data-testid="register-password"]',
+      data.password || "password123"
+    );
+    await this.page.click('[data-testid="register-submit"]');
+    await this.page.waitForURL("/");
+  }
+
+  async login(credentials: { email: string; password?: string }) {
+    await this.page.goto("/login");
+    await this.page.fill('[data-testid="login-email"]', credentials.email);
+    await this.page.fill(
+      '[data-testid="login-password"]',
+      credentials.password || "password123"
+    );
+    await this.page.click('[data-testid="login-submit"]');
+    await this.page.waitForURL("/");
+  }
+
+  async logout() {
+    await this.page.click('[data-testid="logout-button"]');
+  }
+}
+
 export class AppHelper {
   public testApi: TestApiClient;
+  public auth: AuthHelper;
 
   constructor(public page: Page, public context?: BrowserContext) {
     this.testApi = new TestApiClient(page.request);
+    this.auth = new AuthHelper(page);
   }
 
   /**

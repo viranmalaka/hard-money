@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { usePathname } from "next/navigation";
 import { Plus } from "lucide-react";
 
 interface FabProps {
@@ -8,6 +9,12 @@ interface FabProps {
 }
 
 export function Fab({ onClick }: FabProps) {
+  const pathname = usePathname();
+
+  if (pathname === "/login" || pathname === "/register") {
+    return null;
+  }
+
   return (
     <>
       {/* Mobile Floating Action Button */}
