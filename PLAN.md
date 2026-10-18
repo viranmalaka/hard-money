@@ -76,7 +76,7 @@
 | 12  | Credit cards: cycles, available credit & settlement            | Sec 4.S2.1, 4.S2.3      | ☑      |
 | 13  | 0% installment plans                                           | Sec 4.S2.2, 3.C         | ☑      |
 | 14  | SMS ingress, archival & template parsing                       | Sec 4.S1 (steps 1-2a)   | ☑      |
-| 15  | Gemini fallback, validation gate & review inbox                | Sec 4.S1 (step 2b-4)    | ☐      |
+| 15  | Gemini fallback, validation gate & review inbox                | Sec 4.S1 (step 2b-4)    | ☑      |
 | 16  | Transaction ingestion service (dedupe, ATM, deposits, refunds) | Sec 4.S1 (step 3)       | ☐      |
 | 17  | Fixed deposits                                                 | Sec 4.S5.1, 3.G         | ☐      |
 | 18  | Loans & leases                                                 | Sec 4.S5.2, 3.H         | ☐      |

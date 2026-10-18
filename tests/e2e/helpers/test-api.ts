@@ -59,4 +59,9 @@ export class TestApiClient {
   async clearLogs() {
     return this.request.post(`${this.baseURL}/api/test/clear-logs`);
   }
+
+  async getGeminiRequests(): Promise<{ requests: Array<{ sender: string; rawMessage: string; maskedMessage: string; model: string; timestamp: string }> }> {
+    const res = await this.request.get(`${this.baseURL}/api/test/gemini-requests`);
+    return res.json();
+  }
 }

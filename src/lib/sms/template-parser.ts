@@ -78,6 +78,26 @@ export function parseBankSmsTemplate(
   const normSender = (sender || "").toUpperCase().trim();
   const text = rawMessage.trim();
 
+  const KNOWN_TEMPLATE_BANKS = [
+    "COMBANK",
+    "COMMERCIAL",
+    "SAMPATH",
+    "DFCC",
+    "HNB",
+    "NTB",
+    "SEYLAN",
+    "BOC",
+    "PEOPLES",
+  ];
+
+  const isKnownBank = KNOWN_TEMPLATE_BANKS.some(
+    (b) => normSender.includes(b) || text.toUpperCase().includes(b)
+  );
+
+  if (!isKnownBank) {
+    return { matched: false };
+  }
+
   // 1. Check if non-transactional (OTP / Promo)
   if (isNonTransactionalMessage(text)) {
     return {

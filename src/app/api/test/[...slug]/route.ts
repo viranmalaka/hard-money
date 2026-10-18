@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerNow, setServerNow, resetServerClock } from "@/lib/server-clock";
 import { resetTestSyncHooks, addFailingMutationEntityId } from "@/lib/test-sync-hook";
-
-// Mock gemini response queue for tests
-const queuedGeminiResponses: unknown[] = [];
+import {
+  enqueueMockGeminiResponse,
+  getCapturedGeminiRequests,
+  clearGeminiMockState,
+} from "@/lib/sms/gemini-provider";
 
 export async function POST(
   request: NextRequest,
@@ -20,7 +22,7 @@ export async function POST(
     case "reset": {
       resetServerClock();
       resetTestSyncHooks();
-      queuedGeminiResponses.length = 0;
+      clearGeminiMockState();
       const { clearCapturedLogs } = await import("@/lib/server-log");
       clearCapturedLogs();
       try {
@@ -311,8 +313,8 @@ export async function POST(
 
     case "gemini": {
       const body = await request.json().catch(() => ({}));
-      queuedGeminiResponses.push(body);
-      return NextResponse.json({ ok: true, queueLength: queuedGeminiResponses.length });
+      enqueueMockGeminiResponse(body);
+      return NextResponse.json({ ok: true });
     }
 
     case "clear-logs": {
@@ -346,6 +348,10 @@ export async function GET(
   const action = slug[0];
 
   switch (action) {
+    case "gemini-requests": {
+      return NextResponse.json({ requests: getCapturedGeminiRequests() });
+    }
+
     case "logs": {
       const { getCapturedLogs } = await import("@/lib/server-log");
       return NextResponse.json({ logs: getCapturedLogs() });
