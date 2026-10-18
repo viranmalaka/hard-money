@@ -39,6 +39,10 @@ function LoginForm() {
         return;
       }
 
+      if (data?.user?.id) {
+        localStorage.setItem("hardmoney_active_user", data.user.id);
+      }
+
       router.push(callbackUrl);
       router.refresh();
     } catch {

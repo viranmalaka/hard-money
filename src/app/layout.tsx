@@ -1,6 +1,10 @@
+import React, { Suspense } from "react";
 import type { Metadata } from "next";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
+import { SyncProvider } from "@/components/sync-provider";
+import { QuickAddProvider } from "@/components/transaction/quick-add-context";
+import { QuickAddModal } from "@/components/transaction/quick-add-modal";
 import { Sidebar } from "@/components/navigation/sidebar";
 import { BottomNav } from "@/components/navigation/bottom-nav";
 import { Fab } from "@/components/ui/fab";
@@ -26,23 +30,32 @@ export default function RootLayout({
       </head>
       <body className="h-screen w-screen overflow-hidden bg-app text-[var(--text)]">
         <ThemeProvider>
-          <div className="flex h-full w-full overflow-hidden">
-            {/* Desktop Collapsible Sidebar */}
-            <Sidebar />
+          <Suspense fallback={null}>
+            <SyncProvider>
+              <QuickAddProvider>
+                <div className="flex h-full w-full overflow-hidden">
+                  {/* Desktop Collapsible Sidebar */}
+                  <Sidebar />
 
-            {/* Main Application Area */}
-            <div className="flex-1 flex flex-col h-full min-w-0 overflow-hidden relative">
-              <div className="flex-1 overflow-y-auto pb-16 md:pb-0">
-                {children}
-              </div>
+                  {/* Main Application Area */}
+                  <div className="flex-1 flex flex-col h-full min-w-0 overflow-hidden relative">
+                    <div className="flex-1 overflow-y-auto pb-16 md:pb-0">
+                      {children}
+                    </div>
 
-              {/* Floating Action Button */}
-              <Fab />
-            </div>
+                    {/* Floating Action Button */}
+                    <Fab />
+                  </div>
 
-            {/* Mobile Bottom Navigation */}
-            <BottomNav />
-          </div>
+                  {/* Mobile Bottom Navigation */}
+                  <BottomNav />
+
+                  {/* Global Quick-Add Modal */}
+                  <QuickAddModal />
+                </div>
+              </QuickAddProvider>
+            </SyncProvider>
+          </Suspense>
         </ThemeProvider>
       </body>
     </html>

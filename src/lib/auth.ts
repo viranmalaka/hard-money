@@ -9,6 +9,7 @@ export const SESSION_COOKIE_NAME = "hardmoney_session";
 
 export interface SessionPayload {
   userId: string;
+  id: string;
   email: string;
   name: string;
 }
@@ -30,8 +31,9 @@ export async function verifyPassword(hashStr: string, password: string): Promise
   }
 }
 
-export async function createSessionToken(payload: SessionPayload): Promise<string> {
-  return new SignJWT({ ...payload })
+export async function createSessionToken(payload: Omit<SessionPayload, "id"> & { id?: string }): Promise<string> {
+  const userId = payload.userId || payload.id!;
+  return new SignJWT({ ...payload, userId, id: userId })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
     .setExpirationTime("30d")
@@ -41,8 +43,10 @@ export async function createSessionToken(payload: SessionPayload): Promise<strin
 export async function verifySessionToken(token: string): Promise<SessionPayload | null> {
   try {
     const { payload } = await jwtVerify(token, SECRET_KEY);
+    const userId = (payload.userId || payload.id) as string;
     return {
-      userId: payload.userId as string,
+      userId,
+      id: userId,
       email: payload.email as string,
       name: payload.name as string,
     };
@@ -58,30 +62,21 @@ export async function getSessionUser(): Promise<SessionPayload | null> {
   return verifySessionToken(token);
 }
 
-export const DEFAULT_SYSTEM_CATEGORIES = [
-  { name: "Groceries", icon: "ShoppingCart", color: "#2B8A3E" },
-  { name: "Dining", icon: "Utensils", color: "#E8590C" },
-  { name: "Fuel & Transport", icon: "Fuel", color: "#1971C2" },
-  { name: "Utilities & Bills", icon: "Zap", color: "#F59F00" },
-  { name: "Healthcare", icon: "HeartPulse", color: "#D6336C" },
-  { name: "Shopping", icon: "ShoppingBag", color: "#845EF7" },
-  { name: "Bank Fees", icon: "AlertCircle", color: "#495057" },
-  { name: "Cash Withdrawal", icon: "ArrowDownCircle", color: "#495057" },
-  { name: "Salary", icon: "Wallet", color: "#0CA678" },
-  { name: "Investment Yield", icon: "TrendingUp", color: "#2F9E44" },
-  { name: "Loan Principal", icon: "CreditCard", color: "#3B5BDB" },
-  { name: "Balance Calibration", icon: "Sliders", color: "#868E96" },
-];
+export { DEFAULT_SYSTEM_CATEGORIES } from "./categories-data";
+import { DEFAULT_SYSTEM_CATEGORIES } from "./categories-data";
 
 export async function seedDefaultCategoriesForUser(userId: string) {
-  const categories = DEFAULT_SYSTEM_CATEGORIES.map((cat) => ({
-    userId,
-    name: cat.name,
-    icon: cat.icon,
-    color: cat.color,
-  }));
-
-  await prisma.category.createMany({
-    data: categories,
-  });
+  const { getNextServerSeq } = await import("./server-seq");
+  for (const cat of DEFAULT_SYSTEM_CATEGORIES) {
+    const nextSeq = await getNextServerSeq();
+    await prisma.category.create({
+      data: {
+        userId,
+        name: cat.name,
+        icon: cat.icon,
+        color: cat.color,
+        serverSeq: nextSeq,
+      },
+    });
+  }
 }

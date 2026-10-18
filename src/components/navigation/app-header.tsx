@@ -4,6 +4,7 @@ import React from "react";
 import { Moon, Sun, CreditCard } from "lucide-react";
 import { useTheme } from "../theme-provider";
 import { useMounted } from "@/lib/use-mounted";
+import { SyncIndicator } from "../sync-provider";
 
 interface AppHeaderProps {
   title: string;
@@ -22,7 +23,8 @@ export function AppHeader({ title }: AppHeaderProps) {
       </div>
 
       {/* Mobile Top Controls (hidden on desktop where sidebar has them) */}
-      <div className="mobile-only flex items-center gap-1">
+      <div className="mobile-only flex items-center gap-2">
+        <SyncIndicator isMobile={true} />
         <button
           type="button"
           data-testid="color-swap-toggle"

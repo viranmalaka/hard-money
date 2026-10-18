@@ -89,6 +89,8 @@ export function calculateAccountBalance(
   return balance;
 }
 
+export const calculateLedgerBalance = calculateAccountBalance;
+
 export function deriveAccountBalance(
   openingBalanceMinor: number,
   transactions: LedgerTransaction[],

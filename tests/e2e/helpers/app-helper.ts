@@ -1,4 +1,4 @@
-import { Page, BrowserContext } from "@playwright/test";
+import { Page, BrowserContext, expect } from "@playwright/test";
 import { TestApiClient } from "./test-api";
 
 export type NavDestination = "trans" | "stats" | "budget" | "accounts" | "more" | "dashboard";
@@ -8,14 +8,17 @@ export class AuthHelper {
 
   async register(data: { name: string; email: string; password?: string }) {
     await this.page.goto("/register");
-    await this.page.fill('[data-testid="register-name"]', data.name);
+    const nameInput = this.page.locator('[data-testid="register-name"]');
+    await nameInput.waitFor({ state: "visible" });
+    await nameInput.click();
+    await nameInput.fill(data.name);
     await this.page.fill('[data-testid="register-email"]', data.email);
     await this.page.fill(
       '[data-testid="register-password"]',
       data.password || "password123"
     );
     await this.page.click('[data-testid="register-submit"]');
-    await this.page.waitForURL("/");
+    await expect(this.page).toHaveURL("/");
   }
 
   async login(credentials: { email: string; password?: string }) {
@@ -26,11 +29,12 @@ export class AuthHelper {
       credentials.password || "password123"
     );
     await this.page.click('[data-testid="login-submit"]');
-    await this.page.waitForURL("/");
+    await expect(this.page).toHaveURL("/");
   }
 
   async logout() {
     await this.page.click('[data-testid="logout-button"]');
+    await expect(this.page).toHaveURL(/\/login/);
   }
 }
 
@@ -80,7 +84,7 @@ export class AppHelper {
    * Waits for sync engine to report idle state
    */
   async waitForSyncIdle() {
-    await this.page.locator('[data-sync-state="idle"]').waitFor({ state: "attached", timeout: 5000 });
+    await this.page.locator('[data-sync-state="idle"]').first().waitFor({ state: "attached", timeout: 10000 });
   }
 
   /**

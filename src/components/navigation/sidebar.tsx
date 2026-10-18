@@ -11,16 +11,20 @@ import {
   CreditCard,
   Moon,
   PieChart,
+  Plus,
   Settings,
   Sun,
   Wallet,
 } from "lucide-react";
 import { useMounted } from "@/lib/use-mounted";
 import { useTheme } from "../theme-provider";
+import { SyncIndicator } from "../sync-provider";
+import { useQuickAdd } from "../transaction/quick-add-context";
 
 export function Sidebar() {
   const pathname = usePathname();
   const { resolvedTheme, toggleTheme, colorSwap, toggleColorSwap } = useTheme();
+  const { openQuickAdd } = useQuickAdd();
   const [collapsed, setCollapsed] = useState(false);
   const mounted = useMounted();
 
@@ -110,10 +114,30 @@ export function Sidebar() {
             </Link>
           );
         })}
+
+        {/* Quick Add Button in Sidebar */}
+        <div className="pt-3 px-1">
+          <button
+            type="button"
+            data-testid="sidebar-quick-add-btn"
+            onClick={() => openQuickAdd()}
+            title="Add Transaction"
+            className={`w-full flex items-center gap-2.5 py-2 px-3 rounded bg-[var(--text)] text-[var(--bg)] font-semibold text-xs hover:opacity-90 active:scale-98 transition-all ${
+              collapsed ? "justify-center px-0" : ""
+            }`}
+          >
+            <Plus size={16} strokeWidth={2.5} className="shrink-0" />
+            {!collapsed && <span>New Transaction</span>}
+          </button>
+        </div>
       </nav>
 
-      {/* Footer Controls: Theme & Color Swap */}
+      {/* Footer Controls: Sync, Theme & Color Swap */}
       <div className="p-3 border-t border-hairline space-y-2">
+        <div className={`flex ${collapsed ? "justify-center" : "items-center"}`}>
+          <SyncIndicator isMobile={false} />
+        </div>
+
         <button
           type="button"
           data-testid="theme-toggle"

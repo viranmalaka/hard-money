@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import {
   Bookmark,
   ChevronRight,
@@ -62,6 +63,9 @@ export default function MorePage() {
     } catch {
       // ignore
     }
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("hardmoney_active_user");
+    }
     router.push("/login");
   };
 
@@ -102,16 +106,16 @@ export default function MorePage() {
     {
       title: "Organization",
       items: [
-        { label: "Bookmarks & Templates", icon: Bookmark, badge: null },
-        { label: "Categories", icon: Paintbrush, badge: null },
+        { label: "Bookmarks & Templates", icon: Bookmark, badge: null, href: null, testId: null },
+        { label: "Categories", icon: Paintbrush, badge: null, href: "/more/categories", testId: "more-categories-link" },
       ],
     },
     {
       title: "Automation & Data",
       items: [
-        { label: "SMS Review Inbox", icon: Inbox, badge: "0" },
-        { label: "Export & Import", icon: Database, badge: null },
-        { label: "Household Collaboration", icon: Users, badge: null },
+        { label: "SMS Review Inbox", icon: Inbox, badge: "0", href: null, testId: null },
+        { label: "Export & Import", icon: Database, badge: null, href: null, testId: null },
+        { label: "Household Collaboration", icon: Users, badge: null, href: null, testId: null },
       ],
     },
   ];
@@ -325,9 +329,9 @@ export default function MorePage() {
           <div className="flat-card divide-y divide-hairline">
             {section.items.map((item) => {
               const Icon = item.icon;
-              return (
+              const content = (
                 <div
-                  key={item.label}
+                  data-testid={item.testId || undefined}
                   className="flex items-center justify-between p-3 hover:bg-surface transition-colors cursor-pointer"
                 >
                   <div className="flex items-center gap-3">
@@ -346,6 +350,15 @@ export default function MorePage() {
                   </div>
                 </div>
               );
+
+              if (item.href) {
+                return (
+                  <Link key={item.label} href={item.href} className="block">
+                    {content}
+                  </Link>
+                );
+              }
+              return <React.Fragment key={item.label}>{content}</React.Fragment>;
             })}
           </div>
         </div>

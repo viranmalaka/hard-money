@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerNow, setServerNow, resetServerClock } from "@/lib/server-clock";
+import { resetTestSyncHooks, addFailingMutationEntityId } from "@/lib/test-sync-hook";
 
 // Mock gemini response queue for tests
 const queuedGeminiResponses: unknown[] = [];
@@ -18,13 +19,24 @@ export async function POST(
   switch (action) {
     case "reset": {
       resetServerClock();
+      resetTestSyncHooks();
       queuedGeminiResponses.length = 0;
       try {
         const { prisma } = await import("@/lib/prisma");
+        await prisma.transactionSplitItem.deleteMany();
+        await prisma.transaction.deleteMany();
+        await prisma.account.deleteMany();
         await prisma.householdMember.deleteMany();
         await prisma.household.deleteMany();
         await prisma.category.deleteMany();
+        await prisma.appliedMutation.deleteMany();
+        await prisma.syncSequence.deleteMany();
         await prisma.user.deleteMany();
+        try {
+          await prisma.$executeRawUnsafe("ALTER SEQUENCE IF EXISTS global_server_seq RESTART WITH 1");
+        } catch {
+          // ignore
+        }
       } catch (e) {
         console.error("Failed to reset database:", e);
       }
@@ -56,6 +68,14 @@ export async function POST(
       return NextResponse.json({ ok: true, queueLength: queuedGeminiResponses.length });
     }
 
+    case "fail-mutation": {
+      const body = await request.json().catch(() => ({}));
+      if (body.entityId) {
+        addFailingMutationEntityId(body.entityId);
+      }
+      return NextResponse.json({ ok: true, entityId: body.entityId });
+    }
+
     default:
       return new NextResponse("Not Found", { status: 404 });
   }
@@ -74,10 +94,30 @@ export async function GET(
 
   switch (action) {
     case "snapshot": {
-      return NextResponse.json({
-        now: getServerNow().toISOString(),
-        balances: {},
-      });
+      try {
+        const { prisma } = await import("@/lib/prisma");
+        const [accounts, categories, transactions] = await Promise.all([
+          prisma.account.findMany({ where: { deletedAt: null } }),
+          prisma.category.findMany({ where: { deletedAt: null } }),
+          prisma.transaction.findMany({ where: { deletedAt: null } }),
+        ]);
+
+        const balances: Record<string, number> = {};
+        for (const a of accounts) {
+          balances[a.id] = a.openingBalanceMinor;
+        }
+
+        return NextResponse.json({
+          now: getServerNow().toISOString(),
+          accounts: accounts.map((a) => ({ ...a, serverSeq: Number(a.serverSeq) })),
+          categories: categories.map((c) => ({ ...c, serverSeq: Number(c.serverSeq) })),
+          transactions: transactions.map((t) => ({ ...t, serverSeq: Number(t.serverSeq) })),
+          balances,
+        });
+      } catch (err: any) {
+        console.error("SNAPSHOT ERROR:", err);
+        return NextResponse.json({ error: err.message, stack: err.stack }, { status: 500 });
+      }
     }
 
     default:

@@ -64,9 +64,9 @@
 | 0   | Repo, tooling & test harness                                   | Sec 1, A (this doc)     | ☑      |
 | 1   | App shell & flat design system                                 | Sec 5.0                 | ☑      |
 | 2   | Auth & user settings                                           | Sec 1 (Auth), 3.A       | ☑      |
-| 3   | Offline data layer & sync engine (with Accounts/Categories)    | Sec 2.6, 2.7, 3.B, 4.S6 | ☐      |
-| 4   | Accounts & Categories management UI                            | Sec 3.B, 3.D            | ☐      |
-| 5   | Quick-Add, keypad & ledger core (expense/income/transfer)      | Sec 2.1, 2.3, 4.S3      | ☐      |
+| 3   | Offline data layer & sync engine (with Accounts/Categories)    | Sec 2.6, 2.7, 3.B, 4.S6 | ☑      |
+| 4   | Accounts & Categories management UI                            | Sec 3.B, 3.D            | ☑      |
+| 5   | Quick-Add, keypad & ledger core (expense/income/transfer)      | Sec 2.1, 2.3, 4.S3      | ☑      |
 | 6   | Trans. tab views (Daily / Calendar / Monthly / Summary)        | Sec 5.0                 | ☐      |
 | 7   | Edit/delete, splits & bookmark templates                       | Sec 2.4, 2.5, 4.S3      | ☐      |
 | 8   | Balance calibration                                            | Sec 4.S7                | ☐      |

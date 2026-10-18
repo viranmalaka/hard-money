@@ -27,6 +27,8 @@ model User {
   ownedHouseholds              Household[]       @relation("HouseholdOwner")
   householdMembers             HouseholdMember[]
   categories                   Category[]
+  accounts                     Account[]
+  transactions                 Transaction[]
 }
 
 model Household {
@@ -63,6 +65,104 @@ model Category {
   deletedAt   DateTime?
 
   user        User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+  splitItems   TransactionSplitItem[]
 
   @@index([userId])
+  @@index([serverSeq])
+}
+
+model Account {
+  id                         String    @id @default(uuid())
+  userId                     String
+  householdId                String?
+  name                       String
+  type                       String    // CASH | BANK_SAVINGS | CREDIT_CARD
+  openingBalanceMinor        Int       @default(0)
+  balanceCacheMinor          Int?
+  currency                   String    @default("LKR")
+  accountNumberLast4         String?
+  bankSenderIds              String[]  @default([])
+  accessScope                String    @default("PRIVATE") // PRIVATE | SHARED_HOUSEHOLD
+  feeRules                   Json?
+  creditLimitMinor           Int?
+  statementCutoffDay         Int?
+  paymentDueDay              Int?
+  linkedSettlementAccountId  String?
+  isArchived                 Boolean   @default(false)
+  serverSeq                  BigInt    @default(0)
+  createdAt                  DateTime  @default(now())
+  updatedAt                  DateTime  @updatedAt
+  deletedAt                  DateTime?
+
+  user                       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions               Transaction[] @relation("AccountTransactions")
+  transfersTo                Transaction[] @relation("TransferToAccount")
+
+  @@index([userId])
+  @@index([householdId])
+  @@index([serverSeq])
+}
+
+model Transaction {
+  id                           String    @id @default(uuid())
+  userId                       String
+  householdId                  String?
+  accountId                    String
+  toAccountId                  String?
+  categoryId                   String?
+  amountMinor                  Int
+  direction                    String?   // IN | OUT
+  type                         String    // EXPENSE | INCOME | TRANSFER | REFUND | ADJUSTMENT
+  subType                      String?
+  source                       String    @default("MANUAL")
+  createdByUserId              String
+  updatedByUserId              String
+  transactionDate              DateTime
+  note                         String?
+  isSplit                      Boolean   @default(false)
+  excludeFromBudget            Boolean   @default(false)
+  excludeFromStats             Boolean   @default(false)
+  excludeFromBalance           Boolean   @default(false)
+  serverSeq                    BigInt    @default(0)
+  createdAt                    DateTime  @default(now())
+  updatedAt                    DateTime  @updatedAt
+  deletedAt                    DateTime?
+
+  user                         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  account                      Account   @relation("AccountTransactions", fields: [accountId], references: [id], onDelete: Cascade)
+  toAccount                    Account?  @relation("TransferToAccount", fields: [toAccountId], references: [id], onDelete: SetNull)
+  category                     Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  splitItems                   TransactionSplitItem[]
+
+  @@index([userId])
+  @@index([accountId])
+  @@index([transactionDate])
+  @@index([serverSeq])
+}
+
+model TransactionSplitItem {
+  id            String      @id @default(uuid())
+  transactionId String
+  categoryId    String
+  amountMinor   Int
+  note          String?
+
+  transaction   Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  category      Category    @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@index([transactionId])
+}
+
+model AppliedMutation {
+  id        String   @id // mutationId
+  userId    String
+  appliedAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model SyncSequence {
+  id  Int    @id @default(1)
+  seq BigInt @default(0)
 }
