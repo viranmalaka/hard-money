@@ -3,6 +3,7 @@ import {
   HardMoneyDB,
   LocalAccount,
   LocalCategory,
+  LocalTemplate,
   LocalTransaction,
   OutboxMutation,
 } from "../db";
@@ -67,7 +68,7 @@ export async function syncNow(
 
     const data = await res.json();
 
-    await db.transaction("rw", [db.accounts, db.categories, db.transactions, db.syncMeta], async () => {
+    await db.transaction("rw", [db.accounts, db.categories, db.transactions, db.templates, db.syncMeta], async () => {
       // Accounts
       for (const a of data.accounts || []) {
         if (a.deletedAt) {
@@ -90,6 +91,14 @@ export async function syncNow(
           await db.transactions.delete(t.id);
         } else {
           await db.transactions.put(t);
+        }
+      }
+      // Templates
+      for (const tmpl of data.templates || []) {
+        if (tmpl.deletedAt) {
+          await db.templates.delete(tmpl.id);
+        } else {
+          await db.templates.put(tmpl);
         }
       }
       if (data.cursor !== undefined) {
@@ -296,4 +305,148 @@ export async function localCreateTransaction(
   });
 
   return fullTx;
+}
+
+export async function localUpdateTransaction(
+  db: HardMoneyDB,
+  id: string,
+  patch: Partial<LocalTransaction>
+): Promise<void> {
+  const existing = await db.transactions.get(id);
+  if (!existing) return;
+
+  const now = new Date().toISOString();
+  const updated: LocalTransaction = { ...existing, ...patch, updatedAt: now };
+
+  const mutation: OutboxMutation = {
+    mutationId: uuidv4(),
+    entity: "transaction",
+    op: "UPDATE",
+    id,
+    payload: patch,
+    createdAt: now,
+    status: "pending",
+  };
+
+  await db.transaction("rw", [db.transactions, db.outbox], async () => {
+    await db.transactions.put(updated);
+    await db.outbox.add(mutation);
+  });
+}
+
+export async function localDeleteTransaction(db: HardMoneyDB, id: string): Promise<void> {
+  const existing = await db.transactions.get(id);
+  const now = new Date().toISOString();
+
+  const mutation: OutboxMutation = {
+    mutationId: uuidv4(),
+    entity: "transaction",
+    op: "DELETE",
+    id,
+    createdAt: now,
+    status: "pending",
+  };
+
+  await db.transaction("rw", [db.transactions, db.outbox], async () => {
+    if (existing) {
+      await db.transactions.delete(id);
+    }
+    await db.outbox.add(mutation);
+  });
+}
+
+export async function localRestoreTransaction(db: HardMoneyDB, tx: LocalTransaction): Promise<void> {
+  const now = new Date().toISOString();
+  const restoredTx = { ...tx, deletedAt: null, updatedAt: now };
+
+  const mutation: OutboxMutation = {
+    mutationId: uuidv4(),
+    entity: "transaction",
+    op: "CREATE",
+    id: tx.id,
+    payload: restoredTx,
+    createdAt: now,
+    status: "pending",
+  };
+
+  await db.transaction("rw", [db.transactions, db.outbox], async () => {
+    await db.transactions.put(restoredTx);
+    await db.outbox.add(mutation);
+  });
+}
+
+export async function localCreateTemplate(
+  db: HardMoneyDB,
+  tmpl: Omit<LocalTemplate, "id" | "serverSeq" | "createdAt" | "updatedAt"> & { id?: string }
+): Promise<LocalTemplate> {
+  const now = new Date().toISOString();
+  const id = tmpl.id || uuidv4();
+  const fullTmpl: LocalTemplate = {
+    ...tmpl,
+    id,
+    serverSeq: 0,
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  const mutation: OutboxMutation = {
+    mutationId: uuidv4(),
+    entity: "template",
+    op: "CREATE",
+    id,
+    payload: fullTmpl,
+    createdAt: now,
+    status: "pending",
+  };
+
+  await db.transaction("rw", [db.templates, db.outbox], async () => {
+    await db.templates.put(fullTmpl);
+    await db.outbox.add(mutation);
+  });
+
+  return fullTmpl;
+}
+
+export async function localUpdateTemplate(
+  db: HardMoneyDB,
+  id: string,
+  patch: Partial<LocalTemplate>
+): Promise<void> {
+  const existing = await db.templates.get(id);
+  if (!existing) return;
+
+  const now = new Date().toISOString();
+  const updated: LocalTemplate = { ...existing, ...patch, updatedAt: now };
+
+  const mutation: OutboxMutation = {
+    mutationId: uuidv4(),
+    entity: "template",
+    op: "UPDATE",
+    id,
+    payload: patch,
+    createdAt: now,
+    status: "pending",
+  };
+
+  await db.transaction("rw", [db.templates, db.outbox], async () => {
+    await db.templates.put(updated);
+    await db.outbox.add(mutation);
+  });
+}
+
+export async function localDeleteTemplate(db: HardMoneyDB, id: string): Promise<void> {
+  const now = new Date().toISOString();
+  const mutation: OutboxMutation = {
+    mutationId: uuidv4(),
+    entity: "template",
+    op: "DELETE",
+    id,
+    createdAt: now,
+    status: "pending",
+  };
+
+  await db.transaction("rw", [db.templates, db.outbox], async () => {
+    await db.templates.delete(id);
+    await db.outbox.add(mutation);
+  });
 }

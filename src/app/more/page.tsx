@@ -106,7 +106,7 @@ export default function MorePage() {
     {
       title: "Organization",
       items: [
-        { label: "Bookmarks & Templates", icon: Bookmark, badge: null, href: null, testId: null },
+        { label: "Bookmarks & Templates", icon: Bookmark, badge: null, href: "/more/bookmarks", testId: "more-bookmarks-link" },
         { label: "Categories", icon: Paintbrush, badge: null, href: "/more/categories", testId: "more-categories-link" },
       ],
     },

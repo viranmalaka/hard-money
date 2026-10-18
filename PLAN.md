@@ -67,9 +67,9 @@
 | 3   | Offline data layer & sync engine (with Accounts/Categories)    | Sec 2.6, 2.7, 3.B, 4.S6 | ☑      |
 | 4   | Accounts & Categories management UI                            | Sec 3.B, 3.D            | ☑      |
 | 5   | Quick-Add, keypad & ledger core (expense/income/transfer)      | Sec 2.1, 2.3, 4.S3      | ☑      |
-| 6   | Trans. tab views (Daily / Calendar / Monthly / Summary)        | Sec 5.0                 | ☐      |
-| 7   | Edit/delete, splits & bookmark templates                       | Sec 2.4, 2.5, 4.S3      | ☐      |
-| 8   | Balance calibration                                            | Sec 4.S7                | ☐      |
+| 6   | Trans. tab views (Daily / Calendar / Monthly / Summary)        | Sec 5.0                 | ☑      |
+| 7   | Edit/delete, splits & bookmark templates                       | Sec 2.4, 2.5, 4.S3      | ☑      |
+| 8   | Balance calibration                                            | Sec 4.S7                | ☑      |
 | 9   | Stats tab                                                      | Sec 5.0                 | ☐      |
 | 10  | Budgets & safe-to-spend                                        | Sec 4.S4, 3.F           | ☐      |
 | 11  | Scheduler infrastructure & budget rollover                     | Sec 1 (Jobs), 2.7, 4.S4 | ☐      |

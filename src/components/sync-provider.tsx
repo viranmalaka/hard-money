@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useEffect, useState, useMemo, useCallback } from "react";
 import { usePathname } from "next/navigation";
 import { useLiveQuery } from "dexie-react-hooks";
-import { getDatabase, HardMoneyDB, LocalAccount, LocalCategory, LocalTransaction, OutboxMutation } from "@/lib/db";
+import { getDatabase, HardMoneyDB, LocalAccount, LocalCategory, LocalTemplate, LocalTransaction, OutboxMutation } from "@/lib/db";
 import { syncNow, SyncState } from "@/lib/sync/client";
 import { RefreshCw, WifiOff, AlertCircle, CheckCircle2 } from "lucide-react";
 
@@ -65,10 +65,13 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
 
   // Initial sync & trigger on user session
   useEffect(() => {
+    if (typeof window !== "undefined") {
+      (window as unknown as { __hardMoneyDb?: HardMoneyDB }).__hardMoneyDb = db;
+    }
     if (userId) {
       triggerSync();
     }
-  }, [userId, triggerSync]);
+  }, [userId, triggerSync, db]);
 
   // Listen for online/offline events
   useEffect(() => {
@@ -151,6 +154,11 @@ export function useCategories(): LocalCategory[] {
 export function useTransactions(): LocalTransaction[] {
   const { db } = useSync();
   return useLiveQuery(() => db.transactions.filter((t) => !t.deletedAt).toArray(), [db]) || [];
+}
+
+export function useTemplates(): LocalTemplate[] {
+  const { db } = useSync();
+  return useLiveQuery(() => db.templates.filter((tmpl) => !tmpl.deletedAt).toArray(), [db]) || [];
 }
 
 export function SyncIndicator({ isMobile }: { isMobile?: boolean }) {

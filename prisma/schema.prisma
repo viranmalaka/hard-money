@@ -29,6 +29,7 @@ model User {
   categories                   Category[]
   accounts                     Account[]
   transactions                 Transaction[]
+  templates                    TransactionTemplate[]
 }
 
 model Household {
@@ -128,16 +129,41 @@ model Transaction {
   createdAt                    DateTime  @default(now())
   updatedAt                    DateTime  @updatedAt
   deletedAt                    DateTime?
+  reversalOfTransactionId      String?
 
   user                         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   account                      Account   @relation("AccountTransactions", fields: [accountId], references: [id], onDelete: Cascade)
   toAccount                    Account?  @relation("TransferToAccount", fields: [toAccountId], references: [id], onDelete: SetNull)
   category                     Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   splitItems                   TransactionSplitItem[]
+  reversalOf                   Transaction?  @relation("TransactionReversals", fields: [reversalOfTransactionId], references: [id], onDelete: SetNull)
+  reversals                    Transaction[] @relation("TransactionReversals")
 
   @@index([userId])
   @@index([accountId])
   @@index([transactionDate])
+  @@index([serverSeq])
+}
+
+model TransactionTemplate {
+  id                 String    @id @default(uuid())
+  userId             String
+  name               String
+  accountId          String?
+  toAccountId        String?
+  categoryId         String?
+  type               String    @default("EXPENSE") // EXPENSE | INCOME | TRANSFER
+  defaultAmountMinor Int?
+  note               String?
+  icon               String?
+  serverSeq          BigInt    @default(0)
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  deletedAt          DateTime?
+
+  user               User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
   @@index([serverSeq])
 }
 

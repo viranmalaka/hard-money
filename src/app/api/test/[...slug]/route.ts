@@ -24,6 +24,7 @@ export async function POST(
       try {
         const { prisma } = await import("@/lib/prisma");
         await prisma.transactionSplitItem.deleteMany();
+        await prisma.transactionTemplate.deleteMany();
         await prisma.transaction.deleteMany();
         await prisma.account.deleteMany();
         await prisma.householdMember.deleteMany();

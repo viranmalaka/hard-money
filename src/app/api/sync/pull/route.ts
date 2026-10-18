@@ -12,7 +12,7 @@ export async function GET(request: NextRequest) {
   const cursorParam = searchParams.get("cursor") || "0";
   const cursor = BigInt(cursorParam);
 
-  const [accounts, categories, transactions] = await Promise.all([
+  const [accounts, categories, transactions, templates] = await Promise.all([
     prisma.account.findMany({
       where: {
         userId: user.id,
@@ -32,6 +32,16 @@ export async function GET(request: NextRequest) {
         userId: user.id,
         serverSeq: { gt: cursor },
       },
+      include: {
+        splitItems: true,
+      },
+      orderBy: { serverSeq: "asc" },
+    }),
+    prisma.transactionTemplate.findMany({
+      where: {
+        userId: user.id,
+        serverSeq: { gt: cursor },
+      },
       orderBy: { serverSeq: "asc" },
     }),
   ]);
@@ -45,6 +55,9 @@ export async function GET(request: NextRequest) {
   }
   for (const t of transactions) {
     if (t.serverSeq > maxSeq) maxSeq = t.serverSeq;
+  }
+  for (const tmpl of templates) {
+    if (tmpl.serverSeq > maxSeq) maxSeq = tmpl.serverSeq;
   }
 
   const serializedAccounts = accounts.map((a) => ({
@@ -60,6 +73,13 @@ export async function GET(request: NextRequest) {
   const serializedTransactions = transactions.map((t) => ({
     ...t,
     serverSeq: Number(t.serverSeq),
+    transactionDate: t.transactionDate.toISOString().slice(0, 10),
+    splitItems: t.splitItems || [],
+  }));
+
+  const serializedTemplates = templates.map((tmpl) => ({
+    ...tmpl,
+    serverSeq: Number(tmpl.serverSeq),
   }));
 
   return NextResponse.json({
@@ -67,5 +87,6 @@ export async function GET(request: NextRequest) {
     accounts: serializedAccounts,
     categories: serializedCategories,
     transactions: serializedTransactions,
+    templates: serializedTemplates,
   });
 }

@@ -2,7 +2,8 @@
 
 import React, { useState, useMemo, useCallback, useRef } from "react";
 import { X, AlertCircle } from "lucide-react";
-import { useAccounts, useCategories, useSync } from "@/components/sync-provider";
+import { useAccounts, useCategories, useTemplates, useSync } from "@/components/sync-provider";
+import { LocalTemplate } from "@/lib/db";
 import { localCreateTransaction } from "@/lib/sync/client";
 import {
   evaluateExpression,
@@ -48,6 +49,7 @@ function QuickAddModalContent() {
 
   const activeAccounts = useMemo(() => accounts.filter((a) => !a.isArchived), [accounts]);
 
+  const templates = useTemplates();
   const [type, setType] = useState<TransactionType>(initialType || "EXPENSE");
   const [date, setDate] = useState<string>(getTodayDateString());
   const [expression, setExpression] = useState<string>("");
@@ -55,7 +57,29 @@ function QuickAddModalContent() {
   const [rawToAccountId, setToAccountId] = useState<string>("");
   const [rawCategoryId, setCategoryId] = useState<string>("");
   const [note, setNote] = useState<string>("");
+  const [excludeFromBudget, setExcludeFromBudget] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string>("");
+
+  const handleApplyTemplate = (tmpl: LocalTemplate) => {
+    if (tmpl.type === "EXPENSE" || tmpl.type === "INCOME" || tmpl.type === "TRANSFER") {
+      setType(tmpl.type);
+    }
+    if (tmpl.accountId) {
+      setAccountId(tmpl.accountId);
+    }
+    if (tmpl.toAccountId) {
+      setToAccountId(tmpl.toAccountId);
+    }
+    if (tmpl.categoryId) {
+      setCategoryId(tmpl.categoryId);
+    }
+    if (tmpl.defaultAmountMinor) {
+      setExpression(String(tmpl.defaultAmountMinor / 100));
+    }
+    if (tmpl.note) {
+      setNote(tmpl.note);
+    }
+  };
 
   const amountInputRef = useRef<HTMLInputElement>(null);
 
@@ -184,7 +208,7 @@ function QuickAddModalContent() {
         createdByUserId: userId || "default",
         updatedByUserId: userId || "default",
         isSplit: false,
-        excludeFromBudget: false,
+        excludeFromBudget,
         excludeFromStats: false,
         excludeFromBalance: false,
       });
@@ -272,6 +296,31 @@ function QuickAddModalContent() {
             <X size={18} />
           </button>
         </div>
+
+        {/* Bookmark Chips Row */}
+        {templates.length > 0 && (
+          <div
+            data-testid="bookmark-chips"
+            className="flex items-center gap-1.5 overflow-x-auto px-4 py-2 border-b border-hairline bg-[var(--surface-hover)]/30 no-scrollbar"
+          >
+            {templates.map((tmpl) => (
+              <button
+                key={tmpl.id}
+                type="button"
+                data-testid={`bookmark-chip-${tmpl.id}`}
+                onClick={() => handleApplyTemplate(tmpl)}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-hairline bg-[var(--surface)] hover:bg-[var(--border)] text-xs text-[var(--text)] whitespace-nowrap shrink-0 transition-colors"
+              >
+                <span className="font-medium">{tmpl.name}</span>
+                {tmpl.defaultAmountMinor && (
+                  <span className="text-[10px] text-[var(--text-muted)] font-mono">
+                    {(tmpl.defaultAmountMinor / 100).toFixed(0)}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* Content Body */}
         <div className="flex-1 overflow-y-auto p-4 space-y-3">
@@ -464,6 +513,25 @@ function QuickAddModalContent() {
               placeholder="e.g. Lunch with team, monthly salary"
               className="w-full px-3 py-2 rounded border border-hairline bg-[var(--bg)] text-[var(--text)] text-xs focus:outline-none focus:ring-1 focus:ring-[var(--text)]"
             />
+          </div>
+
+          {/* Exclude from Budget Toggle */}
+          <div className="flex items-center justify-between py-1 border-t border-hairline">
+            <span className="text-xs text-[var(--text)]">Exclude from budget</span>
+            <button
+              type="button"
+              data-testid="exclude-budget-toggle"
+              onClick={() => setExcludeFromBudget(!excludeFromBudget)}
+              className={`w-9 h-5 rounded-full transition-colors relative ${
+                excludeFromBudget ? "bg-[var(--text)]" : "bg-[var(--border)]"
+              }`}
+            >
+              <span
+                className={`block w-3.5 h-3.5 rounded-full bg-[var(--bg)] transition-transform absolute top-0.5 ${
+                  excludeFromBudget ? "left-4.5" : "left-0.5"
+                }`}
+              />
+            </button>
           </div>
 
           {/* Inline Validation / Error Message */}

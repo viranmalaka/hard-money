@@ -1,13 +1,16 @@
 "use client";
 
-import React, { useMemo, Suspense } from "react";
+import React, { useState, useMemo, Suspense } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { ArrowLeft, Wallet, Building2, CreditCard, ArrowLeftRight } from "lucide-react";
+import { ArrowLeft, Wallet, Building2, CreditCard, ArrowLeftRight, Scale } from "lucide-react";
 import { useAccounts, useTransactions, useCategories } from "@/components/sync-provider";
 import { calculateLedgerBalance, LedgerTransaction } from "@/lib/finance-core/ledger";
 import { formatMoney } from "@/lib/finance-core/money";
 import { EmptyState } from "@/components/ui/empty-state";
+import { CalibrationModal } from "@/components/transaction/calibration-modal";
+import { TransactionEditModal } from "@/components/transaction/transaction-edit-modal";
+import { LocalTransaction } from "@/lib/db";
 
 export default function AccountDetailPage() {
   return (
@@ -30,6 +33,9 @@ function AccountDetailContent() {
   const accounts = useAccounts();
   const transactions = useTransactions();
   const categories = useCategories();
+
+  const [isCalibrateOpen, setIsCalibrateOpen] = useState(false);
+  const [selectedTxForEdit, setSelectedTxForEdit] = useState<LocalTransaction | null>(null);
 
   const account = useMemo(() => {
     return accounts.find((a) => a.id === accountId);
@@ -64,7 +70,7 @@ function AccountDetailContent() {
   const accountTransactions = useMemo(() => {
     if (!account) return [];
     return transactions
-      .filter((t) => t.accountId === account.id || t.toAccountId === account.id)
+      .filter((t) => !t.deletedAt && (t.accountId === account.id || t.toAccountId === account.id))
       .sort((a, b) => new Date(b.transactionDate).getTime() - new Date(a.transactionDate).getTime());
   }, [account, transactions]);
 
@@ -132,24 +138,36 @@ function AccountDetailContent() {
           </div>
         </div>
 
-        {/* Current Balance Display */}
-        <div className="text-right">
-          <span className="text-[11px] font-medium text-[var(--text-muted)] block">
-            {isCreditCard ? "Current Balance" : "Balance"}
-          </span>
-          <span
-            data-testid="account-detail-balance"
-            className={`text-lg font-bold font-mono tabular-nums ${
-              balance < 0 ? "text-expense" : balance > 0 ? "text-income" : "text-[var(--text)]"
-            }`}
+        {/* Current Balance Display & Calibrate Button */}
+        <div className="flex flex-col items-end gap-1.5">
+          <div className="text-right">
+            <span className="text-[11px] font-medium text-[var(--text-muted)] block">
+              {isCreditCard ? "Current Balance" : "Balance"}
+            </span>
+            <span
+              data-testid="account-detail-balance"
+              className={`text-lg font-bold font-mono tabular-nums ${
+                balance < 0 ? "text-expense" : balance > 0 ? "text-income" : "text-[var(--text)]"
+              }`}
+            >
+              {formatMoney(balance)}
+            </span>
+            {isCreditCard && (
+              <div data-testid="account-detail-outstanding" className="text-xs font-semibold text-expense">
+                Outstanding: {formatMoney(outstandingDebt)}
+              </div>
+            )}
+          </div>
+
+          <button
+            type="button"
+            data-testid="calibrate-balance-btn"
+            onClick={() => setIsCalibrateOpen(true)}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded border border-hairline text-[11px] font-semibold text-[var(--text)] hover:bg-[var(--border)] active:scale-95 transition-all"
           >
-            {formatMoney(balance)}
-          </span>
-          {isCreditCard && (
-            <div data-testid="account-detail-outstanding" className="text-xs font-semibold text-expense">
-              Outstanding: {formatMoney(outstandingDebt)}
-            </div>
-          )}
+            <Scale size={13} />
+            <span>Calibrate Balance</span>
+          </button>
         </div>
       </div>
 
@@ -162,7 +180,7 @@ function AccountDetailContent() {
           </div>
           <div>
             <span className="text-[11px] text-[var(--text-muted)] block">Available Credit</span>
-            <span className="font-mono font-semibold">
+            <span data-testid="available-credit-display" className="font-mono font-semibold">
               {formatMoney(Math.max(0, account.creditLimitMinor - outstandingDebt))}
             </span>
           </div>
@@ -191,7 +209,8 @@ function AccountDetailContent() {
               const isOutgoing = tx.accountId === account.id;
               const isTransfer = tx.type === "TRANSFER";
               const isExpense = tx.type === "EXPENSE";
-              const isIncome = tx.type === "INCOME";
+              const isIncome = tx.type === "INCOME" || tx.type === "REFUND";
+              const isCalibration = tx.source === "CALIBRATION" || tx.type === "ADJUSTMENT";
 
               const category = tx.categoryId ? categoryMap.get(tx.categoryId) : null;
 
@@ -199,23 +218,46 @@ function AccountDetailContent() {
                 <div
                   key={tx.id}
                   data-testid={`transaction-row-${tx.id}`}
-                  className="flex items-center justify-between p-3 hover:bg-[var(--border)]/30 transition-colors"
+                  onClick={() => setSelectedTxForEdit(tx)}
+                  className="flex items-center justify-between p-3 hover:bg-[var(--border)]/30 active:bg-[var(--border)]/50 transition-colors cursor-pointer"
                 >
-                  <div className="space-y-0.5 min-w-0">
-                    <div className="flex items-center gap-2">
-                      {category && (
+                  <div className="space-y-0.5 min-w-0 pr-2">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {isCalibration ? (
+                        <span
+                          data-testid="calibration-icon"
+                          className="p-1 rounded bg-[var(--border)] text-[var(--text)] shrink-0"
+                          title="Balance Calibration"
+                        >
+                          <Scale size={12} />
+                        </span>
+                      ) : category ? (
                         <span
                           className="w-2.5 h-2.5 rounded-full shrink-0"
                           style={{ backgroundColor: category.color }}
                         />
-                      )}
+                      ) : null}
+
                       <span className="text-xs font-semibold text-[var(--text)] truncate">
-                        {isTransfer
+                        {isCalibration
+                          ? "Balance Calibration"
+                          : isTransfer
                           ? isOutgoing
                             ? `Transfer Out`
                             : `Transfer In`
                           : category?.name || tx.type}
                       </span>
+
+                      {isCalibration && (
+                        <span
+                          data-testid="calibration-badge"
+                          className={`inline-flex items-center gap-0.5 text-[10px] px-1 py-0.2 rounded font-mono font-medium ${
+                            tx.direction === "IN" ? "bg-income/10 text-income" : "bg-expense/10 text-expense"
+                          }`}
+                        >
+                          {tx.direction === "IN" ? "+ Calibration" : "- Calibration"}
+                        </span>
+                      )}
                     </div>
                     <div className="text-[11px] text-[var(--text-muted)] flex items-center gap-2">
                       <span>{tx.transactionDate}</span>
@@ -248,6 +290,16 @@ function AccountDetailContent() {
                         {isOutgoing ? `- ${formatMoney(tx.amountMinor)}` : `+ ${formatMoney(tx.amountMinor)}`}
                       </span>
                     )}
+                    {isCalibration && (
+                      <span
+                        data-testid="transaction-amount"
+                        className={`font-mono font-semibold text-xs tabular-nums ${
+                          tx.direction === "IN" ? "text-income" : "text-expense"
+                        }`}
+                      >
+                        {tx.direction === "IN" ? `+ ${formatMoney(tx.amountMinor)}` : `- ${formatMoney(tx.amountMinor)}`}
+                      </span>
+                    )}
                   </div>
                 </div>
               );
@@ -255,6 +307,25 @@ function AccountDetailContent() {
           </div>
         )}
       </section>
+
+      {/* Balance Calibration Sheet / Modal */}
+      {isCalibrateOpen && (
+        <CalibrationModal
+          account={account}
+          currentBalanceMinor={balance}
+          isOpen={isCalibrateOpen}
+          onClose={() => setIsCalibrateOpen(false)}
+        />
+      )}
+
+      {/* Transaction Edit Sheet */}
+      {selectedTxForEdit && (
+        <TransactionEditModal
+          transaction={selectedTxForEdit}
+          isOpen={!!selectedTxForEdit}
+          onClose={() => setSelectedTxForEdit(null)}
+        />
+      )}
     </main>
   );
 }

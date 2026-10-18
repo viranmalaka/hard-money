@@ -209,6 +209,7 @@ export async function POST(request: NextRequest) {
               transactionDate: payload.transactionDate ? new Date(payload.transactionDate) : new Date(),
               note: payload.note || null,
               isSplit: payload.isSplit ?? false,
+              reversalOfTransactionId: payload.reversalOfTransactionId || null,
               excludeFromBudget: payload.excludeFromBudget ?? false,
               excludeFromStats: payload.excludeFromStats ?? false,
               excludeFromBalance: payload.excludeFromBalance ?? false,
@@ -228,6 +229,7 @@ export async function POST(request: NextRequest) {
               transactionDate: payload.transactionDate ? new Date(payload.transactionDate) : undefined,
               note: payload.note,
               isSplit: payload.isSplit,
+              reversalOfTransactionId: payload.reversalOfTransactionId,
               excludeFromBudget: payload.excludeFromBudget,
               excludeFromStats: payload.excludeFromStats,
               excludeFromBalance: payload.excludeFromBalance,
@@ -235,6 +237,23 @@ export async function POST(request: NextRequest) {
               deletedAt: null,
             },
           });
+
+          if (Array.isArray(payload.splitItems)) {
+            await prisma.transactionSplitItem.deleteMany({
+              where: { transactionId: mutation.id },
+            });
+            for (const item of payload.splitItems) {
+              await prisma.transactionSplitItem.create({
+                data: {
+                  id: item.id || undefined,
+                  transactionId: mutation.id,
+                  categoryId: item.categoryId,
+                  amountMinor: item.amountMinor,
+                  note: item.note || null,
+                },
+              });
+            }
+          }
         } else if (mutation.op === "UPDATE") {
           await prisma.transaction.updateMany({
             where: { id: mutation.id, userId: user.id },
@@ -251,6 +270,9 @@ export async function POST(request: NextRequest) {
               }),
               ...(payload.note !== undefined && { note: payload.note }),
               ...(payload.isSplit !== undefined && { isSplit: payload.isSplit }),
+              ...(payload.reversalOfTransactionId !== undefined && {
+                reversalOfTransactionId: payload.reversalOfTransactionId,
+              }),
               ...(payload.excludeFromBudget !== undefined && {
                 excludeFromBudget: payload.excludeFromBudget,
               }),
@@ -264,8 +286,95 @@ export async function POST(request: NextRequest) {
               serverSeq: nextSeq,
             },
           });
+
+          if (Array.isArray(payload.splitItems)) {
+            await prisma.transactionSplitItem.deleteMany({
+              where: { transactionId: mutation.id },
+            });
+            for (const item of payload.splitItems) {
+              await prisma.transactionSplitItem.create({
+                data: {
+                  id: item.id || undefined,
+                  transactionId: mutation.id,
+                  categoryId: item.categoryId,
+                  amountMinor: item.amountMinor,
+                  note: item.note || null,
+                },
+              });
+            }
+          }
         } else if (mutation.op === "DELETE") {
+          const reversal = await prisma.transaction.findFirst({
+            where: { reversalOfTransactionId: mutation.id, deletedAt: null },
+          });
+          if (reversal) {
+            results.push({
+              mutationId: mutation.mutationId,
+              status: "rejected",
+              reason: "Cannot delete transaction: an active reversal exists.",
+            });
+            continue;
+          }
+
           await prisma.transaction.updateMany({
+            where: { id: mutation.id, userId: user.id },
+            data: {
+              deletedAt: new Date(),
+              serverSeq: nextSeq,
+            },
+          });
+        }
+      } else if (entityLower === "template") {
+        const payload = mutation.payload || {};
+        if (mutation.op === "CREATE") {
+          await prisma.transactionTemplate.upsert({
+            where: { id: mutation.id },
+            create: {
+              id: mutation.id,
+              userId: user.id,
+              name: payload.name || "Template",
+              accountId: payload.accountId || null,
+              toAccountId: payload.toAccountId || null,
+              categoryId: payload.categoryId || null,
+              type: payload.type || "EXPENSE",
+              defaultAmountMinor: payload.defaultAmountMinor ?? null,
+              note: payload.note || null,
+              icon: payload.icon || null,
+              serverSeq: nextSeq,
+              deletedAt: null,
+            },
+            update: {
+              name: payload.name,
+              accountId: payload.accountId || null,
+              toAccountId: payload.toAccountId || null,
+              categoryId: payload.categoryId || null,
+              type: payload.type,
+              defaultAmountMinor: payload.defaultAmountMinor ?? null,
+              note: payload.note,
+              icon: payload.icon,
+              serverSeq: nextSeq,
+              deletedAt: null,
+            },
+          });
+        } else if (mutation.op === "UPDATE") {
+          await prisma.transactionTemplate.updateMany({
+            where: { id: mutation.id, userId: user.id },
+            data: {
+              ...(payload.name !== undefined && { name: payload.name }),
+              ...(payload.accountId !== undefined && { accountId: payload.accountId }),
+              ...(payload.toAccountId !== undefined && { toAccountId: payload.toAccountId }),
+              ...(payload.categoryId !== undefined && { categoryId: payload.categoryId }),
+              ...(payload.type !== undefined && { type: payload.type }),
+              ...(payload.defaultAmountMinor !== undefined && {
+                defaultAmountMinor: payload.defaultAmountMinor,
+              }),
+              ...(payload.note !== undefined && { note: payload.note }),
+              ...(payload.icon !== undefined && { icon: payload.icon }),
+              serverSeq: nextSeq,
+            },
+          });
+        } else if (mutation.op === "DELETE") {
+          await prisma.transactionTemplate.updateMany({
             where: { id: mutation.id, userId: user.id },
             data: {
               deletedAt: new Date(),
