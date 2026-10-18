@@ -50,3 +50,32 @@ export function parseMoneyToMinor(input: string): number {
   if (isNaN(parsed)) return 0;
   return roundHalfUp(parsed * 100);
 }
+
+/**
+ * Largest-remainder method (Hare-Niemeyer method).
+ * Guarantees that the rounded percentages sum up to exactly targetTotal (typically 100).
+ */
+export function calculatePercentagesLargestRemainder(
+  values: number[],
+  targetTotal = 100
+): number[] {
+  const sum = values.reduce((a, b) => a + b, 0);
+  if (sum === 0) return values.map(() => 0);
+
+  const exacts = values.map((v) => (v / sum) * targetTotal);
+  const floors = exacts.map((e) => Math.floor(e));
+  const remainders = exacts.map((e, idx) => ({
+    idx,
+    remainder: e - floors[idx],
+  }));
+
+  const currentSum = floors.reduce((a, b) => a + b, 0);
+  const diff = targetTotal - currentSum;
+  remainders.sort((a, b) => b.remainder - a.remainder);
+
+  for (let i = 0; i < diff; i++) {
+    floors[remainders[i % remainders.length].idx] += 1;
+  }
+
+  return floors;
+}

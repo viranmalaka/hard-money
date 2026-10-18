@@ -12,7 +12,7 @@ export interface LocalAccount {
   accountNumberLast4?: string | null;
   bankSenderIds: string[];
   accessScope: "PRIVATE" | "SHARED_HOUSEHOLD";
-  feeRules?: any;
+  feeRules?: unknown;
   creditLimitMinor?: number | null;
   statementCutoffDay?: number | null;
   paymentDueDay?: number | null;
@@ -90,12 +90,55 @@ export interface LocalTransaction {
   deletedAt?: string | null;
 }
 
+export interface LocalBudget {
+  id: string;
+  userId: string;
+  categoryId: string;
+  monthlyLimitMinor: number;
+  enableRollover: boolean;
+  rolloverStartMonth?: string | null;
+  serverSeq: number;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt?: string | null;
+}
+
+export interface LocalBudgetMonthSnapshot {
+  id: string;
+  userId: string;
+  budgetId: string;
+  categoryId: string;
+  month: string;
+  limitMinor: number;
+  spentMinor: number;
+  carriedInMinor: number;
+  carriedOutMinor: number;
+  serverSeq: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LocalCreditCardStatement {
+  id: string;
+  userId: string;
+  accountId: string;
+  cycleStartDate: string;
+  cycleCutoffDate: string;
+  dueDate: string;
+  billedDebtMinor: number;
+  totalDebtMinor: number;
+  isSettled: boolean;
+  serverSeq: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface OutboxMutation {
   mutationId: string;
-  entity: "account" | "category" | "transaction" | "template";
+  entity: "account" | "category" | "transaction" | "template" | "budget" | "statement";
   op: "CREATE" | "UPDATE" | "DELETE";
   id: string;
-  payload?: any;
+  payload?: unknown;
   createdAt: string;
   status: "pending" | "failed";
   errorReason?: string;
@@ -103,7 +146,7 @@ export interface OutboxMutation {
 
 export interface SyncMeta {
   key: string;
-  value: any;
+  value: unknown;
 }
 
 export class HardMoneyDB extends Dexie {
@@ -111,6 +154,9 @@ export class HardMoneyDB extends Dexie {
   categories!: Table<LocalCategory, string>;
   transactions!: Table<LocalTransaction, string>;
   templates!: Table<LocalTemplate, string>;
+  budgets!: Table<LocalBudget, string>;
+  budgetSnapshots!: Table<LocalBudgetMonthSnapshot, string>;
+  creditCardStatements!: Table<LocalCreditCardStatement, string>;
   outbox!: Table<OutboxMutation, string>;
   syncMeta!: Table<SyncMeta, string>;
 
@@ -130,6 +176,19 @@ export class HardMoneyDB extends Dexie {
     // Version 2: preserves data (migration test scaffold)
     this.version(2).upgrade(() => {
       // no schema changes required for v2, verifies upgrade pathway
+    });
+
+    // Version 3: budgets, snapshots, and credit card statements
+    this.version(3).stores({
+      accounts: "id, userId, householdId, name, type, serverSeq, deletedAt, isArchived",
+      categories: "id, userId, householdId, name, serverSeq, deletedAt",
+      transactions: "id, userId, accountId, toAccountId, categoryId, transactionDate, serverSeq, deletedAt",
+      templates: "id, userId, name, serverSeq, deletedAt",
+      budgets: "id, userId, categoryId, serverSeq, deletedAt",
+      budgetSnapshots: "id, userId, categoryId, month, serverSeq",
+      creditCardStatements: "id, userId, accountId, cycleCutoffDate, serverSeq",
+      outbox: "mutationId, entity, op, id, status, createdAt",
+      syncMeta: "key",
     });
   }
 }

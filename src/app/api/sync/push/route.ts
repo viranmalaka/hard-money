@@ -6,7 +6,17 @@ import { shouldFailMutation } from "@/lib/test-sync-hook";
 
 export interface SyncMutation {
   mutationId: string;
-  entity: "account" | "Account" | "category" | "Category" | "transaction" | "Transaction";
+  entity:
+    | "account"
+    | "Account"
+    | "category"
+    | "Category"
+    | "transaction"
+    | "Transaction"
+    | "template"
+    | "Template"
+    | "budget"
+    | "Budget";
   op: "CREATE" | "UPDATE" | "DELETE";
   id: string;
   payload?: any;
@@ -375,6 +385,73 @@ export async function POST(request: NextRequest) {
           });
         } else if (mutation.op === "DELETE") {
           await prisma.transactionTemplate.updateMany({
+            where: { id: mutation.id, userId: user.id },
+            data: {
+              deletedAt: new Date(),
+              serverSeq: nextSeq,
+            },
+          });
+        }
+      } else if (entityLower === "budget") {
+        const payload = mutation.payload || {};
+        if (mutation.op === "CREATE") {
+          if (payload.categoryId) {
+            await prisma.category.upsert({
+              where: { id: payload.categoryId },
+              create: {
+                id: payload.categoryId,
+                userId: user.id,
+                name: "Budgeted Category",
+                icon: "🛒",
+                color: "#10b981",
+                serverSeq: nextSeq,
+              },
+              update: {},
+            });
+          }
+          await prisma.budget.upsert({
+            where: {
+              userId_categoryId: {
+                userId: user.id,
+                categoryId: payload.categoryId,
+              },
+            },
+            create: {
+              id: mutation.id,
+              userId: user.id,
+              categoryId: payload.categoryId,
+              monthlyLimitMinor: payload.monthlyLimitMinor ?? 0,
+              enableRollover: payload.enableRollover ?? false,
+              rolloverStartMonth: payload.rolloverStartMonth || null,
+              serverSeq: nextSeq,
+              deletedAt: null,
+            },
+            update: {
+              monthlyLimitMinor: payload.monthlyLimitMinor,
+              enableRollover: payload.enableRollover,
+              rolloverStartMonth: payload.rolloverStartMonth,
+              serverSeq: nextSeq,
+              deletedAt: null,
+            },
+          });
+        } else if (mutation.op === "UPDATE") {
+          await prisma.budget.updateMany({
+            where: { id: mutation.id, userId: user.id },
+            data: {
+              ...(payload.monthlyLimitMinor !== undefined && {
+                monthlyLimitMinor: payload.monthlyLimitMinor,
+              }),
+              ...(payload.enableRollover !== undefined && {
+                enableRollover: payload.enableRollover,
+              }),
+              ...(payload.rolloverStartMonth !== undefined && {
+                rolloverStartMonth: payload.rolloverStartMonth,
+              }),
+              serverSeq: nextSeq,
+            },
+          });
+        } else if (mutation.op === "DELETE") {
+          await prisma.budget.updateMany({
             where: { id: mutation.id, userId: user.id },
             data: {
               deletedAt: new Date(),

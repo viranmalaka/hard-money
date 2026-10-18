@@ -9,6 +9,8 @@ import { localCreateAccount, localUpdateAccount, localDeleteAccount } from "@/li
 import { LocalAccount } from "@/lib/db";
 import { formatMoney, parseMoneyToMinor } from "@/lib/finance-core/money";
 import { calculateLedgerBalance, LedgerTransaction } from "@/lib/finance-core/ledger";
+import { calculateStatementCycle } from "@/lib/finance-core/credit-card";
+import { SettleModal } from "@/components/account/settle-modal";
 
 export default function AccountsPage() {
   const accounts = useAccounts();
@@ -18,6 +20,7 @@ export default function AccountsPage() {
   const [showArchived, setShowArchived] = useState(false);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingAccount, setEditingAccount] = useState<LocalAccount | null>(null);
+  const [settlingCard, setSettlingCard] = useState<LocalAccount | null>(null);
 
   // Form State
   const [name, setName] = useState("");
@@ -31,10 +34,8 @@ export default function AccountsPage() {
   const [settlementAccountId, setSettlementAccountId] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  // Ledger-derived balances for each account
-  const accountBalances = useMemo(() => {
-    const balances: Record<string, number> = {};
-    const ledgerTxList: LedgerTransaction[] = transactions.map((t) => ({
+  const ledgerTxList: LedgerTransaction[] = useMemo(() => {
+    return transactions.map((t) => ({
       id: t.id,
       accountId: t.accountId,
       toAccountId: t.toAccountId,
@@ -45,6 +46,11 @@ export default function AccountsPage() {
       excludeFromBalance: t.excludeFromBalance,
       deletedAt: t.deletedAt,
     }));
+  }, [transactions]);
+
+  // Ledger-derived balances for each account
+  const accountBalances = useMemo(() => {
+    const balances: Record<string, number> = {};
 
     for (const acc of accounts) {
       balances[acc.id] = calculateLedgerBalance(
@@ -57,12 +63,27 @@ export default function AccountsPage() {
       );
     }
     return balances;
-  }, [accounts, transactions]);
+  }, [accounts, ledgerTxList]);
 
   // Filtered accounts
   const visibleAccounts = useMemo(() => {
     return accounts.filter((a) => (showArchived ? true : !a.isArchived));
   }, [accounts, showArchived]);
+
+  const settlingCardCycle = useMemo(() => {
+    if (!settlingCard) return null;
+    return calculateStatementCycle({
+      account: {
+        id: settlingCard.id,
+        type: settlingCard.type,
+        openingBalanceMinor: settlingCard.openingBalanceMinor,
+      },
+      transactions: ledgerTxList,
+      creditLimitMinor: settlingCard.creditLimitMinor || 0,
+      statementCutoffDay: settlingCard.statementCutoffDay || 20,
+      paymentDueDay: settlingCard.paymentDueDay || 10,
+    });
+  }, [settlingCard, ledgerTxList]);
 
   // Grouped accounts
   const cashAccounts = useMemo(() => visibleAccounts.filter((a) => a.type === "CASH"), [visibleAccounts]);
@@ -360,13 +381,15 @@ export default function AccountsPage() {
               </div>
               <div className="grid gap-2">
                 {creditAccounts.map((acc) => (
-                  <AccountCard
+                  <CreditCardAccountCard
                     key={acc.id}
                     account={acc}
                     balance={accountBalances[acc.id] ?? acc.openingBalanceMinor}
+                    transactions={ledgerTxList}
                     onEdit={() => openEditForm(acc)}
                     onArchive={() => handleArchiveToggle(acc)}
                     onDelete={() => handleDelete(acc)}
+                    onSettle={() => setSettlingCard(acc)}
                   />
                 ))}
               </div>
@@ -572,6 +595,17 @@ export default function AccountsPage() {
           </div>
         </div>
       )}
+
+      {/* 1-Tap Bill Settlement Modal */}
+      {settlingCard && settlingCardCycle && (
+        <SettleModal
+          card={settlingCard}
+          billedBalanceMinor={settlingCardCycle.billedBalanceMinor}
+          totalDebtMinor={settlingCardCycle.outstandingDebtMinor}
+          isOpen={!!settlingCard}
+          onClose={() => setSettlingCard(null)}
+        />
+      )}
     </main>
   );
 }
@@ -671,6 +705,163 @@ function AccountCard({
           >
             <Trash2 size={13} />
           </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CreditCardAccountCard({
+  account,
+  balance,
+  transactions,
+  onEdit,
+  onArchive,
+  onDelete,
+  onSettle,
+}: {
+  account: LocalAccount;
+  balance: number;
+  transactions: LedgerTransaction[];
+  onEdit: () => void;
+  onArchive: () => void;
+  onDelete: () => void;
+  onSettle: () => void;
+}) {
+  const cycle = useMemo(() => {
+    return calculateStatementCycle({
+      account: {
+        id: account.id,
+        type: account.type,
+        openingBalanceMinor: account.openingBalanceMinor,
+      },
+      transactions,
+      creditLimitMinor: account.creditLimitMinor || 0,
+      statementCutoffDay: account.statementCutoffDay || 20,
+      paymentDueDay: account.paymentDueDay || 10,
+    });
+  }, [account, transactions]);
+
+  const isOverpaid = balance > 0;
+
+  return (
+    <div
+      data-testid={`account-item-${account.id}`}
+      className={`p-3 rounded border border-hairline flat-card space-y-2.5 transition-colors ${
+        account.isArchived ? "opacity-60 bg-[var(--border)]" : ""
+      }`}
+    >
+      <div className="flex items-center justify-between">
+        <Link
+          href={`/accounts/${account.id}`}
+          data-testid="account-detail-link"
+          className="space-y-0.5 min-w-0 flex-1 hover:opacity-80 transition-opacity cursor-pointer"
+        >
+          <div className="flex items-center gap-2">
+            <span data-testid="account-card-name" className="text-xs font-semibold text-[var(--text)] truncate">
+              {account.name}
+            </span>
+            {account.isArchived && (
+              <span className="text-[10px] px-1 rounded bg-[var(--border)] text-[var(--text-muted)]">Archived</span>
+            )}
+            <span
+              data-testid="credit-due-countdown"
+              className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-[var(--border)] text-[var(--text-muted)]"
+            >
+              {cycle.dueCountdownText}
+            </span>
+          </div>
+          <div className="text-[11px] text-[var(--text-muted)] flex items-center gap-2">
+            {account.accountNumberLast4 && <span>•••• {account.accountNumberLast4}</span>}
+            {account.creditLimitMinor && <span>Limit: {formatMoney(account.creditLimitMinor)}</span>}
+            {account.statementCutoffDay && <span>Cutoff: Day {account.statementCutoffDay}</span>}
+            {account.paymentDueDay && <span>Due: Day {account.paymentDueDay}</span>}
+          </div>
+        </Link>
+
+        <div className="flex items-center gap-2">
+          {/* Settle button */}
+          <button
+            type="button"
+            data-testid="credit-settle-btn"
+            onClick={onSettle}
+            className="px-2.5 py-1 rounded bg-[var(--text)] text-[var(--bg)] text-xs font-semibold hover:opacity-90 active:scale-95 transition-all"
+          >
+            Settle
+          </button>
+
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              data-testid="account-edit-btn"
+              onClick={onEdit}
+              title="Edit"
+              className="p-1.5 rounded hover:bg-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text)] transition-colors"
+            >
+              <Edit2 size={13} />
+            </button>
+            <button
+              type="button"
+              data-testid="account-archive-btn"
+              onClick={onArchive}
+              title={account.isArchived ? "Unarchive" : "Archive"}
+              className="p-1.5 rounded hover:bg-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text)] transition-colors"
+            >
+              <Archive size={13} />
+            </button>
+            <button
+              type="button"
+              data-testid="account-delete-btn"
+              onClick={onDelete}
+              title="Delete"
+              className="p-1.5 rounded hover:bg-[var(--border)] text-[var(--text-muted)] hover:text-red-500 transition-colors"
+            >
+              <Trash2 size={13} />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Credit Card Specific Stats Grid */}
+      <div className="grid grid-cols-3 gap-2 pt-2 border-t border-hairline text-center text-xs">
+        <div className="space-y-0.5">
+          <span className="text-[10px] text-[var(--text-muted)] font-medium">Billed Due</span>
+          <div data-testid="credit-billed-amount" className="font-mono font-semibold tabular-nums text-expense">
+            {formatMoney(cycle.billedBalanceMinor)}
+          </div>
+        </div>
+        <div className="space-y-0.5">
+          <span className="text-[10px] text-[var(--text-muted)] font-medium">Unbilled</span>
+          <div data-testid="credit-unbilled-amount" className="font-mono font-semibold tabular-nums text-[var(--text)]">
+            {formatMoney(cycle.unbilledBalanceMinor)}
+          </div>
+        </div>
+        <div className="space-y-0.5">
+          <span className="text-[10px] text-[var(--text-muted)] font-medium">Available Credit</span>
+          <div data-testid="credit-available-amount" className="font-mono font-semibold tabular-nums text-income">
+            {formatMoney(cycle.availableCreditMinor)}
+          </div>
+        </div>
+      </div>
+
+      {/* Balance or Credit info */}
+      <div className="flex items-center justify-between text-[11px] pt-1 text-[var(--text-muted)]">
+        <div>
+          {isOverpaid ? (
+            <span data-testid="credit-card-credit" className="text-income font-semibold tabular-nums">
+              Credit Balance: +{formatMoney(balance)}
+            </span>
+          ) : (
+            <span>
+              Outstanding:{" "}
+              <span className="font-semibold text-expense tabular-nums">
+                {formatMoney(cycle.outstandingDebtMinor)}
+              </span>
+            </span>
+          )}
+        </div>
+        <div data-testid="account-card-balance" className="tabular-nums">
+          Balance: {formatMoney(balance)}
         </div>
       </div>
     </div>

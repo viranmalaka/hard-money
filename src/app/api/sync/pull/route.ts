@@ -12,7 +12,7 @@ export async function GET(request: NextRequest) {
   const cursorParam = searchParams.get("cursor") || "0";
   const cursor = BigInt(cursorParam);
 
-  const [accounts, categories, transactions, templates] = await Promise.all([
+  const [accounts, categories, transactions, templates, budgets, budgetSnapshots, creditCardStatements] = await Promise.all([
     prisma.account.findMany({
       where: {
         userId: user.id,
@@ -44,6 +44,27 @@ export async function GET(request: NextRequest) {
       },
       orderBy: { serverSeq: "asc" },
     }),
+    prisma.budget.findMany({
+      where: {
+        userId: user.id,
+        serverSeq: { gt: cursor },
+      },
+      orderBy: { serverSeq: "asc" },
+    }),
+    prisma.budgetMonthSnapshot.findMany({
+      where: {
+        userId: user.id,
+        serverSeq: { gt: cursor },
+      },
+      orderBy: { serverSeq: "asc" },
+    }),
+    prisma.creditCardStatement.findMany({
+      where: {
+        userId: user.id,
+        serverSeq: { gt: cursor },
+      },
+      orderBy: { serverSeq: "asc" },
+    }),
   ]);
 
   let maxSeq = cursor;
@@ -59,6 +80,15 @@ export async function GET(request: NextRequest) {
   for (const tmpl of templates) {
     if (tmpl.serverSeq > maxSeq) maxSeq = tmpl.serverSeq;
   }
+  for (const b of budgets) {
+    if (b.serverSeq > maxSeq) maxSeq = b.serverSeq;
+  }
+  for (const bs of budgetSnapshots) {
+    if (bs.serverSeq > maxSeq) maxSeq = bs.serverSeq;
+  }
+  for (const ccs of creditCardStatements) {
+    if (ccs.serverSeq > maxSeq) maxSeq = ccs.serverSeq;
+  }
 
   const serializedAccounts = accounts.map((a) => ({
     ...a,
@@ -73,7 +103,7 @@ export async function GET(request: NextRequest) {
   const serializedTransactions = transactions.map((t) => ({
     ...t,
     serverSeq: Number(t.serverSeq),
-    transactionDate: t.transactionDate.toISOString().slice(0, 10),
+    transactionDate: t.transactionDate.toISOString(),
     splitItems: t.splitItems || [],
   }));
 
@@ -82,11 +112,32 @@ export async function GET(request: NextRequest) {
     serverSeq: Number(tmpl.serverSeq),
   }));
 
+  const serializedBudgets = budgets.map((b) => ({
+    ...b,
+    serverSeq: Number(b.serverSeq),
+  }));
+
+  const serializedBudgetSnapshots = budgetSnapshots.map((bs) => ({
+    ...bs,
+    serverSeq: Number(bs.serverSeq),
+  }));
+
+  const serializedCreditCardStatements = creditCardStatements.map((ccs) => ({
+    ...ccs,
+    serverSeq: Number(ccs.serverSeq),
+    cycleStartDate: ccs.cycleStartDate.toISOString(),
+    cycleCutoffDate: ccs.cycleCutoffDate.toISOString(),
+    dueDate: ccs.dueDate.toISOString(),
+  }));
+
   return NextResponse.json({
     cursor: Number(maxSeq),
     accounts: serializedAccounts,
     categories: serializedCategories,
     transactions: serializedTransactions,
     templates: serializedTemplates,
+    budgets: serializedBudgets,
+    budgetSnapshots: serializedBudgetSnapshots,
+    creditCardStatements: serializedCreditCardStatements,
   });
 }

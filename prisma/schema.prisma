@@ -30,6 +30,9 @@ model User {
   accounts                     Account[]
   transactions                 Transaction[]
   templates                    TransactionTemplate[]
+  budgets                      Budget[]
+  budgetSnapshots              BudgetMonthSnapshot[]
+  creditCardStatements         CreditCardStatement[]
 }
 
 model Household {
@@ -68,6 +71,8 @@ model Category {
   user        User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
   transactions Transaction[]
   splitItems   TransactionSplitItem[]
+  budgets      Budget[]
+  budgetSnapshots BudgetMonthSnapshot[]
 
   @@index([userId])
   @@index([serverSeq])
@@ -99,6 +104,7 @@ model Account {
   user                       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   transactions               Transaction[] @relation("AccountTransactions")
   transfersTo                Transaction[] @relation("TransferToAccount")
+  creditCardStatements       CreditCardStatement[]
 
   @@index([userId])
   @@index([householdId])
@@ -191,4 +197,71 @@ model AppliedMutation {
 model SyncSequence {
   id  Int    @id @default(1)
   seq BigInt @default(0)
+}
+
+model Budget {
+  id                 String    @id @default(uuid())
+  userId             String
+  categoryId         String
+  monthlyLimitMinor  Int
+  enableRollover     Boolean   @default(false)
+  rolloverStartMonth String?   // YYYY-MM
+  serverSeq          BigInt    @default(0)
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  deletedAt          DateTime?
+
+  user               User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category           Category  @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  snapshots          BudgetMonthSnapshot[]
+
+  @@unique([userId, categoryId])
+  @@index([userId])
+  @@index([serverSeq])
+}
+
+model BudgetMonthSnapshot {
+  id                 String    @id // deterministic: snap_<userId>_<categoryId>_<YYYY-MM>
+  userId             String
+  budgetId           String
+  categoryId         String
+  month              String    // YYYY-MM
+  limitMinor         Int
+  spentMinor         Int
+  carriedInMinor     Int       @default(0)
+  carriedOutMinor    Int       @default(0)
+  serverSeq          BigInt    @default(0)
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  user               User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  budget             Budget    @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  category           Category  @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, categoryId, month])
+  @@index([userId])
+  @@index([budgetId])
+}
+
+model CreditCardStatement {
+  id                   String    @id // deterministic: stmt_<accountId>_<cycleDate>
+  userId               String
+  accountId            String
+  cycleStartDate       DateTime
+  cycleCutoffDate      DateTime
+  dueDate              DateTime
+  billedDebtMinor      Int
+  totalDebtMinor       Int
+  isSettled            Boolean   @default(false)
+  serverSeq            BigInt    @default(0)
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  user                 User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  account              Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@unique([accountId, cycleCutoffDate])
+  @@index([userId])
+  @@index([accountId])
 }

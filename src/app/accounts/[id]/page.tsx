@@ -4,12 +4,14 @@ import React, { useState, useMemo, Suspense } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { ArrowLeft, Wallet, Building2, CreditCard, ArrowLeftRight, Scale } from "lucide-react";
-import { useAccounts, useTransactions, useCategories } from "@/components/sync-provider";
+import { useAccounts, useTransactions, useCategories, useCreditCardStatements } from "@/components/sync-provider";
 import { calculateLedgerBalance, LedgerTransaction } from "@/lib/finance-core/ledger";
 import { formatMoney } from "@/lib/finance-core/money";
+import { calculateStatementCycle } from "@/lib/finance-core/credit-card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { CalibrationModal } from "@/components/transaction/calibration-modal";
 import { TransactionEditModal } from "@/components/transaction/transaction-edit-modal";
+import { SettleModal } from "@/components/account/settle-modal";
 import { LocalTransaction } from "@/lib/db";
 
 export default function AccountDetailPage() {
@@ -33,18 +35,18 @@ function AccountDetailContent() {
   const accounts = useAccounts();
   const transactions = useTransactions();
   const categories = useCategories();
+  const statements = useCreditCardStatements();
 
   const [isCalibrateOpen, setIsCalibrateOpen] = useState(false);
+  const [isSettleOpen, setIsSettleOpen] = useState(false);
   const [selectedTxForEdit, setSelectedTxForEdit] = useState<LocalTransaction | null>(null);
 
   const account = useMemo(() => {
     return accounts.find((a) => a.id === accountId);
   }, [accounts, accountId]);
 
-  // Derived balance from ledger
-  const balance = useMemo(() => {
-    if (!account) return 0;
-    const ledgerTxList: LedgerTransaction[] = transactions.map((t) => ({
+  const ledgerTxList: LedgerTransaction[] = useMemo(() => {
+    return transactions.map((t) => ({
       id: t.id,
       accountId: t.accountId,
       toAccountId: t.toAccountId,
@@ -55,7 +57,11 @@ function AccountDetailContent() {
       excludeFromBalance: t.excludeFromBalance,
       deletedAt: t.deletedAt,
     }));
+  }, [transactions]);
 
+  // Derived balance from ledger
+  const balance = useMemo(() => {
+    if (!account) return 0;
     return calculateLedgerBalance(
       {
         id: account.id,
@@ -64,7 +70,31 @@ function AccountDetailContent() {
       },
       ledgerTxList
     );
-  }, [account, transactions]);
+  }, [account, ledgerTxList]);
+
+  // Credit Card Statement Cycle
+  const cycle = useMemo(() => {
+    if (!account || account.type !== "CREDIT_CARD") return null;
+    return calculateStatementCycle({
+      account: {
+        id: account.id,
+        type: account.type,
+        openingBalanceMinor: account.openingBalanceMinor,
+      },
+      transactions: ledgerTxList,
+      creditLimitMinor: account.creditLimitMinor || 0,
+      statementCutoffDay: account.statementCutoffDay || 20,
+      paymentDueDay: account.paymentDueDay || 10,
+    });
+  }, [account, ledgerTxList]);
+
+  // Card statement history
+  const cardStatements = useMemo(() => {
+    if (!account || account.type !== "CREDIT_CARD") return [];
+    return statements
+      .filter((s) => s.accountId === account.id)
+      .sort((a, b) => new Date(b.cycleCutoffDate).getTime() - new Date(a.cycleCutoffDate).getTime());
+  }, [statements, account]);
 
   // Transactions involving this account, sorted by date desc
   const accountTransactions = useMemo(() => {
@@ -159,34 +189,60 @@ function AccountDetailContent() {
             )}
           </div>
 
-          <button
-            type="button"
-            data-testid="calibrate-balance-btn"
-            onClick={() => setIsCalibrateOpen(true)}
-            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded border border-hairline text-[11px] font-semibold text-[var(--text)] hover:bg-[var(--border)] active:scale-95 transition-all"
-          >
-            <Scale size={13} />
-            <span>Calibrate Balance</span>
-          </button>
+          <div className="flex items-center gap-2">
+            {isCreditCard && (
+              <button
+                type="button"
+                data-testid="credit-settle-btn"
+                onClick={() => setIsSettleOpen(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1 rounded bg-[var(--text)] text-[var(--bg)] text-xs font-semibold hover:opacity-90 active:scale-95 transition-all"
+              >
+                Settle Card
+              </button>
+            )}
+
+            <button
+              type="button"
+              data-testid="calibrate-balance-btn"
+              onClick={() => setIsCalibrateOpen(true)}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded border border-hairline text-[11px] font-semibold text-[var(--text)] hover:bg-[var(--border)] active:scale-95 transition-all"
+            >
+              <Scale size={13} />
+              <span>Calibrate Balance</span>
+            </button>
+          </div>
         </div>
       </div>
 
       {/* Account Info Stats */}
-      {isCreditCard && account.creditLimitMinor && (
-        <div className="grid grid-cols-3 gap-2 p-3 bg-[var(--surface)] border border-hairline rounded-lg text-xs">
+      {isCreditCard && cycle && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 p-3 bg-[var(--surface)] border border-hairline rounded-lg text-xs">
           <div>
-            <span className="text-[11px] text-[var(--text-muted)] block">Limit</span>
-            <span className="font-mono font-semibold">{formatMoney(account.creditLimitMinor)}</span>
-          </div>
-          <div>
-            <span className="text-[11px] text-[var(--text-muted)] block">Available Credit</span>
-            <span data-testid="available-credit-display" className="font-mono font-semibold">
-              {formatMoney(Math.max(0, account.creditLimitMinor - outstandingDebt))}
+            <span className="text-[11px] text-[var(--text-muted)] block">Billed Due</span>
+            <span data-testid="credit-billed-amount" className="font-mono font-semibold text-expense">
+              {formatMoney(cycle.billedBalanceMinor)}
             </span>
           </div>
           <div>
-            <span className="text-[11px] text-[var(--text-muted)] block">Due Day</span>
-            <span className="font-mono font-semibold">Day {account.paymentDueDay || "N/A"}</span>
+            <span className="text-[11px] text-[var(--text-muted)] block">Unbilled Spend</span>
+            <span data-testid="credit-unbilled-amount" className="font-mono font-semibold text-[var(--text)]">
+              {formatMoney(cycle.unbilledBalanceMinor)}
+            </span>
+          </div>
+          <div>
+            <span className="text-[11px] text-[var(--text-muted)] block">Available Credit</span>
+            <span data-testid="credit-available-amount" className="font-mono font-semibold text-income">
+              {formatMoney(cycle.availableCreditMinor)}
+            </span>
+          </div>
+          <div>
+            <span className="text-[11px] text-[var(--text-muted)] block">Due Countdown</span>
+            <span
+              data-testid="credit-due-countdown"
+              className="inline-block mt-0.5 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-[var(--border)] text-[var(--text)]"
+            >
+              {cycle.dueCountdownText}
+            </span>
           </div>
         </div>
       )}
@@ -308,6 +364,41 @@ function AccountDetailContent() {
         )}
       </section>
 
+      {/* Statement History for Credit Cards */}
+      {isCreditCard && cardStatements.length > 0 && (
+        <section data-testid="statement-list" className="space-y-2">
+          <h2 className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider px-1">
+            Billing Statements ({cardStatements.length})
+          </h2>
+          <div className="border border-hairline rounded-lg divide-y divide-hairline bg-[var(--surface)] overflow-hidden text-xs">
+            {cardStatements.map((stmt) => (
+              <div
+                key={stmt.id}
+                data-testid={`statement-row-${stmt.id}`}
+                className="flex items-center justify-between p-3"
+              >
+                <div>
+                  <div className="font-semibold text-[var(--text)]">
+                    Cutoff {stmt.cycleCutoffDate ? stmt.cycleCutoffDate.slice(0, 10) : ""}
+                  </div>
+                  <div className="text-[11px] text-[var(--text-muted)]">
+                    Due {stmt.dueDate ? stmt.dueDate.slice(0, 10) : ""}
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="font-mono font-semibold tabular-nums text-expense">
+                    {formatMoney(stmt.billedDebtMinor)}
+                  </div>
+                  <div className="text-[10px] text-[var(--text-muted)]">
+                    {stmt.isSettled ? "Settled" : "Due"}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
       {/* Balance Calibration Sheet / Modal */}
       {isCalibrateOpen && (
         <CalibrationModal
@@ -315,6 +406,17 @@ function AccountDetailContent() {
           currentBalanceMinor={balance}
           isOpen={isCalibrateOpen}
           onClose={() => setIsCalibrateOpen(false)}
+        />
+      )}
+
+      {/* Settle Modal */}
+      {isSettleOpen && cycle && (
+        <SettleModal
+          card={account}
+          billedBalanceMinor={cycle.billedBalanceMinor}
+          totalDebtMinor={cycle.outstandingDebtMinor}
+          isOpen={isSettleOpen}
+          onClose={() => setIsSettleOpen(false)}
         />
       )}
 

@@ -11,6 +11,7 @@ const PUBLIC_PATHS = [
   "/api/auth",
   "/api/health",
   "/api/test",
+  "/api/v1/cron",
 ];
 
 export async function middleware(request: NextRequest) {

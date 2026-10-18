@@ -11,6 +11,7 @@ import {
   getRemainingDaysInMonth,
   calculateSafeToSpendDaily,
   calculateRolloverCarriedIn,
+  calculatePercentagesLargestRemainder,
   type LedgerTransaction,
   type LedgerAccount,
 } from "../../src/lib/finance-core";
@@ -137,5 +138,17 @@ describe("finance-core budget calculations", () => {
     expect(calculateRolloverCarriedIn(50000, 10000, 45000)).toBe(15000);
     // Deficit rollover: 50,000 + 0 - 55,000 = -5,000
     expect(calculateRolloverCarriedIn(50000, 0, 55000)).toBe(-5000);
+  });
+
+  it("calculates largest remainder percentages summing to exactly 100", () => {
+    // e.g. 3 equal items: 33.333% -> floors 33, 33, 33 sum to 99. Largest remainder distributes 1 extra to first.
+    const res = calculatePercentagesLargestRemainder([10, 10, 10]);
+    expect(res).toEqual([34, 33, 33]);
+    expect(res.reduce((a: number, b: number) => a + b, 0)).toBe(100);
+
+    // 4 items: 10, 20, 30, 40 -> 10%, 20%, 30%, 40%
+    const res2 = calculatePercentagesLargestRemainder([10, 20, 30, 40]);
+    expect(res2).toEqual([10, 20, 30, 40]);
+    expect(res2.reduce((a: number, b: number) => a + b, 0)).toBe(100);
   });
 });

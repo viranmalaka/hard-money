@@ -88,6 +88,14 @@ export class AppHelper {
   }
 
   /**
+   * Dispatches online event to trigger sync and waits for idle
+   */
+  async triggerSync() {
+    await this.page.evaluate(() => window.dispatchEvent(new Event("online")));
+    await this.waitForSyncIdle();
+  }
+
+  /**
    * Quick-Add stub helper for later steps
    */
   async quickAdd(_data: {

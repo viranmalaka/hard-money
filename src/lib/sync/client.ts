@@ -2,7 +2,10 @@ import { v4 as uuidv4 } from "uuid";
 import {
   HardMoneyDB,
   LocalAccount,
+  LocalBudget,
+  LocalBudgetMonthSnapshot,
   LocalCategory,
+  LocalCreditCardStatement,
   LocalTemplate,
   LocalTransaction,
   OutboxMutation,
@@ -68,44 +71,74 @@ export async function syncNow(
 
     const data = await res.json();
 
-    await db.transaction("rw", [db.accounts, db.categories, db.transactions, db.templates, db.syncMeta], async () => {
-      // Accounts
-      for (const a of data.accounts || []) {
-        if (a.deletedAt) {
-          await db.accounts.delete(a.id);
-        } else {
-          await db.accounts.put(a);
+    await db.transaction(
+      "rw",
+      [
+        db.accounts,
+        db.categories,
+        db.transactions,
+        db.templates,
+        db.budgets,
+        db.budgetSnapshots,
+        db.creditCardStatements,
+        db.syncMeta,
+      ],
+      async () => {
+        // Accounts
+        for (const a of data.accounts || []) {
+          if (a.deletedAt) {
+            await db.accounts.delete(a.id);
+          } else {
+            await db.accounts.put(a);
+          }
         }
-      }
-      // Categories
-      for (const c of data.categories || []) {
-        if (c.deletedAt) {
-          await db.categories.delete(c.id);
-        } else {
-          await db.categories.put(c);
+        // Categories
+        for (const c of data.categories || []) {
+          if (c.deletedAt) {
+            await db.categories.delete(c.id);
+          } else {
+            await db.categories.put(c);
+          }
         }
-      }
-      // Transactions
-      for (const t of data.transactions || []) {
-        if (t.deletedAt) {
-          await db.transactions.delete(t.id);
-        } else {
-          await db.transactions.put(t);
+        // Transactions
+        for (const t of data.transactions || []) {
+          if (t.deletedAt) {
+            await db.transactions.delete(t.id);
+          } else {
+            await db.transactions.put(t);
+          }
         }
-      }
-      // Templates
-      for (const tmpl of data.templates || []) {
-        if (tmpl.deletedAt) {
-          await db.templates.delete(tmpl.id);
-        } else {
-          await db.templates.put(tmpl);
+        // Templates
+        for (const tmpl of data.templates || []) {
+          if (tmpl.deletedAt) {
+            await db.templates.delete(tmpl.id);
+          } else {
+            await db.templates.put(tmpl);
+          }
         }
+        // Budgets
+        for (const b of data.budgets || []) {
+          if (b.deletedAt) {
+            await db.budgets.delete(b.id);
+          } else {
+            await db.budgets.put(b);
+          }
+        }
+        // Budget Snapshots
+        for (const bs of data.budgetSnapshots || []) {
+          await db.budgetSnapshots.put(bs);
+        }
+        // Credit Card Statements
+        for (const ccs of data.creditCardStatements || []) {
+          await db.creditCardStatements.put(ccs);
+        }
+
+        if (data.cursor !== undefined) {
+          await db.syncMeta.put({ key: "cursor", value: data.cursor });
+        }
+        await db.syncMeta.put({ key: "lastSyncedAt", value: new Date().toISOString() });
       }
-      if (data.cursor !== undefined) {
-        await db.syncMeta.put({ key: "cursor", value: data.cursor });
-      }
-      await db.syncMeta.put({ key: "lastSyncedAt", value: new Date().toISOString() });
-    });
+    );
   } catch (err) {
     console.warn("Sync pull failed:", err);
     onStateChange("offline");
@@ -450,3 +483,87 @@ export async function localDeleteTemplate(db: HardMoneyDB, id: string): Promise<
     await db.outbox.add(mutation);
   });
 }
+
+export async function localCreateBudget(
+  db: HardMoneyDB,
+  budget: Omit<LocalBudget, "id" | "serverSeq" | "createdAt" | "updatedAt"> & { id?: string }
+): Promise<LocalBudget> {
+  const now = new Date().toISOString();
+  const id = budget.id || uuidv4();
+  const fullBudget: LocalBudget = {
+    ...budget,
+    id,
+    serverSeq: 0,
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  const mutation: OutboxMutation = {
+    mutationId: uuidv4(),
+    entity: "budget",
+    op: "CREATE",
+    id,
+    payload: {
+      id,
+      userId: budget.userId,
+      categoryId: budget.categoryId,
+      monthlyLimitMinor: budget.monthlyLimitMinor,
+      enableRollover: budget.enableRollover ?? false,
+      rolloverStartMonth: budget.rolloverStartMonth || null,
+    },
+    createdAt: now,
+    status: "pending",
+  };
+
+  await db.transaction("rw", [db.budgets, db.outbox], async () => {
+    await db.budgets.put(fullBudget);
+    await db.outbox.add(mutation);
+  });
+
+  return fullBudget;
+}
+
+export async function localUpdateBudget(
+  db: HardMoneyDB,
+  id: string,
+  patch: Partial<LocalBudget>
+): Promise<void> {
+  const existing = await db.budgets.get(id);
+  if (!existing) return;
+
+  const now = new Date().toISOString();
+  const updated: LocalBudget = { ...existing, ...patch, updatedAt: now };
+
+  const mutation: OutboxMutation = {
+    mutationId: uuidv4(),
+    entity: "budget",
+    op: "UPDATE",
+    id,
+    payload: patch,
+    createdAt: now,
+    status: "pending",
+  };
+
+  await db.transaction("rw", [db.budgets, db.outbox], async () => {
+    await db.budgets.put(updated);
+    await db.outbox.add(mutation);
+  });
+}
+
+export async function localDeleteBudget(db: HardMoneyDB, id: string): Promise<void> {
+  const now = new Date().toISOString();
+  const mutation: OutboxMutation = {
+    mutationId: uuidv4(),
+    entity: "budget",
+    op: "DELETE",
+    id,
+    createdAt: now,
+    status: "pending",
+  };
+
+  await db.transaction("rw", [db.budgets, db.outbox], async () => {
+    await db.budgets.delete(id);
+    await db.outbox.add(mutation);
+  });
+}
+

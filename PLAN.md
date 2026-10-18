@@ -70,10 +70,10 @@
 | 6   | Trans. tab views (Daily / Calendar / Monthly / Summary)        | Sec 5.0                 | ☑      |
 | 7   | Edit/delete, splits & bookmark templates                       | Sec 2.4, 2.5, 4.S3      | ☑      |
 | 8   | Balance calibration                                            | Sec 4.S7                | ☑      |
-| 9   | Stats tab                                                      | Sec 5.0                 | ☐      |
-| 10  | Budgets & safe-to-spend                                        | Sec 4.S4, 3.F           | ☐      |
-| 11  | Scheduler infrastructure & budget rollover                     | Sec 1 (Jobs), 2.7, 4.S4 | ☐      |
-| 12  | Credit cards: cycles, available credit & settlement            | Sec 4.S2.1, 4.S2.3      | ☐      |
+| 9   | Stats tab                                                      | Sec 5.0                 | ☑      |
+| 10  | Budgets & safe-to-spend                                        | Sec 4.S4, 3.F           | ☑      |
+| 11  | Scheduler infrastructure & budget rollover                     | Sec 1 (Jobs), 2.7, 4.S4 | ☑      |
+| 12  | Credit cards: cycles, available credit & settlement            | Sec 4.S2.1, 4.S2.3      | ☑      |
 | 13  | 0% installment plans                                           | Sec 4.S2.2, 3.C         | ☐      |
 | 14  | SMS ingress, archival & template parsing                       | Sec 4.S1 (steps 1-2a)   | ☐      |
 | 15  | Gemini fallback, validation gate & review inbox                | Sec 4.S1 (step 2b-4)    | ☐      |

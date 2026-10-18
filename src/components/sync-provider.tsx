@@ -3,7 +3,18 @@
 import React, { createContext, useContext, useEffect, useState, useMemo, useCallback } from "react";
 import { usePathname } from "next/navigation";
 import { useLiveQuery } from "dexie-react-hooks";
-import { getDatabase, HardMoneyDB, LocalAccount, LocalCategory, LocalTemplate, LocalTransaction, OutboxMutation } from "@/lib/db";
+import {
+  getDatabase,
+  HardMoneyDB,
+  LocalAccount,
+  LocalBudget,
+  LocalBudgetMonthSnapshot,
+  LocalCategory,
+  LocalCreditCardStatement,
+  LocalTemplate,
+  LocalTransaction,
+  OutboxMutation,
+} from "@/lib/db";
 import { syncNow, SyncState } from "@/lib/sync/client";
 import { RefreshCw, WifiOff, AlertCircle, CheckCircle2 } from "lucide-react";
 
@@ -159,6 +170,21 @@ export function useTransactions(): LocalTransaction[] {
 export function useTemplates(): LocalTemplate[] {
   const { db } = useSync();
   return useLiveQuery(() => db.templates.filter((tmpl) => !tmpl.deletedAt).toArray(), [db]) || [];
+}
+
+export function useBudgets(): LocalBudget[] {
+  const { db } = useSync();
+  return useLiveQuery(() => db.budgets.filter((b) => !b.deletedAt).toArray(), [db]) || [];
+}
+
+export function useBudgetSnapshots(): LocalBudgetMonthSnapshot[] {
+  const { db } = useSync();
+  return useLiveQuery(() => db.budgetSnapshots.toArray(), [db]) || [];
+}
+
+export function useCreditCardStatements(): LocalCreditCardStatement[] {
+  const { db } = useSync();
+  return useLiveQuery(() => db.creditCardStatements.toArray(), [db]) || [];
 }
 
 export function SyncIndicator({ isMobile }: { isMobile?: boolean }) {
