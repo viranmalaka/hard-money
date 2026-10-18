@@ -12,7 +12,7 @@ export async function GET(request: NextRequest) {
   const cursorParam = searchParams.get("cursor") || "0";
   const cursor = BigInt(cursorParam);
 
-  const [accounts, categories, transactions, templates, budgets, budgetSnapshots, creditCardStatements] = await Promise.all([
+  const [accounts, categories, transactions, templates, budgets, budgetSnapshots, creditCardStatements, installmentPlans] = await Promise.all([
     prisma.account.findMany({
       where: {
         userId: user.id,
@@ -65,6 +65,13 @@ export async function GET(request: NextRequest) {
       },
       orderBy: { serverSeq: "asc" },
     }),
+    prisma.creditCardInstallmentPlan.findMany({
+      where: {
+        userId: user.id,
+        serverSeq: { gt: cursor },
+      },
+      orderBy: { serverSeq: "asc" },
+    }),
   ]);
 
   let maxSeq = cursor;
@@ -88,6 +95,9 @@ export async function GET(request: NextRequest) {
   }
   for (const ccs of creditCardStatements) {
     if (ccs.serverSeq > maxSeq) maxSeq = ccs.serverSeq;
+  }
+  for (const plan of installmentPlans) {
+    if (plan.serverSeq > maxSeq) maxSeq = plan.serverSeq;
   }
 
   const serializedAccounts = accounts.map((a) => ({
@@ -130,6 +140,16 @@ export async function GET(request: NextRequest) {
     dueDate: ccs.dueDate.toISOString(),
   }));
 
+  const serializedInstallmentPlans = installmentPlans.map((plan) => ({
+    ...plan,
+    serverSeq: Number(plan.serverSeq),
+    startDate: plan.startDate.toISOString(),
+    firstStatementDate: plan.firstStatementDate.toISOString(),
+    createdAt: plan.createdAt.toISOString(),
+    updatedAt: plan.updatedAt.toISOString(),
+    deletedAt: plan.deletedAt ? plan.deletedAt.toISOString() : null,
+  }));
+
   return NextResponse.json({
     cursor: Number(maxSeq),
     accounts: serializedAccounts,
@@ -139,5 +159,6 @@ export async function GET(request: NextRequest) {
     budgets: serializedBudgets,
     budgetSnapshots: serializedBudgetSnapshots,
     creditCardStatements: serializedCreditCardStatements,
+    installmentPlans: serializedInstallmentPlans,
   });
 }

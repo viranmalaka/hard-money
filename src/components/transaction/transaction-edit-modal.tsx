@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { X, Trash2, Split, Plus, AlertCircle, Ban } from "lucide-react";
 import { useAccounts, useCategories, useTransactions, useSync } from "@/components/sync-provider";
-import { localUpdateTransaction, localDeleteTransaction } from "@/lib/sync/client";
+import { localUpdateTransaction, localDeleteTransaction, localCreateInstallmentPlan } from "@/lib/sync/client";
 import { LocalTransaction, LocalSplitItem } from "@/lib/db";
 import { formatMoney, parseMoneyToMinor } from "@/lib/finance-core/money";
 
@@ -75,8 +75,60 @@ function TransactionEditContent({
 
   const [showConfirmDelete, setShowConfirmDelete] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
+  const [showConvertForm, setShowConvertForm] = useState(false);
+  const [convertTenure, setConvertTenure] = useState(12);
 
   const activeAccounts = useMemo(() => accounts.filter((a) => !a.isArchived), [accounts]);
+  const targetAccount = useMemo(() => accounts.find((a) => a.id === transaction.accountId), [accounts, transaction.accountId]);
+  const isCardExpense = targetAccount?.type === "CREDIT_CARD" && transaction.type === "EXPENSE" && transaction.subType !== "CC_INSTALLMENT" && !transaction.excludeFromBalance;
+  const isSystemInstallment = transaction.subType === "CC_INSTALLMENT";
+
+  const handleConvertConfirm = async () => {
+    const tenure = Number(convertTenure) || 12;
+    const monthly = Math.floor(transaction.amountMinor / tenure);
+    const remainder = transaction.amountMinor - monthly * (tenure - 1);
+
+    const txDate = new Date(transaction.transactionDate);
+    const cutoffDay = targetAccount?.statementCutoffDay || 20;
+    const { getColomboEndOfDay } = await import("@/lib/finance-core/credit-card");
+    let nextM = txDate.getMonth() + 1;
+    let nextY = txDate.getFullYear();
+    if (txDate.getDate() >= cutoffDay) {
+      nextM += 1;
+      if (nextM > 12) {
+        nextM = 1;
+        nextY += 1;
+      }
+    }
+    const firstStatementDate = getColomboEndOfDay(nextY, nextM, cutoffDay);
+
+    await localUpdateTransaction(db, transaction.id, {
+      excludeFromBalance: true,
+      excludeFromStats: true,
+    });
+
+    await localCreateInstallmentPlan(db, {
+      userId: transaction.userId || "current-user",
+      accountId: transaction.accountId,
+      categoryId: transaction.categoryId || null,
+      merchantName: transaction.note || "Converted Purchase",
+      totalAmountMinor: transaction.amountMinor,
+      tenureMonths: tenure,
+      monthlyAmountMinor: monthly,
+      finalInstallmentAmountMinor: remainder,
+      initialPaidInstallments: 0,
+      processingFeeMinor: 0,
+      processingFeeBilled: false,
+      startDate: transaction.transactionDate,
+      firstStatementDate: firstStatementDate.toISOString(),
+      isOngoingSetup: false,
+      status: "ACTIVE",
+      originalTransactionId: transaction.id,
+      note: transaction.note || null,
+    });
+
+    onClose();
+  };
 
   // Check if active reversal exists
   const hasActiveReversal = useMemo(() => {
@@ -173,7 +225,7 @@ function TransactionEditContent({
       className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-end md:items-center justify-center p-0 md:p-4 select-none"
     >
       <div
-        data-testid="transaction-detail"
+        data-testid="transaction-edit-modal"
         className="w-full md:max-w-md bg-[var(--surface)] border border-hairline rounded-t-2xl md:rounded-xl shadow-2xl flex flex-col max-h-[92vh] overflow-hidden"
       >
         {/* Header */}
@@ -414,6 +466,72 @@ function TransactionEditContent({
             </div>
           )}
 
+          {/* Convert to 0% Installment Option */}
+          {isCardExpense && (
+            <div className="pt-2 border-t border-hairline space-y-2">
+              {!showConvertForm ? (
+                <button
+                  type="button"
+                  data-testid="convert-to-installment-btn"
+                  onClick={() => setShowConvertForm(true)}
+                  className="w-full py-1.5 px-3 rounded border border-purple-500/30 bg-purple-500/10 text-purple-600 font-semibold text-xs hover:bg-purple-500/20 active:scale-98 transition-all flex items-center justify-center gap-1.5"
+                >
+                  Convert to 0% Installment
+                </button>
+              ) : (
+                <div
+                  data-testid="convert-section"
+                  className="p-3 rounded border border-purple-500/30 bg-purple-500/5 space-y-2.5"
+                >
+                  <div className="font-semibold text-xs text-[var(--text)]">Convert to 0% Installment Plan</div>
+                  <div className="space-y-1">
+                    <label className="text-[11px] text-[var(--text-muted)]">Tenure</label>
+                    <select
+                      data-testid="convert-tenure-select"
+                      value={convertTenure}
+                      onChange={(e) => setConvertTenure(Number(e.target.value))}
+                      className="w-full px-2 py-1.5 rounded border border-hairline bg-[var(--bg)] text-xs"
+                    >
+                      <option value={3}>3 Months ({formatMoney(Math.floor(transaction.amountMinor / 3))}/mo)</option>
+                      <option value={6}>6 Months ({formatMoney(Math.floor(transaction.amountMinor / 6))}/mo)</option>
+                      <option value={12}>12 Months ({formatMoney(Math.floor(transaction.amountMinor / 12))}/mo)</option>
+                      <option value={18}>18 Months ({formatMoney(Math.floor(transaction.amountMinor / 18))}/mo)</option>
+                      <option value={24}>24 Months ({formatMoney(Math.floor(transaction.amountMinor / 24))}/mo)</option>
+                      <option value={36}>36 Months ({formatMoney(Math.floor(transaction.amountMinor / 36))}/mo)</option>
+                    </select>
+                  </div>
+                  <div className="flex items-center gap-2 pt-1">
+                    <button
+                      type="button"
+                      data-testid="confirm-convert-btn"
+                      onClick={handleConvertConfirm}
+                      className="flex-1 py-1.5 px-3 rounded bg-purple-600 text-white font-semibold text-xs hover:bg-purple-700 active:scale-98 transition-all"
+                    >
+                      Confirm Conversion
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowConvertForm(false)}
+                      className="py-1.5 px-3 rounded border border-hairline text-xs hover:bg-[var(--border)] transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Blocking message if system installment */}
+          {isSystemInstallment && (
+            <div
+              data-testid="cannot-delete-installment-msg"
+              className="p-2 rounded bg-amber-500/10 border border-amber-500/20 text-amber-600 text-[11px]"
+            >
+              System-generated installment rows cannot be deleted manually.
+            </div>
+          )}
+
           {/* Blocking message if reversal exists */}
           {hasActiveReversal && (
             <div
@@ -448,16 +566,18 @@ function TransactionEditContent({
             </div>
           ) : (
             <>
-              <button
-                type="button"
-                data-testid="transaction-delete-btn"
-                disabled={hasActiveReversal}
-                onClick={() => setShowConfirmDelete(true)}
-                className="p-2 rounded text-red-500 hover:bg-red-500/10 active:scale-95 transition-all disabled:opacity-30 disabled:pointer-events-none"
-                title="Delete transaction"
-              >
-                <Trash2 size={16} />
-              </button>
+              {!isSystemInstallment && (
+                <button
+                  type="button"
+                  data-testid="transaction-delete-btn"
+                  disabled={hasActiveReversal || isSystemInstallment}
+                  onClick={() => setShowConfirmDelete(true)}
+                  className="p-2 rounded text-red-500 hover:bg-red-500/10 active:scale-95 transition-all disabled:opacity-30 disabled:pointer-events-none"
+                  title="Delete transaction"
+                >
+                  <Trash2 size={16} />
+                </button>
+              )}
 
               <button
                 type="button"

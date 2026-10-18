@@ -32,6 +32,7 @@ export async function runCronTick(options?: { now?: Date }): Promise<{
   timestamp: string;
   processedBudgets: number;
   processedStatements: number;
+  processedInstallmentPlans: number;
 }> {
   const now = options?.now || getServerNow();
   const colomboNowStr = getColomboDateString(now);
@@ -262,10 +263,111 @@ export async function runCronTick(options?: { now?: Date }): Promise<{
     processedStatements++;
   }
 
+  // 3. 0% Installment Plans catch-up job (Step 13)
+  const activePlans = await prisma.creditCardInstallmentPlan.findMany({
+    where: {
+      status: "ACTIVE",
+      deletedAt: null,
+    },
+    include: {
+      account: true,
+    },
+  });
+
+  let processedInstallmentPlans = 0;
+
+  for (const plan of activePlans) {
+    const card = plan.account;
+    const { getColomboDateParts, getColomboEndOfDay } = await import("@/lib/finance-core/credit-card");
+    const startParts = getColomboDateParts(plan.firstStatementDate);
+    let curYear = startParts.year;
+    let curMonth = startParts.month;
+    const cutoffDay = card.statementCutoffDay || startParts.day;
+
+    let loopGuard = 0;
+    while (loopGuard++ < 120) {
+      const cutoffDate = getColomboEndOfDay(curYear, curMonth, cutoffDay);
+      if (cutoffDate.getTime() > now.getTime()) {
+        break; // cutoff in future
+      }
+
+      const cutoffDateStr = getColomboDateString(cutoffDate);
+      const deterministicId = `inst_${plan.id}_${cutoffDateStr}`;
+
+      const existingTx = await prisma.transaction.findUnique({
+        where: { id: deterministicId },
+      });
+
+      if (!existingTx) {
+        const existingCount = await prisma.transaction.count({
+          where: { installmentPlanId: plan.id, deletedAt: null },
+        });
+        const currentPaid = plan.initialPaidInstallments + existingCount;
+        if (currentPaid < plan.tenureMonths) {
+          const installmentIndex = currentPaid + 1;
+          const isFinal = installmentIndex >= plan.tenureMonths;
+          const amount = isFinal ? plan.finalInstallmentAmountMinor : plan.monthlyAmountMinor;
+          const nextSeq = await getNextServerSeq();
+
+          await prisma.transaction.create({
+            data: {
+              id: deterministicId,
+              userId: plan.userId,
+              accountId: plan.accountId,
+              categoryId: plan.categoryId || null,
+              amountMinor: amount,
+              type: "EXPENSE",
+              subType: "CC_INSTALLMENT",
+              source: "SYSTEM",
+              createdByUserId: plan.userId,
+              updatedByUserId: plan.userId,
+              transactionDate: cutoffDate,
+              note: `${plan.merchantName} (Installment ${installmentIndex} of ${plan.tenureMonths})`,
+              excludeFromBudget: false,
+              excludeFromStats: false,
+              excludeFromBalance: false,
+              installmentPlanId: plan.id,
+              serverSeq: nextSeq,
+            },
+          });
+
+          if (installmentIndex >= plan.tenureMonths) {
+            await prisma.creditCardInstallmentPlan.update({
+              where: { id: plan.id },
+              data: { status: "COMPLETED", serverSeq: nextSeq },
+            });
+            break;
+          }
+        }
+      }
+
+      curMonth++;
+      if (curMonth > 12) {
+        curMonth = 1;
+        curYear++;
+      }
+    }
+
+    // Check if plan reached completion
+    const totalBilled = await prisma.transaction.count({
+      where: { installmentPlanId: plan.id, deletedAt: null },
+    });
+    if (plan.initialPaidInstallments + totalBilled >= plan.tenureMonths && plan.status === "ACTIVE") {
+      const nextSeq = await getNextServerSeq();
+      await prisma.creditCardInstallmentPlan.update({
+        where: { id: plan.id },
+        data: { status: "COMPLETED", serverSeq: nextSeq },
+      });
+    }
+
+    processedInstallmentPlans++;
+  }
+
   return {
     ok: true,
     timestamp: now.toISOString(),
     processedBudgets,
     processedStatements,
+    processedInstallmentPlans,
   };
 }

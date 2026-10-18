@@ -21,21 +21,13 @@ export async function POST(
       resetServerClock();
       resetTestSyncHooks();
       queuedGeminiResponses.length = 0;
+      const { clearCapturedLogs } = await import("@/lib/server-log");
+      clearCapturedLogs();
       try {
         const { prisma } = await import("@/lib/prisma");
-        await prisma.creditCardStatement.deleteMany();
-        await prisma.budgetMonthSnapshot.deleteMany();
-        await prisma.budget.deleteMany();
-        await prisma.transactionSplitItem.deleteMany();
-        await prisma.transactionTemplate.deleteMany();
-        await prisma.transaction.deleteMany();
-        await prisma.account.deleteMany();
-        await prisma.householdMember.deleteMany();
-        await prisma.household.deleteMany();
-        await prisma.category.deleteMany();
-        await prisma.appliedMutation.deleteMany();
-        await prisma.syncSequence.deleteMany();
-        await prisma.user.deleteMany();
+        await prisma.$executeRawUnsafe(
+          'TRUNCATE TABLE "User", "Account", "Category", "Transaction", "TransactionSplitItem", "TransactionTemplate", "Budget", "BudgetMonthSnapshot", "CreditCardStatement", "CreditCardInstallmentPlan", "BankSms", "Household", "HouseholdMember", "SyncSequence", "AppliedMutation" CASCADE;'
+        );
         try {
           await prisma.$executeRawUnsafe("ALTER SEQUENCE IF EXISTS global_server_seq RESTART WITH 1");
         } catch {
@@ -198,6 +190,7 @@ export async function POST(
               excludeFromBudget: t.excludeFromBudget || false,
               excludeFromStats: t.excludeFromStats || false,
               excludeFromBalance: t.excludeFromBalance || false,
+              installmentPlanId: t.installmentPlanId || null,
               serverSeq: nextSeq,
             },
             update: {
@@ -205,6 +198,43 @@ export async function POST(
               type: t.type || "EXPENSE",
               transactionDate: new Date(t.transactionDate),
               excludeFromBudget: t.excludeFromBudget || false,
+              excludeFromStats: t.excludeFromStats || false,
+              excludeFromBalance: t.excludeFromBalance || false,
+              installmentPlanId: t.installmentPlanId || null,
+              serverSeq: nextSeq,
+            },
+          });
+        }
+      }
+
+      if (Array.isArray(body.installmentPlans)) {
+        for (const plan of body.installmentPlans) {
+          const nextSeq = await getNextServerSeq();
+          await prisma.creditCardInstallmentPlan.upsert({
+            where: { id: plan.id },
+            create: {
+              id: plan.id,
+              userId: plan.userId,
+              accountId: plan.accountId,
+              categoryId: plan.categoryId || null,
+              merchantName: plan.merchantName || "Installment Plan",
+              totalAmountMinor: plan.totalAmountMinor ?? 0,
+              tenureMonths: plan.tenureMonths ?? 1,
+              monthlyAmountMinor: plan.monthlyAmountMinor ?? 0,
+              finalInstallmentAmountMinor: plan.finalInstallmentAmountMinor ?? 0,
+              initialPaidInstallments: plan.initialPaidInstallments ?? 0,
+              processingFeeMinor: plan.processingFeeMinor ?? 0,
+              processingFeeBilled: plan.processingFeeBilled ?? false,
+              startDate: new Date(plan.startDate || new Date()),
+              firstStatementDate: new Date(plan.firstStatementDate || new Date()),
+              isOngoingSetup: plan.isOngoingSetup ?? false,
+              status: plan.status || "ACTIVE",
+              originalTransactionId: plan.originalTransactionId || null,
+              note: plan.note || null,
+              serverSeq: nextSeq,
+            },
+            update: {
+              status: plan.status,
               serverSeq: nextSeq,
             },
           });
@@ -224,6 +254,12 @@ export async function POST(
       const body = await request.json().catch(() => ({}));
       queuedGeminiResponses.push(body);
       return NextResponse.json({ ok: true, queueLength: queuedGeminiResponses.length });
+    }
+
+    case "clear-logs": {
+      const { clearCapturedLogs } = await import("@/lib/server-log");
+      clearCapturedLogs();
+      return NextResponse.json({ ok: true });
     }
 
     case "fail-mutation": {
@@ -251,16 +287,22 @@ export async function GET(
   const action = slug[0];
 
   switch (action) {
+    case "logs": {
+      const { getCapturedLogs } = await import("@/lib/server-log");
+      return NextResponse.json({ logs: getCapturedLogs() });
+    }
+
     case "snapshot": {
       try {
         const { prisma } = await import("@/lib/prisma");
-        const [accounts, categories, transactions, budgets, budgetSnapshots, creditCardStatements] = await Promise.all([
+        const [accounts, categories, transactions, budgets, budgetSnapshots, creditCardStatements, installmentPlans] = await Promise.all([
           prisma.account.findMany({ where: { deletedAt: null } }),
           prisma.category.findMany({ where: { deletedAt: null } }),
           prisma.transaction.findMany({ where: { deletedAt: null } }),
           prisma.budget.findMany({ where: { deletedAt: null } }),
           prisma.budgetMonthSnapshot.findMany(),
           prisma.creditCardStatement.findMany(),
+          prisma.creditCardInstallmentPlan.findMany({ where: { deletedAt: null } }),
         ]);
 
         const balances: Record<string, number> = {};
@@ -276,6 +318,7 @@ export async function GET(
           budgets: budgets.map((b) => ({ ...b, serverSeq: Number(b.serverSeq) })),
           budgetSnapshots: budgetSnapshots.map((bs) => ({ ...bs, serverSeq: Number(bs.serverSeq) })),
           creditCardStatements: creditCardStatements.map((ccs) => ({ ...ccs, serverSeq: Number(ccs.serverSeq) })),
+          installmentPlans: installmentPlans.map((p) => ({ ...p, serverSeq: Number(p.serverSeq) })),
           balances,
         });
       } catch (err: any) {

@@ -16,7 +16,10 @@ export interface SyncMutation {
     | "template"
     | "Template"
     | "budget"
-    | "Budget";
+    | "Budget"
+    | "installmentplan"
+    | "InstallmentPlan"
+    | "installmentPlan";
   op: "CREATE" | "UPDATE" | "DELETE";
   id: string;
   payload?: any;
@@ -223,6 +226,7 @@ export async function POST(request: NextRequest) {
               excludeFromBudget: payload.excludeFromBudget ?? false,
               excludeFromStats: payload.excludeFromStats ?? false,
               excludeFromBalance: payload.excludeFromBalance ?? false,
+              installmentPlanId: payload.installmentPlanId || null,
               serverSeq: nextSeq,
               deletedAt: null,
             },
@@ -243,6 +247,9 @@ export async function POST(request: NextRequest) {
               excludeFromBudget: payload.excludeFromBudget,
               excludeFromStats: payload.excludeFromStats,
               excludeFromBalance: payload.excludeFromBalance,
+              ...(payload.installmentPlanId !== undefined && {
+                installmentPlanId: payload.installmentPlanId,
+              }),
               serverSeq: nextSeq,
               deletedAt: null,
             },
@@ -452,6 +459,63 @@ export async function POST(request: NextRequest) {
           });
         } else if (mutation.op === "DELETE") {
           await prisma.budget.updateMany({
+            where: { id: mutation.id, userId: user.id },
+            data: {
+              deletedAt: new Date(),
+              serverSeq: nextSeq,
+            },
+          });
+        }
+      }
+
+      if (entityLower === "installmentplan") {
+        const payload = mutation.payload || {};
+        if (mutation.op === "CREATE") {
+          await prisma.creditCardInstallmentPlan.upsert({
+            where: { id: mutation.id },
+            create: {
+              id: mutation.id,
+              userId: user.id,
+              accountId: payload.accountId,
+              categoryId: payload.categoryId || null,
+              merchantName: payload.merchantName || "Installment Plan",
+              totalAmountMinor: payload.totalAmountMinor ?? 0,
+              tenureMonths: payload.tenureMonths ?? 1,
+              monthlyAmountMinor: payload.monthlyAmountMinor ?? 0,
+              finalInstallmentAmountMinor: payload.finalInstallmentAmountMinor ?? 0,
+              initialPaidInstallments: payload.initialPaidInstallments ?? 0,
+              processingFeeMinor: payload.processingFeeMinor ?? 0,
+              processingFeeBilled: payload.processingFeeBilled ?? false,
+              startDate: payload.startDate ? new Date(payload.startDate) : new Date(),
+              firstStatementDate: payload.firstStatementDate ? new Date(payload.firstStatementDate) : new Date(),
+              isOngoingSetup: payload.isOngoingSetup ?? false,
+              status: payload.status || "ACTIVE",
+              originalTransactionId: payload.originalTransactionId || null,
+              note: payload.note || null,
+              serverSeq: nextSeq,
+              deletedAt: null,
+            },
+            update: {
+              categoryId: payload.categoryId,
+              merchantName: payload.merchantName,
+              status: payload.status,
+              note: payload.note,
+              serverSeq: nextSeq,
+              deletedAt: null,
+            },
+          });
+        } else if (mutation.op === "UPDATE") {
+          await prisma.creditCardInstallmentPlan.updateMany({
+            where: { id: mutation.id, userId: user.id },
+            data: {
+              ...(payload.status !== undefined && { status: payload.status }),
+              ...(payload.note !== undefined && { note: payload.note }),
+              ...(payload.categoryId !== undefined && { categoryId: payload.categoryId }),
+              serverSeq: nextSeq,
+            },
+          });
+        } else if (mutation.op === "DELETE") {
+          await prisma.creditCardInstallmentPlan.updateMany({
             where: { id: mutation.id, userId: user.id },
             data: {
               deletedAt: new Date(),

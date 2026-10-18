@@ -6,6 +6,7 @@ import {
   LocalBudgetMonthSnapshot,
   LocalCategory,
   LocalCreditCardStatement,
+  LocalInstallmentPlan,
   LocalTemplate,
   LocalTransaction,
   OutboxMutation,
@@ -81,6 +82,7 @@ export async function syncNow(
         db.budgets,
         db.budgetSnapshots,
         db.creditCardStatements,
+        db.installmentPlans,
         db.syncMeta,
       ],
       async () => {
@@ -131,6 +133,14 @@ export async function syncNow(
         // Credit Card Statements
         for (const ccs of data.creditCardStatements || []) {
           await db.creditCardStatements.put(ccs);
+        }
+        // Installment Plans
+        for (const plan of data.installmentPlans || []) {
+          if (plan.deletedAt) {
+            await db.installmentPlans.delete(plan.id);
+          } else {
+            await db.installmentPlans.put(plan);
+          }
         }
 
         if (data.cursor !== undefined) {
@@ -566,4 +576,81 @@ export async function localDeleteBudget(db: HardMoneyDB, id: string): Promise<vo
     await db.outbox.add(mutation);
   });
 }
+
+export async function localCreateInstallmentPlan(
+  db: HardMoneyDB,
+  plan: Omit<LocalInstallmentPlan, "id" | "serverSeq" | "createdAt" | "updatedAt"> & { id?: string }
+): Promise<LocalInstallmentPlan> {
+  const now = new Date().toISOString();
+  const id = plan.id || uuidv4();
+  const fullPlan: LocalInstallmentPlan = {
+    ...plan,
+    id,
+    serverSeq: 0,
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  const mutation: OutboxMutation = {
+    mutationId: uuidv4(),
+    entity: "installmentPlan",
+    op: "CREATE",
+    id,
+    payload: fullPlan,
+    createdAt: now,
+    status: "pending",
+  };
+
+  await db.transaction("rw", [db.installmentPlans, db.outbox], async () => {
+    await db.installmentPlans.put(fullPlan);
+    await db.outbox.add(mutation);
+  });
+
+  return fullPlan;
+}
+
+export async function localUpdateInstallmentPlan(
+  db: HardMoneyDB,
+  id: string,
+  patch: Partial<LocalInstallmentPlan>
+): Promise<void> {
+  const existing = await db.installmentPlans.get(id);
+  if (!existing) return;
+
+  const now = new Date().toISOString();
+  const updated: LocalInstallmentPlan = { ...existing, ...patch, updatedAt: now };
+
+  const mutation: OutboxMutation = {
+    mutationId: uuidv4(),
+    entity: "installmentPlan",
+    op: "UPDATE",
+    id,
+    payload: patch,
+    createdAt: now,
+    status: "pending",
+  };
+
+  await db.transaction("rw", [db.installmentPlans, db.outbox], async () => {
+    await db.installmentPlans.put(updated);
+    await db.outbox.add(mutation);
+  });
+}
+
+export async function localDeleteInstallmentPlan(db: HardMoneyDB, id: string): Promise<void> {
+  const now = new Date().toISOString();
+  const mutation: OutboxMutation = {
+    mutationId: uuidv4(),
+    entity: "installmentPlan",
+    op: "DELETE",
+    id,
+    createdAt: now,
+    status: "pending",
+  };
+
+  await db.transaction("rw", [db.installmentPlans, db.outbox], async () => {
+    await db.installmentPlans.delete(id);
+    await db.outbox.add(mutation);
+  });
+}
+
 

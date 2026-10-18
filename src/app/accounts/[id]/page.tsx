@@ -4,15 +4,17 @@ import React, { useState, useMemo, Suspense } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { ArrowLeft, Wallet, Building2, CreditCard, ArrowLeftRight, Scale } from "lucide-react";
-import { useAccounts, useTransactions, useCategories, useCreditCardStatements } from "@/components/sync-provider";
+import { useAccounts, useTransactions, useCategories, useCreditCardStatements, useInstallmentPlans, useSync } from "@/components/sync-provider";
 import { calculateLedgerBalance, LedgerTransaction } from "@/lib/finance-core/ledger";
 import { formatMoney } from "@/lib/finance-core/money";
-import { calculateStatementCycle } from "@/lib/finance-core/credit-card";
+import { calculateStatementCycle, calculateInstallmentProgress } from "@/lib/finance-core/credit-card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { CalibrationModal } from "@/components/transaction/calibration-modal";
 import { TransactionEditModal } from "@/components/transaction/transaction-edit-modal";
 import { SettleModal } from "@/components/account/settle-modal";
-import { LocalTransaction } from "@/lib/db";
+import { EarlyPayoffModal } from "@/components/account/early-payoff-modal";
+import { LocalTransaction, LocalInstallmentPlan } from "@/lib/db";
+import { localUpdateTransaction, localDeleteInstallmentPlan } from "@/lib/sync/client";
 
 export default function AccountDetailPage() {
   return (
@@ -36,10 +38,14 @@ function AccountDetailContent() {
   const transactions = useTransactions();
   const categories = useCategories();
   const statements = useCreditCardStatements();
+  const installmentPlans = useInstallmentPlans();
 
+  const { db } = useSync();
   const [isCalibrateOpen, setIsCalibrateOpen] = useState(false);
   const [isSettleOpen, setIsSettleOpen] = useState(false);
   const [selectedTxForEdit, setSelectedTxForEdit] = useState<LocalTransaction | null>(null);
+  const [payoffPlan, setPayoffPlan] = useState<LocalInstallmentPlan | null>(null);
+  const [payoffRemainingMinor, setPayoffRemainingMinor] = useState(0);
 
   const account = useMemo(() => {
     return accounts.find((a) => a.id === accountId);
@@ -58,6 +64,42 @@ function AccountDetailContent() {
       deletedAt: t.deletedAt,
     }));
   }, [transactions]);
+
+  const cardPlans = useMemo(() => {
+    if (!account || account.type !== "CREDIT_CARD") return [];
+    return installmentPlans.filter((p) => p.accountId === account.id);
+  }, [account, installmentPlans]);
+
+  const planProgressMap = useMemo(() => {
+    const map = new Map<string, { paidInstallments: number; remainingInstallments: number; remainingPrincipalMinor: number }>();
+    for (const plan of cardPlans) {
+      const planTxBilled = transactions
+        .filter((t) => !t.deletedAt && t.installmentPlanId === plan.id && t.type === "EXPENSE" && t.subType === "CC_INSTALLMENT")
+        .map((t) => t.amountMinor);
+
+      const prog = calculateInstallmentProgress(
+        plan.totalAmountMinor,
+        plan.tenureMonths,
+        plan.initialPaidInstallments || 0,
+        planTxBilled
+      );
+      map.set(plan.id, prog);
+    }
+    return map;
+  }, [cardPlans, transactions]);
+
+  // Blocked principal for this credit card
+  const blockedPrincipalMinor = useMemo(() => {
+    if (!account || account.type !== "CREDIT_CARD") return 0;
+    let total = 0;
+    for (const plan of cardPlans) {
+      if (plan.status === "ACTIVE") {
+        const prog = planProgressMap.get(plan.id);
+        if (prog) total += prog.remainingPrincipalMinor;
+      }
+    }
+    return total;
+  }, [account, cardPlans, planProgressMap]);
 
   // Derived balance from ledger
   const balance = useMemo(() => {
@@ -85,8 +127,9 @@ function AccountDetailContent() {
       creditLimitMinor: account.creditLimitMinor || 0,
       statementCutoffDay: account.statementCutoffDay || 20,
       paymentDueDay: account.paymentDueDay || 10,
+      blockedPrincipalMinor,
     });
-  }, [account, ledgerTxList]);
+  }, [account, ledgerTxList, blockedPrincipalMinor]);
 
   // Card statement history
   const cardStatements = useMemo(() => {
@@ -216,7 +259,7 @@ function AccountDetailContent() {
 
       {/* Account Info Stats */}
       {isCreditCard && cycle && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 p-3 bg-[var(--surface)] border border-hairline rounded-lg text-xs">
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 p-3 bg-[var(--surface)] border border-hairline rounded-lg text-xs">
           <div>
             <span className="text-[11px] text-[var(--text-muted)] block">Billed Due</span>
             <span data-testid="credit-billed-amount" className="font-mono font-semibold text-expense">
@@ -227,6 +270,12 @@ function AccountDetailContent() {
             <span className="text-[11px] text-[var(--text-muted)] block">Unbilled Spend</span>
             <span data-testid="credit-unbilled-amount" className="font-mono font-semibold text-[var(--text)]">
               {formatMoney(cycle.unbilledBalanceMinor)}
+            </span>
+          </div>
+          <div>
+            <span className="text-[11px] text-[var(--text-muted)] block">Blocked</span>
+            <span data-testid="credit-blocked-amount" className="font-mono font-semibold text-amber-600 dark:text-amber-500">
+              {formatMoney(blockedPrincipalMinor)}
             </span>
           </div>
           <div>
@@ -399,6 +448,112 @@ function AccountDetailContent() {
         </section>
       )}
 
+      {/* 0% Installment Plans for this Card */}
+      {isCreditCard && cardPlans.length > 0 && (
+        <section data-testid="card-installment-plans" className="space-y-2">
+          <h2 className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider px-1">
+            0% Installment Plans ({cardPlans.length})
+          </h2>
+          <div className="space-y-2">
+            {cardPlans.map((plan) => {
+              const prog = planProgressMap.get(plan.id) || {
+                paidInstallments: plan.initialPaidInstallments || 0,
+                remainingInstallments: plan.tenureMonths,
+                remainingPrincipalMinor: plan.totalAmountMinor,
+              };
+              const percent = Math.min(100, Math.round((prog.paidInstallments / plan.tenureMonths) * 100));
+
+              return (
+                <div
+                  key={plan.id}
+                  data-testid={`installment-plan-card-${plan.id}`}
+                  className="p-3 rounded border border-hairline bg-[var(--surface)] space-y-2"
+                >
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span data-testid="installment-merchant" className="text-xs font-semibold text-[var(--text)]">
+                        {plan.merchantName}
+                      </span>
+                      <div className="text-[11px] text-[var(--text-muted)] flex items-center gap-2">
+                        <span>Total: {formatMoney(plan.totalAmountMinor)}</span>
+                        {plan.status === "COMPLETED" && (
+                          <span className="px-1.5 py-0.2 rounded bg-green-500/10 text-green-600 dark:text-green-400 font-semibold text-[10px]">
+                            COMPLETED
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      {plan.status === "ACTIVE" && (
+                        <>
+                          <button
+                            type="button"
+                            data-testid="installment-early-payoff-btn"
+                            onClick={() => {
+                              setPayoffPlan(plan);
+                              setPayoffRemainingMinor(prog.remainingPrincipalMinor);
+                            }}
+                            className="px-2 py-0.5 rounded border border-hairline text-[11px] font-medium hover:bg-[var(--border)] text-[var(--text)] transition-colors"
+                          >
+                            Early Payoff
+                          </button>
+                          <button
+                            type="button"
+                            data-testid="cancel-plan-btn"
+                            onClick={async () => {
+                              if (plan.originalTransactionId) {
+                                await localUpdateTransaction(db, plan.originalTransactionId, {
+                                  excludeFromBalance: false,
+                                  excludeFromStats: false,
+                                  installmentPlanId: null,
+                                });
+                              }
+                              await localDeleteInstallmentPlan(db, plan.id);
+                            }}
+                            className="px-2 py-0.5 rounded border border-hairline text-[11px] font-medium text-red-500 hover:bg-red-500/10 transition-colors"
+                          >
+                            Cancel Plan
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Progress Bar & Stats */}
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between text-[11px]">
+                      <span data-testid="installment-progress-text" className="text-[var(--text-muted)]">
+                        {prog.paidInstallments} of {plan.tenureMonths}
+                      </span>
+                      <span data-testid="installment-monthly-amount" className="font-mono tabular-nums text-[var(--text)]">
+                        {formatMoney(plan.monthlyAmountMinor)} / mo
+                      </span>
+                    </div>
+                    <div
+                      data-testid="installment-progress-bar"
+                      className="w-full bg-[var(--border)] h-1.5 rounded-full overflow-hidden"
+                    >
+                      <div
+                        className="bg-blue-500 h-full rounded-full transition-all duration-300"
+                        style={{ width: `${percent}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between text-[11px] pt-1 border-t border-hairline text-[var(--text-muted)]">
+                    <span>Remaining Principal</span>
+                    <span data-testid="installment-remaining-amount" className="font-mono font-semibold tabular-nums text-[var(--text)]">
+                      {formatMoney(prog.remainingPrincipalMinor)}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
       {/* Balance Calibration Sheet / Modal */}
       {isCalibrateOpen && (
         <CalibrationModal
@@ -417,6 +572,16 @@ function AccountDetailContent() {
           totalDebtMinor={cycle.outstandingDebtMinor}
           isOpen={isSettleOpen}
           onClose={() => setIsSettleOpen(false)}
+        />
+      )}
+
+      {/* Early Payoff Modal */}
+      {payoffPlan && (
+        <EarlyPayoffModal
+          plan={payoffPlan}
+          remainingPrincipalMinor={payoffRemainingMinor}
+          isOpen={!!payoffPlan}
+          onClose={() => setPayoffPlan(null)}
         />
       )}
 

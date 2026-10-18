@@ -37,6 +37,7 @@ export function DailyView({
       // Day subtotal: Income - Expense (excluding transfers and excludeFromStats)
       let subtotal = 0;
       for (const t of txs) {
+        if (t.deletedAt || t.excludeFromStats) continue;
         if (t.type === "INCOME") {
           subtotal += t.amountMinor;
         } else if (t.type === "EXPENSE") {
@@ -157,6 +158,16 @@ export function DailyView({
                           >
                             <Ban size={9} />
                             <span>No budget</span>
+                          </span>
+                        )}
+
+                        {/* Converted to installment badge */}
+                        {tx.excludeFromBalance && tx.excludeFromStats && (
+                          <span
+                            data-testid="converted-chip"
+                            className="inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.2 rounded bg-purple-500/10 text-purple-600 font-medium"
+                          >
+                            converted
                           </span>
                         )}
                       </div>

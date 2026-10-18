@@ -40,4 +40,13 @@ export class TestApiClient {
     const res = await this.request.get(`${this.baseURL}/api/test/snapshot`);
     return res.json();
   }
+
+  async getLogs(): Promise<{ logs: string[] }> {
+    const res = await this.request.get(`${this.baseURL}/api/test/logs`);
+    return res.json();
+  }
+
+  async clearLogs() {
+    return this.request.post(`${this.baseURL}/api/test/clear-logs`);
+  }
 }

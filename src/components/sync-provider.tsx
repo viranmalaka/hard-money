@@ -11,6 +11,7 @@ import {
   LocalBudgetMonthSnapshot,
   LocalCategory,
   LocalCreditCardStatement,
+  LocalInstallmentPlan,
   LocalTemplate,
   LocalTransaction,
   OutboxMutation,
@@ -185,6 +186,11 @@ export function useBudgetSnapshots(): LocalBudgetMonthSnapshot[] {
 export function useCreditCardStatements(): LocalCreditCardStatement[] {
   const { db } = useSync();
   return useLiveQuery(() => db.creditCardStatements.toArray(), [db]) || [];
+}
+
+export function useInstallmentPlans(): LocalInstallmentPlan[] {
+  const { db } = useSync();
+  return useLiveQuery(() => db.installmentPlans.filter((p) => !p.deletedAt).toArray(), [db]) || [];
 }
 
 export function SyncIndicator({ isMobile }: { isMobile?: boolean }) {

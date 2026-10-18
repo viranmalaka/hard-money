@@ -84,6 +84,7 @@ export interface LocalTransaction {
   excludeFromBudget: boolean;
   excludeFromStats: boolean;
   excludeFromBalance: boolean;
+  installmentPlanId?: string | null;
   serverSeq: number;
   createdAt: string;
   updatedAt: string;
@@ -133,9 +134,34 @@ export interface LocalCreditCardStatement {
   updatedAt: string;
 }
 
+export interface LocalInstallmentPlan {
+  id: string;
+  userId: string;
+  accountId: string;
+  categoryId?: string | null;
+  merchantName: string;
+  totalAmountMinor: number;
+  tenureMonths: number;
+  monthlyAmountMinor: number;
+  finalInstallmentAmountMinor: number;
+  initialPaidInstallments: number;
+  processingFeeMinor: number;
+  processingFeeBilled: boolean;
+  startDate: string;
+  firstStatementDate: string;
+  isOngoingSetup: boolean;
+  status: "ACTIVE" | "COMPLETED" | "CANCELLED";
+  originalTransactionId?: string | null;
+  note?: string | null;
+  serverSeq: number;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt?: string | null;
+}
+
 export interface OutboxMutation {
   mutationId: string;
-  entity: "account" | "category" | "transaction" | "template" | "budget" | "statement";
+  entity: "account" | "category" | "transaction" | "template" | "budget" | "statement" | "installmentPlan";
   op: "CREATE" | "UPDATE" | "DELETE";
   id: string;
   payload?: unknown;
@@ -157,6 +183,7 @@ export class HardMoneyDB extends Dexie {
   budgets!: Table<LocalBudget, string>;
   budgetSnapshots!: Table<LocalBudgetMonthSnapshot, string>;
   creditCardStatements!: Table<LocalCreditCardStatement, string>;
+  installmentPlans!: Table<LocalInstallmentPlan, string>;
   outbox!: Table<OutboxMutation, string>;
   syncMeta!: Table<SyncMeta, string>;
 
@@ -187,6 +214,7 @@ export class HardMoneyDB extends Dexie {
       budgets: "id, userId, categoryId, serverSeq, deletedAt",
       budgetSnapshots: "id, userId, categoryId, month, serverSeq",
       creditCardStatements: "id, userId, accountId, cycleCutoffDate, serverSeq",
+      installmentPlans: "id, userId, accountId, status, serverSeq, deletedAt",
       outbox: "mutationId, entity, op, id, status, createdAt",
       syncMeta: "key",
     });

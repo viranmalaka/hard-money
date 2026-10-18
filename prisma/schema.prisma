@@ -33,6 +33,8 @@ model User {
   budgets                      Budget[]
   budgetSnapshots              BudgetMonthSnapshot[]
   creditCardStatements         CreditCardStatement[]
+  installmentPlans             CreditCardInstallmentPlan[]
+  bankSmsList                  BankSms[]
 }
 
 model Household {
@@ -73,6 +75,7 @@ model Category {
   splitItems   TransactionSplitItem[]
   budgets      Budget[]
   budgetSnapshots BudgetMonthSnapshot[]
+  installmentPlans CreditCardInstallmentPlan[]
 
   @@index([userId])
   @@index([serverSeq])
@@ -105,6 +108,7 @@ model Account {
   transactions               Transaction[] @relation("AccountTransactions")
   transfersTo                Transaction[] @relation("TransferToAccount")
   creditCardStatements       CreditCardStatement[]
+  installmentPlans           CreditCardInstallmentPlan[]
 
   @@index([userId])
   @@index([householdId])
@@ -144,9 +148,13 @@ model Transaction {
   splitItems                   TransactionSplitItem[]
   reversalOf                   Transaction?  @relation("TransactionReversals", fields: [reversalOfTransactionId], references: [id], onDelete: SetNull)
   reversals                    Transaction[] @relation("TransactionReversals")
+  installmentPlanId            String?
+  installmentPlan              CreditCardInstallmentPlan? @relation("PlanTransactions", fields: [installmentPlanId], references: [id], onDelete: SetNull)
+  bankSmsList                  BankSms[]
 
   @@index([userId])
   @@index([accountId])
+  @@index([installmentPlanId])
   @@index([transactionDate])
   @@index([serverSeq])
 }
@@ -265,3 +273,63 @@ model CreditCardStatement {
   @@index([userId])
   @@index([accountId])
 }
+
+model CreditCardInstallmentPlan {
+  id                          String        @id @default(uuid())
+  userId                      String
+  accountId                   String
+  categoryId                  String?
+  merchantName                String
+  totalAmountMinor            Int
+  tenureMonths                Int
+  monthlyAmountMinor          Int
+  finalInstallmentAmountMinor Int
+  initialPaidInstallments     Int           @default(0)
+  processingFeeMinor          Int           @default(0)
+  processingFeeBilled         Boolean       @default(false)
+  startDate                   DateTime
+  firstStatementDate          DateTime
+  isOngoingSetup              Boolean       @default(false)
+  status                      String        @default("ACTIVE") // ACTIVE | COMPLETED | CANCELLED
+  originalTransactionId       String?
+  note                        String?
+  serverSeq                   BigInt        @default(0)
+  createdAt                   DateTime      @default(now())
+  updatedAt                   DateTime      @updatedAt
+  deletedAt                   DateTime?
+
+  user                        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  account                     Account       @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  category                    Category?     @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  transactions                Transaction[] @relation("PlanTransactions")
+
+  @@index([userId])
+  @@index([accountId])
+  @@index([serverSeq])
+}
+
+model BankSms {
+  id               String       @id @default(uuid())
+  userId           String
+  dedupeKey        String       @unique
+  sender           String
+  rawMessage       String
+  receivedAt       DateTime
+  status           String       @default("PENDING") // PENDING | PROCESSED | NEEDS_REVIEW | IGNORED_NON_TX | DUPLICATE | FAILED
+  parseMethod      String?      // TEMPLATE | GEMINI
+  parsedPayload    Json?
+  reviewReason     String?      // ACCOUNT_UNMATCHED | LOW_CONFIDENCE | VALIDATION_FAILED | NO_GEMINI_KEY | POSSIBLE_DUPLICATE
+  attempts         Int          @default(0)
+  nextRetryAt      DateTime?
+  transactionId    String?
+  failureReason    String?
+  createdAt        DateTime     @default(now())
+
+  user             User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transaction      Transaction? @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([status])
+  @@index([transactionId])
+}
+
