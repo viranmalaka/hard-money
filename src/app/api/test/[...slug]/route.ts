@@ -24,6 +24,18 @@ export async function POST(
       const { clearCapturedLogs } = await import("@/lib/server-log");
       clearCapturedLogs();
       try {
+        const { resetRateLimits } = await import("@/app/api/v1/webhooks/sms-ingress/route");
+        resetRateLimits();
+      } catch {
+        // ignore
+      }
+      try {
+        const { setWorkerPaused } = await import("@/lib/sms/worker");
+        setWorkerPaused(false);
+      } catch {
+        // ignore
+      }
+      try {
         const { prisma } = await import("@/lib/prisma");
         await prisma.$executeRawUnsafe(
           'TRUNCATE TABLE "User", "Account", "Category", "Transaction", "TransactionSplitItem", "TransactionTemplate", "Budget", "BudgetMonthSnapshot", "CreditCardStatement", "CreditCardInstallmentPlan", "BankSms", "Household", "HouseholdMember", "SyncSequence", "AppliedMutation" CASCADE;'
@@ -77,9 +89,33 @@ export async function POST(
         }
       }
 
+      if (Array.isArray(body.users)) {
+        for (const u of body.users) {
+          await prisma.user.upsert({
+            where: { id: u.id },
+            create: {
+              id: u.id,
+              name: u.name || "Test User",
+              email: u.email || `${u.id}@example.com`,
+              apiKeyHash: u.apiKeyHash || null,
+              apiKeyPrefix: u.apiKeyPrefix || null,
+            },
+            update: {
+              apiKeyHash: u.apiKeyHash || null,
+              apiKeyPrefix: u.apiKeyPrefix || null,
+            },
+          });
+        }
+      }
+
       if (Array.isArray(body.accounts)) {
         for (const acc of body.accounts) {
           const nextSeq = await getNextServerSeq();
+          const senderIds = Array.isArray(acc.bankSenderIds)
+            ? acc.bankSenderIds
+            : acc.bankSenderIds
+            ? [acc.bankSenderIds]
+            : [];
           await prisma.account.upsert({
             where: { id: acc.id },
             create: {
@@ -92,6 +128,8 @@ export async function POST(
               creditLimitMinor: acc.creditLimitMinor ?? null,
               statementCutoffDay: acc.statementCutoffDay ?? null,
               paymentDueDay: acc.paymentDueDay ?? null,
+              accountNumberLast4: acc.accountNumberLast4 ?? null,
+              bankSenderIds: senderIds,
               serverSeq: nextSeq,
             },
             update: {
@@ -102,6 +140,8 @@ export async function POST(
               creditLimitMinor: acc.creditLimitMinor ?? null,
               statementCutoffDay: acc.statementCutoffDay ?? null,
               paymentDueDay: acc.paymentDueDay ?? null,
+              accountNumberLast4: acc.accountNumberLast4 ?? null,
+              bankSenderIds: senderIds,
               serverSeq: nextSeq,
             },
           });
@@ -247,7 +287,26 @@ export async function POST(
     case "tick": {
       const { runCronTick } = await import("@/lib/jobs/cron-runner");
       const result = await runCronTick({ now: getServerNow() });
+      try {
+        const { processAllPendingBankSms } = await import("@/lib/sms/worker");
+        await processAllPendingBankSms();
+      } catch {
+        // ignore
+      }
       return NextResponse.json({ ok: true, tickedAt: getServerNow().toISOString(), result });
+    }
+
+    case "pause-worker": {
+      const body = await request.json().catch(() => ({}));
+      const { setWorkerPaused } = await import("@/lib/sms/worker");
+      setWorkerPaused(body.paused ?? true);
+      return NextResponse.json({ ok: true, paused: body.paused ?? true });
+    }
+
+    case "process-sms": {
+      const { processAllPendingBankSms } = await import("@/lib/sms/worker");
+      const count = await processAllPendingBankSms();
+      return NextResponse.json({ ok: true, processed: count });
     }
 
     case "gemini": {
@@ -295,7 +354,7 @@ export async function GET(
     case "snapshot": {
       try {
         const { prisma } = await import("@/lib/prisma");
-        const [accounts, categories, transactions, budgets, budgetSnapshots, creditCardStatements, installmentPlans] = await Promise.all([
+        const [accounts, categories, transactions, budgets, budgetSnapshots, creditCardStatements, installmentPlans, bankSms] = await Promise.all([
           prisma.account.findMany({ where: { deletedAt: null } }),
           prisma.category.findMany({ where: { deletedAt: null } }),
           prisma.transaction.findMany({ where: { deletedAt: null } }),
@@ -303,6 +362,7 @@ export async function GET(
           prisma.budgetMonthSnapshot.findMany(),
           prisma.creditCardStatement.findMany(),
           prisma.creditCardInstallmentPlan.findMany({ where: { deletedAt: null } }),
+          prisma.bankSms.findMany({ orderBy: { receivedAt: "desc" } }),
         ]);
 
         const balances: Record<string, number> = {};
@@ -312,18 +372,20 @@ export async function GET(
 
         return NextResponse.json({
           now: getServerNow().toISOString(),
-          accounts: accounts.map((a) => ({ ...a, serverSeq: Number(a.serverSeq) })),
-          categories: categories.map((c) => ({ ...c, serverSeq: Number(c.serverSeq) })),
-          transactions: transactions.map((t) => ({ ...t, serverSeq: Number(t.serverSeq) })),
-          budgets: budgets.map((b) => ({ ...b, serverSeq: Number(b.serverSeq) })),
-          budgetSnapshots: budgetSnapshots.map((bs) => ({ ...bs, serverSeq: Number(bs.serverSeq) })),
-          creditCardStatements: creditCardStatements.map((ccs) => ({ ...ccs, serverSeq: Number(ccs.serverSeq) })),
-          installmentPlans: installmentPlans.map((p) => ({ ...p, serverSeq: Number(p.serverSeq) })),
+          accounts: accounts.map((a: any) => ({ ...a, serverSeq: Number(a.serverSeq) })),
+          categories: categories.map((c: any) => ({ ...c, serverSeq: Number(c.serverSeq) })),
+          transactions: transactions.map((t: any) => ({ ...t, serverSeq: Number(t.serverSeq) })),
+          budgets: budgets.map((b: any) => ({ ...b, serverSeq: Number(b.serverSeq) })),
+          budgetSnapshots: budgetSnapshots.map((bs: any) => ({ ...bs, serverSeq: Number(bs.serverSeq) })),
+          creditCardStatements: creditCardStatements.map((ccs: any) => ({ ...ccs, serverSeq: Number(ccs.serverSeq) })),
+          installmentPlans: installmentPlans.map((p: any) => ({ ...p, serverSeq: Number(p.serverSeq) })),
+          bankSms,
           balances,
         });
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error("SNAPSHOT ERROR:", err);
-        return NextResponse.json({ error: err.message, stack: err.stack }, { status: 500 });
+        const msg = err instanceof Error ? err.message : String(err);
+        return NextResponse.json({ error: msg }, { status: 500 });
       }
     }
 

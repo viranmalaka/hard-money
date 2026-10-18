@@ -46,6 +46,16 @@ export class TestApiClient {
     return res.json();
   }
 
+  async pauseWorker(paused = true) {
+    return this.request.post(`${this.baseURL}/api/test/pause-worker`, {
+      data: { paused },
+    });
+  }
+
+  async processSms() {
+    return this.request.post(`${this.baseURL}/api/test/process-sms`);
+  }
+
   async clearLogs() {
     return this.request.post(`${this.baseURL}/api/test/clear-logs`);
   }

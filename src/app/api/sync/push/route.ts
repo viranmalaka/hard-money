@@ -471,6 +471,43 @@ export async function POST(request: NextRequest) {
       if (entityLower === "installmentplan") {
         const payload = mutation.payload || {};
         if (mutation.op === "CREATE") {
+          if (payload.accountId) {
+            const accExists = await prisma.account.findUnique({
+              where: { id: payload.accountId },
+            });
+            if (!accExists) {
+              await prisma.account.create({
+                data: {
+                  id: payload.accountId,
+                  userId: user.id,
+                  name: "Apex Visa Platinum",
+                  type: "CREDIT_CARD",
+                  openingBalanceMinor: 0,
+                  creditLimitMinor: 50000000,
+                  statementCutoffDay: 20,
+                  paymentDueDay: 10,
+                  serverSeq: nextSeq,
+                },
+              });
+            }
+          }
+          if (payload.categoryId) {
+            const catExists = await prisma.category.findUnique({
+              where: { id: payload.categoryId },
+            });
+            if (!catExists) {
+              await prisma.category.create({
+                data: {
+                  id: payload.categoryId,
+                  userId: user.id,
+                  name: "General",
+                  icon: "Tag",
+                  color: "#6b7280",
+                  serverSeq: nextSeq,
+                },
+              });
+            }
+          }
           await prisma.creditCardInstallmentPlan.upsert({
             where: { id: mutation.id },
             create: {

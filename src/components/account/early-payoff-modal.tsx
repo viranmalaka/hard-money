@@ -20,7 +20,7 @@ export function EarlyPayoffModal({
   isOpen,
   onClose,
 }: EarlyPayoffModalProps) {
-  const { db } = useSync();
+  const { db, userId } = useSync();
   const [submitting, setSubmitting] = useState(false);
 
   if (!isOpen || !plan) return null;
@@ -28,17 +28,18 @@ export function EarlyPayoffModal({
   const handleConfirm = async () => {
     setSubmitting(true);
     try {
+      const effectiveUserId = plan.userId || userId || "current-user";
       // 1. Post CC_INSTALLMENT_PAYOFF transaction for remaining principal
       await localCreateTransaction(db, {
-        userId: plan.userId || "current-user",
+        userId: effectiveUserId,
         accountId: plan.accountId,
         categoryId: plan.categoryId || null,
         amountMinor: remainingPrincipalMinor,
         type: "EXPENSE",
         subType: "CC_INSTALLMENT_PAYOFF",
         source: "MANUAL",
-        createdByUserId: "current-user",
-        updatedByUserId: "current-user",
+        createdByUserId: effectiveUserId,
+        updatedByUserId: effectiveUserId,
         transactionDate: new Date().toISOString(),
         note: `${plan.merchantName} (Early Payoff)`,
         isSplit: false,

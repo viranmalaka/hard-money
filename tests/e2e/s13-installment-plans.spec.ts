@@ -58,6 +58,11 @@ test.describe("Step 13 — 0% Installment Plans @s13", () => {
     originalTransactionId?: string | null;
   }
 
+  async function getActiveUserId(page: import("@playwright/test").Page): Promise<string> {
+    await page.waitForFunction(() => !!localStorage.getItem("hardmoney_active_user"));
+    return page.evaluate(() => localStorage.getItem("hardmoney_active_user")!);
+  }
+
   async function seedEnvironment(
     page: import("@playwright/test").Page,
     options?: {
@@ -72,7 +77,7 @@ test.describe("Step 13 — 0% Installment Plans @s13", () => {
       return db && db.name && (!expected || db.name === `hardmoney_${expected}`);
     });
 
-    const userId = await page.evaluate(() => localStorage.getItem("hardmoney_active_user") || "default");
+    const userId = await getActiveUserId(page);
     const now = new Date().toISOString();
 
     const defaultAccounts: SeedAccount[] = [
@@ -118,6 +123,13 @@ test.describe("Step 13 — 0% Installment Plans @s13", () => {
       },
       seededAccounts
     );
+
+    // Also seed to server DB so sync push and tick operations have corresponding entities
+    await page.request.post("/api/test/seed", {
+      data: {
+        accounts: seededAccounts,
+      },
+    });
 
     if (options?.transactions && options.transactions.length > 0) {
       await page.evaluate(
@@ -262,7 +274,7 @@ test.describe("Step 13 — 0% Installment Plans @s13", () => {
     await app.auth.register({ name: "User S1302", email: "s1302@example.com" });
     await app.waitForSyncIdle();
 
-    const userId = await page.evaluate(() => localStorage.getItem("hardmoney_active_user") || "user-s1302");
+    const userId = await getActiveUserId(page);
 
     // Seed server DB directly so tick can process it
     await app.testApi.seed({
@@ -430,7 +442,7 @@ test.describe("Step 13 — 0% Installment Plans @s13", () => {
     await app.auth.register({ name: "User S1306", email: "s1306@example.com" });
     await app.waitForSyncIdle();
 
-    const userId = await page.evaluate(() => localStorage.getItem("hardmoney_active_user") || "user-s1306");
+    const userId = await getActiveUserId(page);
 
     await app.testApi.seed({
       accounts: [
@@ -485,7 +497,7 @@ test.describe("Step 13 — 0% Installment Plans @s13", () => {
     await app.auth.register({ name: "User S1307", email: "s1307@example.com" });
     await app.waitForSyncIdle();
 
-    const userId = await page.evaluate(() => localStorage.getItem("hardmoney_active_user") || "user-s1307");
+    const userId = await getActiveUserId(page);
 
     await app.testApi.seed({
       accounts: [
@@ -539,7 +551,7 @@ test.describe("Step 13 — 0% Installment Plans @s13", () => {
     await app.auth.register({ name: "User S1308", email: "s1308@example.com" });
     await app.waitForSyncIdle();
 
-    const userId = await page.evaluate(() => localStorage.getItem("hardmoney_active_user") || "user-s1308");
+    const userId = await getActiveUserId(page);
 
     await app.testApi.seed({
       accounts: [
@@ -594,7 +606,7 @@ test.describe("Step 13 — 0% Installment Plans @s13", () => {
     await app.auth.register({ name: "User S1309", email: "s1309@example.com" });
     await app.waitForSyncIdle();
 
-    const userId = await page.evaluate(() => localStorage.getItem("hardmoney_active_user") || "user-s1309");
+    const userId = await getActiveUserId(page);
 
     await app.testApi.seed({
       categories: [
