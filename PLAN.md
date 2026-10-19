@@ -59,30 +59,30 @@
 
 ### Progress tracker
 
-| #   | Step                                                           | Spec refs               | Status |
-| --- | -------------------------------------------------------------- | ----------------------- | ------ |
-| 0   | Repo, tooling & test harness                                   | Sec 1, A (this doc)     | ☑      |
-| 1   | App shell & flat design system                                 | Sec 5.0                 | ☑      |
-| 2   | Auth & user settings                                           | Sec 1 (Auth), 3.A       | ☑      |
-| 3   | Offline data layer & sync engine (with Accounts/Categories)    | Sec 2.6, 2.7, 3.B, 4.S6 | ☑      |
-| 4   | Accounts & Categories management UI                            | Sec 3.B, 3.D            | ☑      |
-| 5   | Quick-Add, keypad & ledger core (expense/income/transfer)      | Sec 2.1, 2.3, 4.S3      | ☑      |
-| 6   | Trans. tab views (Daily / Calendar / Monthly / Summary)        | Sec 5.0                 | ☑      |
-| 7   | Edit/delete, splits & bookmark templates                       | Sec 2.4, 2.5, 4.S3      | ☑      |
-| 8   | Balance calibration                                            | Sec 4.S7                | ☑      |
-| 9   | Stats tab                                                      | Sec 5.0                 | ☑      |
-| 10  | Budgets & safe-to-spend                                        | Sec 4.S4, 3.F           | ☑      |
-| 11  | Scheduler infrastructure & budget rollover                     | Sec 1 (Jobs), 2.7, 4.S4 | ☑      |
-| 12  | Credit cards: cycles, available credit & settlement            | Sec 4.S2.1, 4.S2.3      | ☑      |
-| 13  | 0% installment plans                                           | Sec 4.S2.2, 3.C         | ☑      |
-| 14  | SMS ingress, archival & template parsing                       | Sec 4.S1 (steps 1-2a)   | ☑      |
-| 15  | Gemini fallback, validation gate & review inbox                | Sec 4.S1 (step 2b-4)    | ☑      |
-| 16  | Transaction ingestion service (dedupe, ATM, deposits, refunds) | Sec 4.S1 (step 3)       | ☑      |
-| 17  | Fixed deposits                                                 | Sec 4.S5.1, 3.G         | ☑      |
-| 18  | Loans & leases                                                 | Sec 4.S5.2, 3.H         | ☑      |
-| 19  | Household collaboration & role enforcement                     | Sec 3.A, 4.S6           | ☐      |
-| 20  | PWA, offline shell & push reminders                            | Sec 1 (PWA)             | ☐      |
-| 21  | Export/import, system health & final hardening                 | Sec 6                   | ☐      |
+| #   | Step                                                         | Spec refs               | Status |
+| --- | ------------------------------------------------------------ | ----------------------- | ------ |
+| 0   | Repo, tooling & test harness                                 | Sec 1, A (this doc)     | ☑      |
+| 1   | App shell & flat design system                               | Sec 5.0                 | ☑      |
+| 2   | Auth & user settings                                         | Sec 1 (Auth), 3.A       | ☑      |
+| 3   | Offline data layer & sync engine (with Accounts/Categories)  | Sec 2.6, 2.7, 3.B, 4.S6 | ☑      |
+| 4   | Accounts & Categories management UI                          | Sec 3.B, 3.D            | ☑      |
+| 5   | Quick-Add, keypad & ledger core (expense/income/transfer)    | Sec 2.1, 2.3, 4.S3      | ☑      |
+| 6   | Trans. tab views (Daily / Calendar / Monthly / Summary)      | Sec 5.0                 | ☑      |
+| 7   | Edit/delete, splits & bookmark templates                     | Sec 2.4, 2.5, 4.S3      | ☑      |
+| 8   | Balance calibration                                          | Sec 4.S7                | ☑      |
+| 9   | Stats tab                                                    | Sec 5.0                 | ☑      |
+| 10  | Budgets & safe-to-spend                                      | Sec 4.S4, 3.F           | ☑      |
+| 11  | Scheduler infrastructure & budget rollover                   | Sec 1 (Jobs), 2.7, 4.S4 | ☑      |
+| 12  | Credit cards: cycles, available credit & settlement          | Sec 4.S2.1, 4.S2.3      | ☑      |
+| 13  | 0% installment plans                                         | Sec 4.S2.2, 3.C         | ☑      |
+| 14  | SMS ingress, archival & template parsing                     | Sec 4.S1 (steps 1-2a)   | ☑      |
+| 15  | Gemini fallback, validation gate & review inbox              | Sec 4.S1 (step 2b-4)    | ☑      |
+| 16  | Transaction ingestion seice (dedupe, ATM, deposits, refunds) | Sec 4.S1 (step 3)       | ☑      |
+| 17  | Fixed deposits                                               | Sec 4.S5.1, 3.G         | ☑      |
+| 18  | Loans & leases                                               | Sec 4.S5.2, 3.H         | ☑      |
+| 19  | Household collaboration & role enforcement                   | Sec 3.A, 4.S6           | ☑      |
+| 20  | PWA, offline shell & push reminders                          | Sec 1 (PWA)             | ☐      |
+| 21  | Export/import, system health & final hardening               | Sec 6                   | ☐      |
 
 ---
 

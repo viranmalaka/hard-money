@@ -12,6 +12,22 @@ export async function GET(request: NextRequest) {
   const cursorParam = searchParams.get("cursor") || "0";
   const cursor = BigInt(cursorParam);
 
+  // Look up user's active household memberships and capability matrix roles
+  const memberships = await prisma.householdMember.findMany({
+    where: { userId: user.id },
+  });
+  const householdRoleMap = new Map<string, string>();
+  for (const m of memberships) {
+    householdRoleMap.set(m.householdId, m.role);
+  }
+  const allHouseholdIds = Array.from(householdRoleMap.keys());
+  const fullReadHouseholdIds = allHouseholdIds.filter(
+    (id) => householdRoleMap.get(id) !== "CONTRIBUTOR_ADD_ONLY"
+  );
+  const contributorHouseholdIds = allHouseholdIds.filter(
+    (id) => householdRoleMap.get(id) === "CONTRIBUTOR_ADD_ONLY"
+  );
+
   const [
     accounts,
     categories,
@@ -29,21 +45,32 @@ export async function GET(request: NextRequest) {
   ] = await Promise.all([
     prisma.account.findMany({
       where: {
-        userId: user.id,
+        OR: [
+          { userId: user.id },
+          { householdId: { in: allHouseholdIds }, accessScope: "SHARED_HOUSEHOLD" },
+        ],
         serverSeq: { gt: cursor },
       },
       orderBy: { serverSeq: "asc" },
     }),
     prisma.category.findMany({
       where: {
-        OR: [{ userId: user.id }, { userId: null }],
+        OR: [
+          { userId: user.id },
+          { userId: null },
+          { householdId: { in: allHouseholdIds } },
+        ],
         serverSeq: { gt: cursor },
       },
       orderBy: { serverSeq: "asc" },
     }),
     prisma.transaction.findMany({
       where: {
-        userId: user.id,
+        OR: [
+          { userId: user.id },
+          { householdId: { in: fullReadHouseholdIds } },
+          { householdId: { in: contributorHouseholdIds }, createdByUserId: user.id },
+        ],
         serverSeq: { gt: cursor },
       },
       include: {
@@ -60,14 +87,20 @@ export async function GET(request: NextRequest) {
     }),
     prisma.budget.findMany({
       where: {
-        userId: user.id,
+        OR: [
+          { userId: user.id },
+          { category: { householdId: { in: fullReadHouseholdIds } } },
+        ],
         serverSeq: { gt: cursor },
       },
       orderBy: { serverSeq: "asc" },
     }),
     prisma.budgetMonthSnapshot.findMany({
       where: {
-        userId: user.id,
+        OR: [
+          { userId: user.id },
+          { category: { householdId: { in: fullReadHouseholdIds } } },
+        ],
         serverSeq: { gt: cursor },
       },
       orderBy: { serverSeq: "asc" },
@@ -88,35 +121,50 @@ export async function GET(request: NextRequest) {
     }),
     prisma.fixedDeposit.findMany({
       where: {
-        userId: user.id,
+        OR: [
+          { userId: user.id },
+          { householdId: { in: fullReadHouseholdIds } },
+        ],
         serverSeq: { gt: cursor },
       },
       orderBy: { serverSeq: "asc" },
     }),
     prisma.fixedDepositPayout.findMany({
       where: {
-        fixedDeposit: { userId: user.id },
+        OR: [
+          { fixedDeposit: { userId: user.id } },
+          { fixedDeposit: { householdId: { in: fullReadHouseholdIds } } },
+        ],
         serverSeq: { gt: cursor },
       },
       orderBy: { serverSeq: "asc" },
     }),
     prisma.loan.findMany({
       where: {
-        userId: user.id,
+        OR: [
+          { userId: user.id },
+          { householdId: { in: fullReadHouseholdIds } },
+        ],
         serverSeq: { gt: cursor },
       },
       orderBy: { serverSeq: "asc" },
     }),
     prisma.loanScheduleEntry.findMany({
       where: {
-        loan: { userId: user.id },
+        OR: [
+          { loan: { userId: user.id } },
+          { loan: { householdId: { in: fullReadHouseholdIds } } },
+        ],
         serverSeq: { gt: cursor },
       },
       orderBy: { serverSeq: "asc" },
     }),
     prisma.loanPayment.findMany({
       where: {
-        loan: { userId: user.id },
+        OR: [
+          { loan: { userId: user.id } },
+          { loan: { householdId: { in: fullReadHouseholdIds } } },
+        ],
         serverSeq: { gt: cursor },
       },
       orderBy: { serverSeq: "asc" },
@@ -164,21 +212,44 @@ export async function GET(request: NextRequest) {
     if (lp.serverSeq > maxSeq) maxSeq = lp.serverSeq;
   }
 
-  const serializedAccounts = accounts.map((a) => ({
-    ...a,
-    serverSeq: Number(a.serverSeq),
-  }));
+  const serializedAccounts = accounts.map((a: any) => {
+    const isContributor =
+      a.householdId &&
+      householdRoleMap.get(a.householdId) === "CONTRIBUTOR_ADD_ONLY" &&
+      a.userId !== user.id;
 
-  const serializedCategories = categories.map((c) => ({
+    return {
+      ...a,
+      serverSeq: Number(a.serverSeq),
+      openingBalanceMinor: isContributor ? 0 : a.openingBalanceMinor,
+      balanceCacheMinor: isContributor ? null : a.balanceCacheMinor,
+      creditLimitMinor: isContributor ? null : a.creditLimitMinor,
+    };
+  });
+
+  const serializedCategories = categories.map((c: any) => ({
     ...c,
     serverSeq: Number(c.serverSeq),
   }));
 
-  const serializedTransactions = transactions.map((t) => ({
+  const creatorUserIds = Array.from(
+    new Set(transactions.map((t: any) => t.createdByUserId).filter(Boolean))
+  ) as string[];
+  const creators = await prisma.user.findMany({
+    where: { id: { in: creatorUserIds } },
+    select: { id: true, name: true },
+  });
+  const creatorMap = new Map<string, string>();
+  for (const c of creators) {
+    creatorMap.set(c.id, c.name);
+  }
+
+  const serializedTransactions = transactions.map((t: any) => ({
     ...t,
     serverSeq: Number(t.serverSeq),
     transactionDate: t.transactionDate.toISOString(),
     splitItems: t.splitItems || [],
+    authorName: creatorMap.get(t.createdByUserId) || null,
   }));
 
   const serializedTemplates = templates.map((tmpl) => ({
@@ -260,6 +331,8 @@ export async function GET(request: NextRequest) {
 
   return NextResponse.json({
     cursor: Number(maxSeq),
+    activeHouseholdIds: allHouseholdIds,
+    contributorHouseholdIds,
     accounts: serializedAccounts,
     categories: serializedCategories,
     transactions: serializedTransactions,

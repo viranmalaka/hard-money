@@ -265,7 +265,7 @@ export default function MorePage() {
         { label: "Bank SMS Activity", icon: FileText, badge: null, href: "/more/sms-activity", testId: "more-sms-activity-link" },
         { label: "Apple Shortcuts Setup Guide", icon: Smartphone, badge: null, href: "/more/shortcuts", testId: "shortcuts-guide-link" },
         { label: "Export & Import", icon: Database, badge: null, href: null, testId: null },
-        { label: "Household Collaboration", icon: Users, badge: null, href: null, testId: null },
+        { label: "Household Collaboration", icon: Users, badge: null, href: "/more/household", testId: "more-household-link" },
       ],
     },
   ];

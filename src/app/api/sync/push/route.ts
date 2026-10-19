@@ -43,6 +43,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const userMemberships = await prisma.householdMember.findMany({
+    where: { userId: user.id },
+  });
+  const userHouseholdRoleMap = new Map<string, string>();
+  for (const m of userMemberships) {
+    userHouseholdRoleMap.set(m.householdId, m.role);
+  }
+
   const body = await request.json().catch(() => ({}));
   const rawMutations: SyncMutation[] = Array.isArray(body.mutations) ? body.mutations : [];
 
@@ -107,6 +115,17 @@ export async function POST(request: NextRequest) {
       if (entityLower === "account") {
         const payload = mutation.payload || {};
         if (mutation.op === "CREATE") {
+          if (payload.householdId) {
+            const role = userHouseholdRoleMap.get(payload.householdId);
+            if (role !== "OWNER" && role !== "CO_OWNER") {
+              results.push({
+                mutationId: mutation.mutationId,
+                status: "rejected",
+                reason: "Forbidden: Only OWNER and CO_OWNER can create shared accounts",
+              });
+              continue;
+            }
+          }
           await prisma.account.upsert({
             where: { id: mutation.id },
             create: {
@@ -150,8 +169,27 @@ export async function POST(request: NextRequest) {
             },
           });
         } else if (mutation.op === "UPDATE") {
+          const acc = await prisma.account.findUnique({ where: { id: mutation.id } });
+          if (acc?.householdId) {
+            const role = userHouseholdRoleMap.get(acc.householdId);
+            if (role !== "OWNER" && role !== "CO_OWNER") {
+              results.push({
+                mutationId: mutation.mutationId,
+                status: "rejected",
+                reason: "Forbidden: Only OWNER and CO_OWNER can update shared accounts",
+              });
+              continue;
+            }
+          } else if (acc && acc.userId !== user.id) {
+            results.push({
+              mutationId: mutation.mutationId,
+              status: "rejected",
+              reason: "Forbidden: Cannot update another user's account",
+            });
+            continue;
+          }
           await prisma.account.updateMany({
-            where: { id: mutation.id, userId: user.id },
+            where: { id: mutation.id },
             data: {
               ...(payload.name !== undefined && { name: payload.name }),
               ...(payload.type !== undefined && { type: payload.type }),
@@ -189,8 +227,27 @@ export async function POST(request: NextRequest) {
             },
           });
         } else if (mutation.op === "DELETE") {
+          const acc = await prisma.account.findUnique({ where: { id: mutation.id } });
+          if (acc?.householdId) {
+            const role = userHouseholdRoleMap.get(acc.householdId);
+            if (role !== "OWNER" && role !== "CO_OWNER") {
+              results.push({
+                mutationId: mutation.mutationId,
+                status: "rejected",
+                reason: "Forbidden: Only OWNER and CO_OWNER can delete shared accounts",
+              });
+              continue;
+            }
+          } else if (acc && acc.userId !== user.id) {
+            results.push({
+              mutationId: mutation.mutationId,
+              status: "rejected",
+              reason: "Forbidden: Cannot delete another user's account",
+            });
+            continue;
+          }
           await prisma.account.updateMany({
-            where: { id: mutation.id, userId: user.id },
+            where: { id: mutation.id },
             data: {
               deletedAt: new Date(),
               serverSeq: nextSeq,
@@ -242,6 +299,33 @@ export async function POST(request: NextRequest) {
       } else if (entityLower === "transaction") {
         const payload = mutation.payload || {};
         if (mutation.op === "CREATE") {
+          let txHouseholdId = payload.householdId || null;
+          if (payload.accountId) {
+            const acc = await prisma.account.findUnique({
+              where: { id: payload.accountId },
+            });
+            if (acc?.householdId) {
+              const role = userHouseholdRoleMap.get(acc.householdId);
+              if (!role && acc.userId !== user.id) {
+                results.push({
+                  mutationId: mutation.mutationId,
+                  status: "rejected",
+                  reason: "Forbidden: Not a member of this household",
+                });
+                continue;
+              }
+              if (role === "VIEWER") {
+                results.push({
+                  mutationId: mutation.mutationId,
+                  status: "rejected",
+                  reason: "Forbidden: VIEWER cannot create transactions",
+                });
+                continue;
+              }
+              txHouseholdId = acc.householdId;
+            }
+          }
+
           let possibleDuplicateOfTransactionId: string | null =
             payload.possibleDuplicateOfTransactionId || null;
 
@@ -281,7 +365,7 @@ export async function POST(request: NextRequest) {
             create: {
               id: mutation.id,
               userId: user.id,
-              householdId: payload.householdId || null,
+              householdId: txHouseholdId,
               accountId: payload.accountId,
               toAccountId: payload.toAccountId || null,
               categoryId: payload.categoryId || null,
@@ -290,7 +374,7 @@ export async function POST(request: NextRequest) {
               type: payload.type || "EXPENSE",
               subType: payload.subType || null,
               source: payload.source || "MANUAL",
-              createdByUserId: user.id,
+              createdByUserId: payload.createdByUserId || user.id,
               updatedByUserId: user.id,
               transactionDate: payload.transactionDate ? new Date(payload.transactionDate) : new Date(),
               note: payload.note || null,
@@ -353,8 +437,42 @@ export async function POST(request: NextRequest) {
             }
           }
         } else if (mutation.op === "UPDATE") {
+          const existingTx = await prisma.transaction.findUnique({
+            where: { id: mutation.id },
+          });
+          if (existingTx) {
+            if (existingTx.householdId) {
+              const role = userHouseholdRoleMap.get(existingTx.householdId);
+              if (role === "VIEWER") {
+                results.push({
+                  mutationId: mutation.mutationId,
+                  status: "rejected",
+                  reason: "Forbidden: VIEWER cannot update transactions",
+                });
+                continue;
+              }
+              if (role === "CONTRIBUTOR_ADD_ONLY") {
+                if (existingTx.createdByUserId !== user.id && existingTx.userId !== user.id) {
+                  results.push({
+                    mutationId: mutation.mutationId,
+                    status: "rejected",
+                    reason: "Forbidden: CONTRIBUTOR_ADD_ONLY cannot update another user's transaction",
+                  });
+                  continue;
+                }
+              }
+            } else if (existingTx.userId !== user.id) {
+              results.push({
+                mutationId: mutation.mutationId,
+                status: "rejected",
+                reason: "Forbidden: Cannot update another user's transaction",
+              });
+              continue;
+            }
+          }
+
           await prisma.transaction.updateMany({
-            where: { id: mutation.id, userId: user.id },
+            where: { id: mutation.id },
             data: {
               ...(payload.accountId !== undefined && { accountId: payload.accountId }),
               ...(payload.toAccountId !== undefined && { toAccountId: payload.toAccountId }),
@@ -402,6 +520,40 @@ export async function POST(request: NextRequest) {
             }
           }
         } else if (mutation.op === "DELETE") {
+          const existingTx = await prisma.transaction.findUnique({
+            where: { id: mutation.id },
+          });
+          if (existingTx) {
+            if (existingTx.householdId) {
+              const role = userHouseholdRoleMap.get(existingTx.householdId);
+              if (role === "VIEWER") {
+                results.push({
+                  mutationId: mutation.mutationId,
+                  status: "rejected",
+                  reason: "Forbidden: VIEWER cannot delete transactions",
+                });
+                continue;
+              }
+              if (role === "CONTRIBUTOR_ADD_ONLY") {
+                if (existingTx.createdByUserId !== user.id && existingTx.userId !== user.id) {
+                  results.push({
+                    mutationId: mutation.mutationId,
+                    status: "rejected",
+                    reason: "Forbidden: CONTRIBUTOR_ADD_ONLY cannot delete another user's transaction",
+                  });
+                  continue;
+                }
+              }
+            } else if (existingTx.userId !== user.id) {
+              results.push({
+                mutationId: mutation.mutationId,
+                status: "rejected",
+                reason: "Forbidden: Cannot delete another user's transaction",
+              });
+              continue;
+            }
+          }
+
           const reversal = await prisma.transaction.findFirst({
             where: { reversalOfTransactionId: mutation.id, deletedAt: null },
           });
@@ -415,9 +567,10 @@ export async function POST(request: NextRequest) {
           }
 
           await prisma.transaction.updateMany({
-            where: { id: mutation.id, userId: user.id },
+            where: { id: mutation.id },
             data: {
               deletedAt: new Date(),
+              updatedByUserId: user.id,
               serverSeq: nextSeq,
             },
           });
@@ -644,6 +797,18 @@ export async function POST(request: NextRequest) {
       } else if (entityLower === "fixeddeposit") {
         const payload = mutation.payload || {};
         if (mutation.op === "CREATE") {
+          if (payload.householdId) {
+            const role = userHouseholdRoleMap.get(payload.householdId);
+            if (role !== "OWNER" && role !== "CO_OWNER") {
+              results.push({
+                mutationId: mutation.mutationId,
+                status: "rejected",
+                reason: "Forbidden: Only OWNER and CO_OWNER can create shared fixed deposits",
+              });
+              continue;
+            }
+          }
+
           if (payload.fundingAccountId && payload.principalAmountMinor > 0) {
             const placementTxId = `${mutation.id}-placement`;
             const placementDate = payload.startDate ? new Date(payload.startDate) : new Date();
@@ -718,8 +883,28 @@ export async function POST(request: NextRequest) {
             },
           });
         } else if (mutation.op === "UPDATE") {
+          const fd = await (prisma as any).fixedDeposit.findUnique({ where: { id: mutation.id } });
+          if (fd?.householdId) {
+            const role = userHouseholdRoleMap.get(fd.householdId);
+            if (role !== "OWNER" && role !== "CO_OWNER") {
+              results.push({
+                mutationId: mutation.mutationId,
+                status: "rejected",
+                reason: "Forbidden: Only OWNER and CO_OWNER can update shared fixed deposits",
+              });
+              continue;
+            }
+          } else if (fd && fd.userId !== user.id) {
+            results.push({
+              mutationId: mutation.mutationId,
+              status: "rejected",
+              reason: "Forbidden: Cannot update another user's fixed deposit",
+            });
+            continue;
+          }
+
           await (prisma as any).fixedDeposit.updateMany({
-            where: { id: mutation.id, userId: user.id },
+            where: { id: mutation.id },
             data: {
               ...(payload.bankName !== undefined && { bankName: payload.bankName }),
               ...(payload.accountNumber !== undefined && { accountNumber: payload.accountNumber }),
@@ -734,8 +919,28 @@ export async function POST(request: NextRequest) {
             },
           });
         } else if (mutation.op === "DELETE") {
+          const fd = await (prisma as any).fixedDeposit.findUnique({ where: { id: mutation.id } });
+          if (fd?.householdId) {
+            const role = userHouseholdRoleMap.get(fd.householdId);
+            if (role !== "OWNER" && role !== "CO_OWNER") {
+              results.push({
+                mutationId: mutation.mutationId,
+                status: "rejected",
+                reason: "Forbidden: Only OWNER and CO_OWNER can delete shared fixed deposits",
+              });
+              continue;
+            }
+          } else if (fd && fd.userId !== user.id) {
+            results.push({
+              mutationId: mutation.mutationId,
+              status: "rejected",
+              reason: "Forbidden: Cannot delete another user's fixed deposit",
+            });
+            continue;
+          }
+
           await (prisma as any).fixedDeposit.updateMany({
-            where: { id: mutation.id, userId: user.id },
+            where: { id: mutation.id },
             data: {
               deletedAt: new Date(),
               serverSeq: nextSeq,
@@ -745,6 +950,18 @@ export async function POST(request: NextRequest) {
       } else if (entityLower === "loan") {
         const payload = mutation.payload || {};
         if (mutation.op === "CREATE") {
+          if (payload.householdId) {
+            const role = userHouseholdRoleMap.get(payload.householdId);
+            if (role !== "OWNER" && role !== "CO_OWNER") {
+              results.push({
+                mutationId: mutation.mutationId,
+                status: "rejected",
+                reason: "Forbidden: Only OWNER and CO_OWNER can create shared loans",
+              });
+              continue;
+            }
+          }
+
           if (payload.linkedDisbursementAccountId && payload.originalPrincipalMinor > 0) {
             const disbursementTxId = `${mutation.id}-disbursement`;
             const disDate = payload.startDate ? new Date(payload.startDate) : new Date();
@@ -811,8 +1028,28 @@ export async function POST(request: NextRequest) {
             },
           });
         } else if (mutation.op === "UPDATE") {
+          const l = await (prisma as any).loan.findUnique({ where: { id: mutation.id } });
+          if (l?.householdId) {
+            const role = userHouseholdRoleMap.get(l.householdId);
+            if (role !== "OWNER" && role !== "CO_OWNER") {
+              results.push({
+                mutationId: mutation.mutationId,
+                status: "rejected",
+                reason: "Forbidden: Only OWNER and CO_OWNER can update shared loans",
+              });
+              continue;
+            }
+          } else if (l && l.userId !== user.id) {
+            results.push({
+              mutationId: mutation.mutationId,
+              status: "rejected",
+              reason: "Forbidden: Cannot update another user's loan",
+            });
+            continue;
+          }
+
           await (prisma as any).loan.updateMany({
-            where: { id: mutation.id, userId: user.id },
+            where: { id: mutation.id },
             data: {
               ...(payload.lenderName !== undefined && { lenderName: payload.lenderName }),
               ...(payload.status !== undefined && { status: payload.status }),
@@ -823,8 +1060,28 @@ export async function POST(request: NextRequest) {
             },
           });
         } else if (mutation.op === "DELETE") {
+          const l = await (prisma as any).loan.findUnique({ where: { id: mutation.id } });
+          if (l?.householdId) {
+            const role = userHouseholdRoleMap.get(l.householdId);
+            if (role !== "OWNER" && role !== "CO_OWNER") {
+              results.push({
+                mutationId: mutation.mutationId,
+                status: "rejected",
+                reason: "Forbidden: Only OWNER and CO_OWNER can delete shared loans",
+              });
+              continue;
+            }
+          } else if (l && l.userId !== user.id) {
+            results.push({
+              mutationId: mutation.mutationId,
+              status: "rejected",
+              reason: "Forbidden: Cannot delete another user's loan",
+            });
+            continue;
+          }
+
           await (prisma as any).loan.updateMany({
-            where: { id: mutation.id, userId: user.id },
+            where: { id: mutation.id },
             data: {
               deletedAt: new Date(),
               serverSeq: nextSeq,

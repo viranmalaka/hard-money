@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import { Wallet, Plus, CreditCard, Building2, Banknote, Edit2, Archive, Trash2, X, AlertTriangle, PiggyBank, Landmark } from "lucide-react";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -54,7 +54,28 @@ export default function AccountsPage() {
   const [cutoffDay, setCutoffDay] = useState("");
   const [dueDay, setDueDay] = useState("");
   const [settlementAccountId, setSettlementAccountId] = useState("");
+  const [accessScope, setAccessScope] = useState<"PRIVATE" | "SHARED_HOUSEHOLD">("PRIVATE");
+  const [householdRoleMap, setHouseholdRoleMap] = useState<Map<string, string>>(new Map());
+  const [activeHouseholdId, setActiveHouseholdId] = useState<string | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    fetch("/api/households", { cache: "no-store" })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data?.households) {
+          const map = new Map<string, string>();
+          for (const h of data.households) {
+            map.set(h.id, h.myRole);
+          }
+          setHouseholdRoleMap(map);
+          if (data.households.length > 0) {
+            setActiveHouseholdId(data.households[0].id);
+          }
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const ledgerTxList: LedgerTransaction[] = useMemo(() => {
     return transactions.map((t) => ({
@@ -255,6 +276,7 @@ export default function AccountsPage() {
     setEditingAccount(null);
     setName("");
     setType("CASH");
+    setAccessScope("PRIVATE");
     setOpeningBalanceStr("0.00");
     setAccountNumberLast4("");
     setBankSender("");
@@ -270,6 +292,7 @@ export default function AccountsPage() {
     setEditingAccount(acc);
     setName(acc.name);
     setType(acc.type);
+    setAccessScope(acc.accessScope || "PRIVATE");
     setOpeningBalanceStr((acc.openingBalanceMinor / 100).toFixed(2));
     setAccountNumberLast4(acc.accountNumberLast4 || "");
     setBankSender(acc.bankSenderIds?.[0] || "");
@@ -329,6 +352,10 @@ export default function AccountsPage() {
 
     const openingMinor = parseMoneyToMinor(openingBalanceStr);
     const bankSenderIds = bankSender.trim() ? [bankSender.trim()] : [];
+    const chosenHouseholdId =
+      accessScope === "SHARED_HOUSEHOLD"
+        ? (editingAccount?.householdId || activeHouseholdId)
+        : null;
 
     if (editingAccount) {
       await localUpdateAccount(db, editingAccount.id, {
@@ -337,6 +364,8 @@ export default function AccountsPage() {
         openingBalanceMinor: openingMinor,
         accountNumberLast4: accountNumberLast4.trim() || null,
         bankSenderIds,
+        accessScope,
+        householdId: chosenHouseholdId,
         creditLimitMinor: limitMinor,
         statementCutoffDay: cutoffNum,
         paymentDueDay: dueNum,
@@ -351,7 +380,8 @@ export default function AccountsPage() {
         currency: "LKR",
         accountNumberLast4: accountNumberLast4.trim() || null,
         bankSenderIds,
-        accessScope: "PRIVATE",
+        accessScope,
+        householdId: chosenHouseholdId,
         creditLimitMinor: limitMinor,
         statementCutoffDay: cutoffNum,
         paymentDueDay: dueNum,
@@ -449,6 +479,7 @@ export default function AccountsPage() {
                     key={acc.id}
                     account={acc}
                     balance={accountBalances[acc.id] ?? acc.openingBalanceMinor}
+                    householdRoleMap={householdRoleMap}
                     onEdit={() => openEditForm(acc)}
                     onArchive={() => handleArchiveToggle(acc)}
                     onDelete={() => handleDelete(acc)}
@@ -476,6 +507,7 @@ export default function AccountsPage() {
                     key={acc.id}
                     account={acc}
                     balance={accountBalances[acc.id] ?? acc.openingBalanceMinor}
+                    householdRoleMap={householdRoleMap}
                     onEdit={() => openEditForm(acc)}
                     onArchive={() => handleArchiveToggle(acc)}
                     onDelete={() => handleDelete(acc)}
@@ -505,6 +537,7 @@ export default function AccountsPage() {
                     balance={accountBalances[acc.id] ?? acc.openingBalanceMinor}
                     blockedPrincipal={accountBlockedPrincipalMap[acc.id] || 0}
                     transactions={ledgerTxList}
+                    householdRoleMap={householdRoleMap}
                     onEdit={() => openEditForm(acc)}
                     onArchive={() => handleArchiveToggle(acc)}
                     onDelete={() => handleDelete(acc)}
@@ -963,6 +996,37 @@ export default function AccountsPage() {
                   </select>
                 </div>
 
+                {/* Access Scope (Private vs Shared) */}
+                <div className="space-y-1">
+                  <label className="font-medium text-[var(--text-muted)]">Access Scope</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      data-testid="account-scope-private"
+                      onClick={() => setAccessScope("PRIVATE")}
+                      className={`py-1.5 px-3 rounded border text-center font-medium transition-colors ${
+                        accessScope === "PRIVATE"
+                          ? "border-[var(--accent)] bg-[var(--accent)]/10 text-[var(--accent)] font-semibold"
+                          : "border-hairline bg-[var(--bg)] text-[var(--text-muted)] hover:bg-[var(--surface-hover)]"
+                      }`}
+                    >
+                      Private
+                    </button>
+                    <button
+                      type="button"
+                      data-testid="account-scope-shared"
+                      onClick={() => setAccessScope("SHARED_HOUSEHOLD")}
+                      className={`py-1.5 px-3 rounded border text-center font-medium transition-colors ${
+                        accessScope === "SHARED_HOUSEHOLD"
+                          ? "border-[var(--accent)] bg-[var(--accent)]/10 text-[var(--accent)] font-semibold"
+                          : "border-hairline bg-[var(--bg)] text-[var(--text-muted)] hover:bg-[var(--surface-hover)]"
+                      }`}
+                    >
+                      Shared Household
+                    </button>
+                  </div>
+                </div>
+
                 {/* Opening Balance */}
                 <div className="space-y-1">
                   <label className="font-medium text-[var(--text-muted)]">
@@ -1179,16 +1243,22 @@ export default function AccountsPage() {
 function AccountCard({
   account,
   balance,
+  householdRoleMap,
   onEdit,
   onArchive,
   onDelete,
 }: {
   account: LocalAccount;
   balance: number;
+  householdRoleMap?: Map<string, string>;
   onEdit: () => void;
   onArchive: () => void;
   onDelete: () => void;
 }) {
+  const role = account.householdId && householdRoleMap ? householdRoleMap.get(account.householdId) : null;
+  const isContributor = role === "CONTRIBUTOR_ADD_ONLY";
+  const isViewer = role === "VIEWER";
+
   return (
     <div
       data-testid={`account-item-${account.id}`}
@@ -1206,6 +1276,11 @@ function AccountCard({
             <span data-testid="account-card-name" className="text-xs font-semibold text-[var(--text)] truncate">
               {account.name}
             </span>
+            {account.accessScope === "SHARED_HOUSEHOLD" && (
+              <span data-testid="account-scope-badge" className="text-[10px] px-1 rounded bg-[var(--accent)]/15 text-[var(--accent)]">
+                Shared
+              </span>
+            )}
             {account.isArchived && (
               <span className="text-[10px] px-1 rounded bg-[var(--border)] text-[var(--text-muted)]">Archived</span>
             )}
@@ -1215,7 +1290,7 @@ function AccountCard({
             {account.bankSenderIds?.[0] && <span>{account.bankSenderIds[0]}</span>}
             {account.type === "CREDIT_CARD" && (
               <>
-                {account.creditLimitMinor && <span>Limit: {formatMoney(account.creditLimitMinor)}</span>}
+                {!isContributor && account.creditLimitMinor && <span>Limit: {formatMoney(account.creditLimitMinor)}</span>}
                 {account.statementCutoffDay && <span>Cutoff: Day {account.statementCutoffDay}</span>}
                 {account.paymentDueDay && <span>Due: Day {account.paymentDueDay}</span>}
               </>
@@ -1227,52 +1302,60 @@ function AccountCard({
           {account.type === "CREDIT_CARD" && balance < 0 ? (
             <div className="text-right">
               <div data-testid="card-outstanding" className="font-semibold text-xs tabular-nums text-expense">
-                Outstanding {formatMoney(Math.abs(balance))}
+                Outstanding {isContributor ? "—" : formatMoney(Math.abs(balance))}
               </div>
               <div data-testid="account-card-balance" className="text-[10px] text-[var(--text-muted)] tabular-nums">
-                {formatMoney(balance)}
+                <span data-testid="account-balance">{isContributor ? "—" : formatMoney(balance)}</span>
               </div>
             </div>
           ) : (
             <span
-              data-testid="account-card-balance"
+              data-testid="account-balance"
               className={`font-semibold text-xs tabular-nums ${
-                balance < 0 ? "text-expense" : balance > 0 ? "text-income" : "text-[var(--text)]"
+                isContributor
+                  ? "text-[var(--text-muted)]"
+                  : balance < 0
+                  ? "text-expense"
+                  : balance > 0
+                  ? "text-income"
+                  : "text-[var(--text)]"
               }`}
             >
-              {formatMoney(balance)}
+              <span data-testid="account-card-balance">{isContributor ? "—" : formatMoney(balance)}</span>
             </span>
           )}
 
-          <div className="flex items-center gap-1">
-            <button
-              type="button"
-              data-testid="account-edit-btn"
-              onClick={onEdit}
-              title="Edit"
-              className="p-1.5 rounded hover:bg-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text)] transition-colors"
-            >
-              <Edit2 size={13} />
-            </button>
-            <button
-              type="button"
-              data-testid="account-archive-btn"
-              onClick={onArchive}
-              title={account.isArchived ? "Unarchive" : "Archive"}
-              className="p-1.5 rounded hover:bg-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text)] transition-colors"
-            >
-              <Archive size={13} />
-            </button>
-            <button
-              type="button"
-              data-testid="account-delete-btn"
-              onClick={onDelete}
-              title="Delete"
-              className="p-1.5 rounded hover:bg-[var(--border)] text-[var(--text-muted)] hover:text-red-500 transition-colors"
-            >
-              <Trash2 size={13} />
-            </button>
-          </div>
+          {!isViewer && (
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                data-testid="account-edit-btn"
+                onClick={onEdit}
+                title="Edit"
+                className="p-1.5 rounded hover:bg-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text)] transition-colors"
+              >
+                <Edit2 size={13} />
+              </button>
+              <button
+                type="button"
+                data-testid="account-archive-btn"
+                onClick={onArchive}
+                title={account.isArchived ? "Unarchive" : "Archive"}
+                className="p-1.5 rounded hover:bg-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text)] transition-colors"
+              >
+                <Archive size={13} />
+              </button>
+              <button
+                type="button"
+                data-testid="account-delete-btn"
+                onClick={onDelete}
+                title="Delete"
+                className="p-1.5 rounded hover:bg-[var(--border)] text-[var(--text-muted)] hover:text-red-500 transition-colors"
+              >
+                <Trash2 size={13} />
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -1308,6 +1391,7 @@ function CreditCardAccountCard({
   balance,
   blockedPrincipal,
   transactions,
+  householdRoleMap,
   onEdit,
   onArchive,
   onDelete,
@@ -1317,11 +1401,16 @@ function CreditCardAccountCard({
   balance: number;
   blockedPrincipal: number;
   transactions: LedgerTransaction[];
+  householdRoleMap?: Map<string, string>;
   onEdit: () => void;
   onArchive: () => void;
   onDelete: () => void;
   onSettle: () => void;
 }) {
+  const role = account.householdId && householdRoleMap ? householdRoleMap.get(account.householdId) : null;
+  const isContributor = role === "CONTRIBUTOR_ADD_ONLY";
+  const isViewer = role === "VIEWER";
+
   const cycle = useMemo(() => {
     return calculateStatementCycle({
       account: {
@@ -1356,6 +1445,11 @@ function CreditCardAccountCard({
             <span data-testid="account-card-name" className="text-xs font-semibold text-[var(--text)] truncate">
               {account.name}
             </span>
+            {account.accessScope === "SHARED_HOUSEHOLD" && (
+              <span data-testid="account-scope-badge" className="text-[10px] px-1 rounded bg-[var(--accent)]/15 text-[var(--accent)]">
+                Shared
+              </span>
+            )}
             {account.isArchived && (
               <span className="text-[10px] px-1 rounded bg-[var(--border)] text-[var(--text-muted)]">Archived</span>
             )}
@@ -1368,7 +1462,7 @@ function CreditCardAccountCard({
           </div>
           <div className="text-[11px] text-[var(--text-muted)] flex items-center gap-2">
             {account.accountNumberLast4 && <span>•••• {account.accountNumberLast4}</span>}
-            {account.creditLimitMinor && <span>Limit: {formatMoney(account.creditLimitMinor)}</span>}
+            {!isContributor && account.creditLimitMinor && <span>Limit: {formatMoney(account.creditLimitMinor)}</span>}
             {account.statementCutoffDay && <span>Cutoff: Day {account.statementCutoffDay}</span>}
             {account.paymentDueDay && <span>Due: Day {account.paymentDueDay}</span>}
           </div>
@@ -1376,44 +1470,48 @@ function CreditCardAccountCard({
 
         <div className="flex items-center gap-2">
           {/* Settle button */}
-          <button
-            type="button"
-            data-testid="credit-settle-btn"
-            onClick={onSettle}
-            className="px-2.5 py-1 rounded bg-[var(--text)] text-[var(--bg)] text-xs font-semibold hover:opacity-90 active:scale-95 transition-all"
-          >
-            Settle
-          </button>
+          {!isViewer && !isContributor && (
+            <button
+              type="button"
+              data-testid="credit-settle-btn"
+              onClick={onSettle}
+              className="px-2.5 py-1 rounded bg-[var(--text)] text-[var(--bg)] text-xs font-semibold hover:opacity-90 active:scale-95 transition-all"
+            >
+              Settle
+            </button>
+          )}
 
-          <div className="flex items-center gap-1">
-            <button
-              type="button"
-              data-testid="account-edit-btn"
-              onClick={onEdit}
-              title="Edit"
-              className="p-1.5 rounded hover:bg-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text)] transition-colors"
-            >
-              <Edit2 size={13} />
-            </button>
-            <button
-              type="button"
-              data-testid="account-archive-btn"
-              onClick={onArchive}
-              title={account.isArchived ? "Unarchive" : "Archive"}
-              className="p-1.5 rounded hover:bg-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text)] transition-colors"
-            >
-              <Archive size={13} />
-            </button>
-            <button
-              type="button"
-              data-testid="account-delete-btn"
-              onClick={onDelete}
-              title="Delete"
-              className="p-1.5 rounded hover:bg-[var(--border)] text-[var(--text-muted)] hover:text-red-500 transition-colors"
-            >
-              <Trash2 size={13} />
-            </button>
-          </div>
+          {!isViewer && (
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                data-testid="account-edit-btn"
+                onClick={onEdit}
+                title="Edit"
+                className="p-1.5 rounded hover:bg-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text)] transition-colors"
+              >
+                <Edit2 size={13} />
+              </button>
+              <button
+                type="button"
+                data-testid="account-archive-btn"
+                onClick={onArchive}
+                title={account.isArchived ? "Unarchive" : "Archive"}
+                className="p-1.5 rounded hover:bg-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text)] transition-colors"
+              >
+                <Archive size={13} />
+              </button>
+              <button
+                type="button"
+                data-testid="account-delete-btn"
+                onClick={onDelete}
+                title="Delete"
+                className="p-1.5 rounded hover:bg-[var(--border)] text-[var(--text-muted)] hover:text-red-500 transition-colors"
+              >
+                <Trash2 size={13} />
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -1422,25 +1520,25 @@ function CreditCardAccountCard({
         <div className="space-y-0.5">
           <span className="text-[10px] text-[var(--text-muted)] font-medium">Billed Due</span>
           <div data-testid="credit-billed-amount" className="font-mono font-semibold tabular-nums text-expense">
-            {formatMoney(cycle.billedBalanceMinor)}
+            {isContributor ? "—" : formatMoney(cycle.billedBalanceMinor)}
           </div>
         </div>
         <div className="space-y-0.5">
           <span className="text-[10px] text-[var(--text-muted)] font-medium">Unbilled</span>
           <div data-testid="credit-unbilled-amount" className="font-mono font-semibold tabular-nums text-[var(--text)]">
-            {formatMoney(cycle.unbilledBalanceMinor)}
+            {isContributor ? "—" : formatMoney(cycle.unbilledBalanceMinor)}
           </div>
         </div>
         <div className="space-y-0.5">
           <span className="text-[10px] text-[var(--text-muted)] font-medium">Blocked</span>
           <div data-testid="credit-blocked-amount" className="font-mono font-semibold tabular-nums text-amber-600 dark:text-amber-500">
-            {formatMoney(blockedPrincipal)}
+            {isContributor ? "—" : formatMoney(blockedPrincipal)}
           </div>
         </div>
         <div className="space-y-0.5">
           <span className="text-[10px] text-[var(--text-muted)] font-medium">Available Credit</span>
           <div data-testid="credit-available-amount" className="font-mono font-semibold tabular-nums text-income">
-            {formatMoney(cycle.availableCreditMinor)}
+            {isContributor ? "—" : formatMoney(cycle.availableCreditMinor)}
           </div>
         </div>
       </div>
@@ -1450,19 +1548,19 @@ function CreditCardAccountCard({
         <div>
           {isOverpaid ? (
             <span data-testid="credit-card-credit" className="text-income font-semibold tabular-nums">
-              Credit Balance: +{formatMoney(balance)}
+              Credit Balance: {isContributor ? "—" : `+${formatMoney(balance)}`}
             </span>
           ) : (
             <span>
               Outstanding:{" "}
               <span data-testid="card-outstanding" className="font-semibold text-expense tabular-nums">
-                {formatMoney(cycle.outstandingDebtMinor)}
+                {isContributor ? "—" : formatMoney(cycle.outstandingDebtMinor)}
               </span>
             </span>
           )}
         </div>
         <div data-testid="account-card-balance" className="tabular-nums">
-          Balance: {formatMoney(balance)}
+          <span data-testid="account-balance">{isContributor ? "—" : formatMoney(balance)}</span>
         </div>
       </div>
 

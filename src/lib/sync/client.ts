@@ -7,6 +7,11 @@ import {
   LocalCategory,
   LocalCreditCardStatement,
   LocalInstallmentPlan,
+  LocalFixedDeposit,
+  LocalFixedDepositPayout,
+  LocalLoan,
+  LocalLoanScheduleEntry,
+  LocalLoanPayment,
   LocalTemplate,
   LocalTransaction,
   OutboxMutation,
@@ -70,7 +75,24 @@ export async function syncNow(
       throw new Error(`Pull HTTP error: ${res.status}`);
     }
 
-    const data = await res.json();
+    const data: {
+      cursor?: number;
+      activeHouseholdIds?: string[];
+      contributorHouseholdIds?: string[];
+      accounts?: LocalAccount[];
+      categories?: LocalCategory[];
+      transactions?: LocalTransaction[];
+      templates?: LocalTemplate[];
+      budgets?: LocalBudget[];
+      budgetSnapshots?: LocalBudgetMonthSnapshot[];
+      creditCardStatements?: LocalCreditCardStatement[];
+      installmentPlans?: LocalInstallmentPlan[];
+      fixedDeposits?: LocalFixedDeposit[];
+      fixedDepositPayouts?: LocalFixedDepositPayout[];
+      loans?: LocalLoan[];
+      loanScheduleEntries?: LocalLoanScheduleEntry[];
+      loanPayments?: LocalLoanPayment[];
+    } = await res.json();
 
     await db.transaction(
       "rw",
@@ -178,6 +200,58 @@ export async function syncNow(
         // Loan Payments
         for (const lp of data.loanPayments || []) {
           await db.loanPayments.put(lp);
+        }
+
+        // Purge locally cached shared data for households the user is no longer a member of
+        if (Array.isArray(data.activeHouseholdIds)) {
+          const activeSet = new Set(data.activeHouseholdIds);
+
+          const localAccounts = await db.accounts.toArray();
+          for (const a of localAccounts) {
+            if (a.householdId && !activeSet.has(a.householdId)) {
+              await db.accounts.delete(a.id);
+            }
+          }
+
+          const localTxs = await db.transactions.toArray();
+          for (const t of localTxs) {
+            if (t.householdId && !activeSet.has(t.householdId)) {
+              await db.transactions.delete(t.id);
+            }
+          }
+
+          const localFds = await db.fixedDeposits.toArray();
+          for (const fd of localFds) {
+            if (fd.householdId && !activeSet.has(fd.householdId)) {
+              await db.fixedDeposits.delete(fd.id);
+            }
+          }
+
+          const localLoans = await db.loans.toArray();
+          for (const l of localLoans) {
+            if (l.householdId && !activeSet.has(l.householdId)) {
+              await db.loans.delete(l.id);
+            }
+          }
+        }
+
+        // Purge FDs and Loans for households where the user is CONTRIBUTOR_ADD_ONLY
+        if (Array.isArray(data.contributorHouseholdIds)) {
+          const contribSet = new Set(data.contributorHouseholdIds);
+
+          const localFds = await db.fixedDeposits.toArray();
+          for (const fd of localFds) {
+            if (fd.householdId && contribSet.has(fd.householdId)) {
+              await db.fixedDeposits.delete(fd.id);
+            }
+          }
+
+          const localLoans = await db.loans.toArray();
+          for (const l of localLoans) {
+            if (l.householdId && contribSet.has(l.householdId)) {
+              await db.loans.delete(l.id);
+            }
+          }
         }
 
         if (data.cursor !== undefined) {
@@ -361,9 +435,19 @@ export async function localCreateTransaction(
 ): Promise<LocalTransaction> {
   const now = new Date().toISOString();
   const id = tx.id || uuidv4();
+
+  let householdId = tx.householdId || null;
+  if (!householdId && tx.accountId) {
+    const acc = await db.accounts.get(tx.accountId);
+    if (acc?.householdId) {
+      householdId = acc.householdId;
+    }
+  }
+
   const fullTx: LocalTransaction = {
     ...tx,
     id,
+    householdId,
     serverSeq: 0,
     createdAt: now,
     updatedAt: now,

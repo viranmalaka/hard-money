@@ -225,6 +225,14 @@ export function DailyView({
                         <div className="text-[11px] text-[var(--text-muted)] flex items-center gap-1.5 truncate">
                           <span>{fromAccount}</span>
                           {tx.note && <span>• {tx.note}</span>}
+                          {tx.authorName && (
+                            <span
+                              data-testid="tx-author"
+                              className="text-[10px] text-[var(--accent)] font-medium"
+                            >
+                              added by {tx.authorName}
+                            </span>
+                          )}
                         </div>
                       </div>
 

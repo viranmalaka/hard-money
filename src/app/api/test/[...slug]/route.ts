@@ -110,6 +110,45 @@ export async function POST(
         }
       }
 
+      if (Array.isArray(body.households)) {
+        for (const h of body.households) {
+          await (prisma as any).household.upsert({
+            where: { id: h.id },
+            create: {
+              id: h.id,
+              name: h.name || "Test Household",
+              ownerId: h.ownerId,
+            },
+            update: {
+              name: h.name,
+              ownerId: h.ownerId,
+            },
+          });
+        }
+      }
+
+      if (Array.isArray(body.householdMembers)) {
+        for (const m of body.householdMembers) {
+          await (prisma as any).householdMember.upsert({
+            where: {
+              householdId_userId: {
+                householdId: m.householdId,
+                userId: m.userId,
+              },
+            },
+            create: {
+              id: m.id || `${m.householdId}-${m.userId}`,
+              householdId: m.householdId,
+              userId: m.userId,
+              role: m.role || "MEMBER",
+            },
+            update: {
+              role: m.role,
+            },
+          });
+        }
+      }
+
       if (Array.isArray(body.accounts)) {
         for (const acc of body.accounts) {
           const nextSeq = await getNextServerSeq();
@@ -123,6 +162,8 @@ export async function POST(
             create: {
               id: acc.id,
               userId: acc.userId,
+              householdId: acc.householdId || null,
+              accessScope: acc.accessScope || "PRIVATE",
               name: acc.name,
               type: acc.type || "CASH",
               openingBalanceMinor: acc.openingBalanceMinor ?? 0,
@@ -138,6 +179,8 @@ export async function POST(
             },
             update: {
               name: acc.name,
+              householdId: acc.householdId || null,
+              accessScope: acc.accessScope || "PRIVATE",
               type: acc.type || "CASH",
               openingBalanceMinor: acc.openingBalanceMinor ?? 0,
               currency: acc.currency || "LKR",
@@ -221,6 +264,7 @@ export async function POST(
             create: {
               id: t.id,
               userId: t.userId,
+              householdId: t.householdId || null,
               accountId: t.accountId,
               toAccountId: t.toAccountId || null,
               categoryId: t.categoryId || null,
@@ -228,8 +272,8 @@ export async function POST(
               type: t.type || "EXPENSE",
               direction: t.direction || (t.type === "INCOME" ? "IN" : "OUT"),
               source: t.source || "MANUAL",
-              createdByUserId: t.userId,
-              updatedByUserId: t.userId,
+              createdByUserId: t.createdByUserId || t.userId,
+              updatedByUserId: t.updatedByUserId || t.userId,
               transactionDate: new Date(t.transactionDate),
               note: t.note || null,
               isSplit: t.isSplit || false,
@@ -365,7 +409,7 @@ export async function POST(
               annualInterestRateBps: l.annualInterestRateBps,
               tenureMonths: l.tenureMonths,
               startDate: new Date(l.startDate),
-              monthlyEmiAmountMinor: l.monthlyEmiAmountMinor,
+              monthlyEmiAmountMinor: l.monthlyEmiAmountMinor ?? 0,
               calculationType: l.calculationType || "REDUCING_BALANCE",
               linkedDisbursementAccountId: l.linkedDisbursementAccountId || null,
               status: l.status || "ACTIVE",

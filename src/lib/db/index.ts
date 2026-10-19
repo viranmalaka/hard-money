@@ -90,6 +90,7 @@ export interface LocalTransaction {
   installmentPlanId?: string | null;
   feeTransactionId?: string | null;
   possibleDuplicateOfTransactionId?: string | null;
+  authorName?: string | null;
   serverSeq: number;
   createdAt: string;
   updatedAt: string;
