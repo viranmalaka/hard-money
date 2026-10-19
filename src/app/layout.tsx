@@ -1,5 +1,5 @@
 import React, { Suspense } from "react";
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 import { SyncProvider } from "@/components/sync-provider";
@@ -8,10 +8,32 @@ import { QuickAddModal } from "@/components/transaction/quick-add-modal";
 import { Sidebar } from "@/components/navigation/sidebar";
 import { BottomNav } from "@/components/navigation/bottom-nav";
 import { Fab } from "@/components/ui/fab";
+import { PwaManager } from "@/components/pwa-manager";
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  viewportFit: "cover",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#FFFFFF" },
+    { media: "(prefers-color-scheme: dark)", color: "#121212" },
+  ],
+};
 
 export const metadata: Metadata = {
   title: "Hard Money",
   description: "Local-first personal treasury & double-entry financial ledger",
+  manifest: "/manifest.json",
+  icons: {
+    icon: "/favicon.png",
+    apple: "/apple-touch-icon.png",
+  },
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "Hard Money",
+  },
 };
 
 export default function RootLayout({
@@ -52,6 +74,9 @@ export default function RootLayout({
 
                   {/* Global Quick-Add Modal */}
                   <QuickAddModal />
+
+                  {/* PWA Service Worker & Update Handler */}
+                  <PwaManager />
                 </div>
               </QuickAddProvider>
             </SyncProvider>

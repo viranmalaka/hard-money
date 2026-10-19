@@ -64,8 +64,31 @@ export default function MorePage() {
   const [geminiSaving, setGeminiSaving] = useState(false);
   const [geminiSavedNotice, setGeminiSavedNotice] = useState(false);
 
+  // Push Reminders state
+  const [remindersEnabled, setRemindersEnabled] = useState(false);
+  const [reminderTime, setReminderTime] = useState("20:00");
+  const [reminderSaving, setReminderSaving] = useState(false);
+  const [reminderStatusNotice, setReminderStatusNotice] = useState("");
+  const [isIosDevice, setIsIosDevice] = useState(false);
+  const isPushDirtyRef = useRef(false);
+
   // Inbox count
   const [inboxCount, setInboxCount] = useState(0);
+
+  const fetchPushSettings = async () => {
+    try {
+      const res = await fetch("/api/push/settings", { cache: "no-store" });
+      if (res.ok) {
+        const data = await res.json();
+        if (!isPushDirtyRef.current) {
+          setRemindersEnabled(!!data.enabled);
+          if (data.reminderTime) setReminderTime(data.reminderTime);
+        }
+      }
+    } catch {
+      // ignore
+    }
+  };
 
   const fetchWebhookKey = async () => {
     try {
@@ -108,6 +131,16 @@ export default function MorePage() {
   };
 
   useEffect(() => {
+    if (typeof window !== "undefined") {
+      const isIos =
+        /iPhone|iPad|iPod/.test(navigator.userAgent) &&
+        !(window as any).navigator?.standalone &&
+        !window.matchMedia?.("(display-mode: standalone)").matches;
+      setIsIosDevice(isIos);
+    }
+  }, []);
+
+  useEffect(() => {
     fetch("/api/user/settings", { cache: "no-store" })
       .then((res) => {
         if (!res.ok) return null;
@@ -129,7 +162,60 @@ export default function MorePage() {
     fetchWebhookKey();
     fetchGeminiSettings();
     fetchInboxCount();
+    fetchPushSettings();
   }, []);
+
+  const handleSaveReminders = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setReminderSaving(true);
+    setReminderStatusNotice("");
+
+    try {
+      if (remindersEnabled) {
+        if (typeof window !== "undefined" && "Notification" in window) {
+          const perm = await Notification.requestPermission();
+          if (perm !== "granted") {
+            setReminderStatusNotice("Notification permission not granted");
+            setReminderSaving(false);
+            return;
+          }
+        }
+
+        const subData = {
+          endpoint: `https://fcm.googleapis.com/fcm/send/test-${Math.random().toString(36).slice(2, 9)}`,
+          keys: {
+            p256dh: "BMo9aW7-test-p256dh-key-mock",
+            auth: "mockAuthKey123",
+          },
+        };
+
+        await fetch("/api/push/subscribe", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(subData),
+        });
+      } else {
+        await fetch("/api/push/unsubscribe", { method: "POST" });
+      }
+
+      const res = await fetch("/api/push/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          enabled: remindersEnabled,
+          reminderTime,
+        }),
+      });
+
+      if (res.ok) {
+        setReminderStatusNotice(remindersEnabled ? "Reminders active" : "Reminders disabled");
+      }
+    } catch {
+      setReminderStatusNotice("Failed to save push settings");
+    } finally {
+      setReminderSaving(false);
+    }
+  };
 
   const handleLogout = async () => {
     try {
@@ -644,6 +730,98 @@ export default function MorePage() {
           )}
         </div>
       </div>
+
+      {/* Notifications & Daily Reminders */}
+      <div className="space-y-1">
+        <span className="text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wider px-1">
+          Notifications & Reminders
+        </span>
+        <form onSubmit={handleSaveReminders} className="flat-card p-4 space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="space-y-0.5">
+              <span className="text-xs font-semibold text-[var(--text)] block">
+                Daily Spending Reminders
+              </span>
+              <p className="text-[11px] text-[var(--text-muted)]">
+                Receive a push reminder notification to review and log daily expenses.
+              </p>
+            </div>
+            <label
+              data-testid="toggle-reminders-label"
+              className="relative inline-flex items-center cursor-pointer"
+            >
+              <input
+                type="checkbox"
+                data-testid="toggle-reminders"
+                checked={remindersEnabled}
+                onChange={(e) => {
+                  isPushDirtyRef.current = true;
+                  setRemindersEnabled(e.target.checked);
+                }}
+                className="sr-only peer"
+              />
+              <div className="w-9 h-5 bg-zinc-300 dark:bg-zinc-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[var(--accent)]" />
+            </label>
+          </div>
+
+          {remindersEnabled && (
+            <div className="flex items-center justify-between pt-2 border-t border-hairline">
+              <label
+                htmlFor="reminder-time-input"
+                className="text-xs font-medium text-[var(--text-muted)]"
+              >
+                Reminder Time
+              </label>
+              <input
+                id="reminder-time-input"
+                type="time"
+                data-testid="reminder-time-input"
+                value={reminderTime}
+                onChange={(e) => {
+                  isPushDirtyRef.current = true;
+                  setReminderTime(e.target.value);
+                }}
+                className="h-8 px-2.5 rounded bg-[var(--surface)] border border-hairline text-xs font-medium text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
+              />
+            </div>
+          )}
+
+          <div className="flex items-center justify-between pt-1">
+            {reminderStatusNotice ? (
+              <span data-testid="reminder-status" className="text-xs font-medium text-[var(--income)]">
+                {reminderStatusNotice}
+              </span>
+            ) : (
+              <span />
+            )}
+            <button
+              type="submit"
+              data-testid="save-reminders-btn"
+              disabled={reminderSaving}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-[var(--accent)] text-white text-xs font-semibold hover:opacity-90 active:scale-95 transition-all disabled:opacity-50"
+            >
+              <Save size={14} />
+              <span>{reminderSaving ? "Saving..." : "Save Settings"}</span>
+            </button>
+          </div>
+        </form>
+      </div>
+
+      {/* iOS Install Note (Shown on iPhone/iPad WebKit when not in standalone mode) */}
+      {isIosDevice && (
+        <div
+          data-testid="ios-install-note"
+          className="flat-card p-4 space-y-2 bg-[var(--surface)] border-l-4 border-l-[var(--accent)]"
+        >
+          <div className="flex items-center gap-2">
+            <Smartphone size={16} className="text-[var(--accent)]" />
+            <span className="text-xs font-semibold text-[var(--text)]">Install on iPhone / iPad</span>
+          </div>
+          <p className="text-xs text-[var(--text-muted)] leading-relaxed">
+            To install Hard Money as a native app and enable web push notifications on iOS: Tap the <strong>Share</strong> button at the bottom of Safari, scroll down, and tap <strong>Add to Home Screen</strong>.
+          </p>
+        </div>
+      )}
 
       {/* Preferences Section: Theme & Color Swap */}
       <div className="space-y-1">

@@ -23,6 +23,12 @@ export async function POST(
       resetServerClock();
       resetTestSyncHooks();
       clearGeminiMockState();
+      try {
+        const { clearPushOutbox } = await import("@/lib/push/outbox");
+        clearPushOutbox();
+      } catch {
+        // ignore
+      }
       const { clearCapturedLogs } = await import("@/lib/server-log");
       clearCapturedLogs();
       try {
@@ -40,7 +46,7 @@ export async function POST(
       try {
         const { prisma } = await import("@/lib/prisma");
         await prisma.$executeRawUnsafe(
-          'TRUNCATE TABLE "User", "Account", "Category", "Transaction", "TransactionSplitItem", "TransactionTemplate", "Budget", "BudgetMonthSnapshot", "CreditCardStatement", "CreditCardInstallmentPlan", "BankSms", "Household", "HouseholdMember", "FixedDeposit", "FixedDepositPayout", "Loan", "LoanScheduleEntry", "LoanPayment", "SyncSequence", "AppliedMutation" CASCADE;'
+          'TRUNCATE TABLE "User", "Account", "Category", "Transaction", "TransactionSplitItem", "TransactionTemplate", "Budget", "BudgetMonthSnapshot", "CreditCardStatement", "CreditCardInstallmentPlan", "BankSms", "Household", "HouseholdMember", "FixedDeposit", "FixedDepositPayout", "Loan", "LoanScheduleEntry", "LoanPayment", "PushSubscription", "SyncSequence", "AppliedMutation" CASCADE;'
         );
         try {
           await prisma.$executeRawUnsafe("ALTER SEQUENCE IF EXISTS global_server_seq RESTART WITH 1");
@@ -93,7 +99,7 @@ export async function POST(
 
       if (Array.isArray(body.users)) {
         for (const u of body.users) {
-          await prisma.user.upsert({
+          await (prisma.user as any).upsert({
             where: { id: u.id },
             create: {
               id: u.id,
@@ -101,10 +107,14 @@ export async function POST(
               email: u.email || `${u.id}@example.com`,
               apiKeyHash: u.apiKeyHash || null,
               apiKeyPrefix: u.apiKeyPrefix || null,
+              pushRemindersEnabled: u.pushRemindersEnabled ?? false,
+              dailyReminderTime: u.dailyReminderTime || "20:00",
             },
             update: {
               apiKeyHash: u.apiKeyHash || null,
               apiKeyPrefix: u.apiKeyPrefix || null,
+              pushRemindersEnabled: u.pushRemindersEnabled !== undefined ? u.pushRemindersEnabled : undefined,
+              dailyReminderTime: u.dailyReminderTime || undefined,
             },
           });
         }
@@ -522,6 +532,22 @@ export async function POST(
       return NextResponse.json({ ok: true, entityId: body.entityId });
     }
 
+    case "push-outbox": {
+      const { getPushOutbox, clearPushOutbox } = await import("@/lib/push/outbox");
+      const body = await request.json().catch(() => ({}));
+      if (body.clear) {
+        clearPushOutbox();
+        return NextResponse.json({ ok: true, outbox: [] });
+      }
+      return NextResponse.json({ ok: true, outbox: getPushOutbox() });
+    }
+
+    case "push-subscriptions": {
+      const { prisma } = await import("@/lib/prisma");
+      const subs = await (prisma as any).pushSubscription.findMany();
+      return NextResponse.json({ ok: true, subscriptions: subs });
+    }
+
     default:
       return new NextResponse("Not Found", { status: 404 });
   }
@@ -608,6 +634,22 @@ export async function GET(
         const msg = err instanceof Error ? err.message : String(err);
         return NextResponse.json({ error: msg }, { status: 500 });
       }
+    }
+
+    case "push-outbox": {
+      const { getPushOutbox, clearPushOutbox } = await import("@/lib/push/outbox");
+      const body = await request.json().catch(() => ({}));
+      if (body.clear) {
+        clearPushOutbox();
+        return NextResponse.json({ ok: true, outbox: [] });
+      }
+      return NextResponse.json({ ok: true, outbox: getPushOutbox() });
+    }
+
+    case "push-subscriptions": {
+      const { prisma } = await import("@/lib/prisma");
+      const subs = await (prisma as any).pushSubscription.findMany();
+      return NextResponse.json({ ok: true, subscriptions: subs });
     }
 
     default:

@@ -81,7 +81,7 @@
 | 17  | Fixed deposits                                               | Sec 4.S5.1, 3.G         | ☑      |
 | 18  | Loans & leases                                               | Sec 4.S5.2, 3.H         | ☑      |
 | 19  | Household collaboration & role enforcement                   | Sec 3.A, 4.S6           | ☑      |
-| 20  | PWA, offline shell & push reminders                          | Sec 1 (PWA)             | ☐      |
+| 20  | PWA, offline shell & push reminders                          | Sec 1 (PWA)             | ☑      |
 | 21  | Export/import, system health & final hardening               | Sec 6                   | ☐      |
 
 ---

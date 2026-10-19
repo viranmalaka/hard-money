@@ -38,6 +38,7 @@ export async function runCronTick(options?: { now?: Date }): Promise<{
   processedStatements: number;
   processedInstallmentPlans: number;
   processedFixedDepositPayouts: number;
+  processedPushReminders?: number;
 }> {
   const now = options?.now || getServerNow();
   const colomboNowStr = getColomboDateString(now);
@@ -511,6 +512,43 @@ export async function runCronTick(options?: { now?: Date }): Promise<{
     }
   }
 
+  // 5. Daily Push Reminders
+  let processedPushReminders = 0;
+  const reminderUsers = await (prisma as any).user.findMany({
+    where: {
+      pushRemindersEnabled: true,
+    },
+    include: {
+      pushSubscriptions: true,
+    },
+  });
+
+  const { enqueuePushNotification } = await import("@/lib/push/outbox");
+  for (const u of reminderUsers) {
+    const tz = u.timezone || "Asia/Colombo";
+    let userTime = "20:00";
+    try {
+      userTime = new Intl.DateTimeFormat("en-GB", {
+        timeZone: tz,
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+      }).format(now);
+    } catch {
+      // fallback
+    }
+
+    const configuredTime = u.dailyReminderTime || "20:00";
+    if (userTime >= configuredTime) {
+      enqueuePushNotification(u.id, {
+        title: "Daily Spending Reminder",
+        body: "Don't forget to review your daily expenses and balances!",
+        url: "/",
+      });
+      processedPushReminders++;
+    }
+  }
+
   return {
     ok: true,
     timestamp: now.toISOString(),
@@ -518,5 +556,6 @@ export async function runCronTick(options?: { now?: Date }): Promise<{
     processedStatements,
     processedInstallmentPlans,
     processedFixedDepositPayouts,
+    processedPushReminders,
   };
 }

@@ -8,6 +8,7 @@ const SESSION_COOKIE_NAME = "hardmoney_session";
 const PUBLIC_PATHS = [
   "/login",
   "/register",
+  "/offline",
   "/api/auth",
   "/api/health",
   "/api/test",
