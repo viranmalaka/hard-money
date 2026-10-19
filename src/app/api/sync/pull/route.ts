@@ -12,7 +12,21 @@ export async function GET(request: NextRequest) {
   const cursorParam = searchParams.get("cursor") || "0";
   const cursor = BigInt(cursorParam);
 
-  const [accounts, categories, transactions, templates, budgets, budgetSnapshots, creditCardStatements, installmentPlans] = await Promise.all([
+  const [
+    accounts,
+    categories,
+    transactions,
+    templates,
+    budgets,
+    budgetSnapshots,
+    creditCardStatements,
+    installmentPlans,
+    fixedDeposits,
+    fixedDepositPayouts,
+    loans,
+    loanScheduleEntries,
+    loanPayments,
+  ] = await Promise.all([
     prisma.account.findMany({
       where: {
         userId: user.id,
@@ -72,6 +86,41 @@ export async function GET(request: NextRequest) {
       },
       orderBy: { serverSeq: "asc" },
     }),
+    prisma.fixedDeposit.findMany({
+      where: {
+        userId: user.id,
+        serverSeq: { gt: cursor },
+      },
+      orderBy: { serverSeq: "asc" },
+    }),
+    prisma.fixedDepositPayout.findMany({
+      where: {
+        fixedDeposit: { userId: user.id },
+        serverSeq: { gt: cursor },
+      },
+      orderBy: { serverSeq: "asc" },
+    }),
+    prisma.loan.findMany({
+      where: {
+        userId: user.id,
+        serverSeq: { gt: cursor },
+      },
+      orderBy: { serverSeq: "asc" },
+    }),
+    prisma.loanScheduleEntry.findMany({
+      where: {
+        loan: { userId: user.id },
+        serverSeq: { gt: cursor },
+      },
+      orderBy: { serverSeq: "asc" },
+    }),
+    prisma.loanPayment.findMany({
+      where: {
+        loan: { userId: user.id },
+        serverSeq: { gt: cursor },
+      },
+      orderBy: { serverSeq: "asc" },
+    }),
   ]);
 
   let maxSeq = cursor;
@@ -98,6 +147,21 @@ export async function GET(request: NextRequest) {
   }
   for (const plan of installmentPlans) {
     if (plan.serverSeq > maxSeq) maxSeq = plan.serverSeq;
+  }
+  for (const fd of fixedDeposits) {
+    if (fd.serverSeq > maxSeq) maxSeq = fd.serverSeq;
+  }
+  for (const fdp of fixedDepositPayouts) {
+    if (fdp.serverSeq > maxSeq) maxSeq = fdp.serverSeq;
+  }
+  for (const l of loans) {
+    if (l.serverSeq > maxSeq) maxSeq = l.serverSeq;
+  }
+  for (const se of loanScheduleEntries) {
+    if (se.serverSeq > maxSeq) maxSeq = se.serverSeq;
+  }
+  for (const lp of loanPayments) {
+    if (lp.serverSeq > maxSeq) maxSeq = lp.serverSeq;
   }
 
   const serializedAccounts = accounts.map((a) => ({
@@ -150,6 +214,50 @@ export async function GET(request: NextRequest) {
     deletedAt: plan.deletedAt ? plan.deletedAt.toISOString() : null,
   }));
 
+  const serializedFixedDeposits = fixedDeposits.map((fd) => ({
+    ...fd,
+    serverSeq: Number(fd.serverSeq),
+    startDate: fd.startDate.toISOString(),
+    maturityDate: fd.maturityDate.toISOString(),
+    closedAt: fd.closedAt ? fd.closedAt.toISOString() : null,
+    createdAt: fd.createdAt.toISOString(),
+    updatedAt: fd.updatedAt.toISOString(),
+    deletedAt: fd.deletedAt ? fd.deletedAt.toISOString() : null,
+  }));
+
+  const serializedFixedDepositPayouts = fixedDepositPayouts.map((fdp) => ({
+    ...fdp,
+    serverSeq: Number(fdp.serverSeq),
+    periodEnd: fdp.periodEnd.toISOString(),
+    createdAt: fdp.createdAt.toISOString(),
+  }));
+
+  const serializedLoans = loans.map((l) => ({
+    ...l,
+    serverSeq: Number(l.serverSeq),
+    startDate: l.startDate.toISOString(),
+    closedAt: l.closedAt ? l.closedAt.toISOString() : null,
+    createdAt: l.createdAt.toISOString(),
+    updatedAt: l.updatedAt.toISOString(),
+    deletedAt: l.deletedAt ? l.deletedAt.toISOString() : null,
+  }));
+
+  const serializedLoanScheduleEntries = loanScheduleEntries.map((se) => ({
+    ...se,
+    serverSeq: Number(se.serverSeq),
+    dueDate: se.dueDate.toISOString(),
+    createdAt: se.createdAt.toISOString(),
+    updatedAt: se.updatedAt.toISOString(),
+    deletedAt: se.deletedAt ? se.deletedAt.toISOString() : null,
+  }));
+
+  const serializedLoanPayments = loanPayments.map((lp) => ({
+    ...lp,
+    serverSeq: Number(lp.serverSeq),
+    paymentDate: lp.paymentDate.toISOString(),
+    createdAt: lp.createdAt.toISOString(),
+  }));
+
   return NextResponse.json({
     cursor: Number(maxSeq),
     accounts: serializedAccounts,
@@ -160,5 +268,10 @@ export async function GET(request: NextRequest) {
     budgetSnapshots: serializedBudgetSnapshots,
     creditCardStatements: serializedCreditCardStatements,
     installmentPlans: serializedInstallmentPlans,
+    fixedDeposits: serializedFixedDeposits,
+    fixedDepositPayouts: serializedFixedDepositPayouts,
+    loans: serializedLoans,
+    loanScheduleEntries: serializedLoanScheduleEntries,
+    loanPayments: serializedLoanPayments,
   });
 }

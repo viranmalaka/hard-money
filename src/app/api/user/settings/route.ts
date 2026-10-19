@@ -7,6 +7,7 @@ const SettingsSchema = z.object({
   name: z.string().optional(),
   timezone: z.string().optional(),
   defaultCurrency: z.string().optional(),
+  defaultWithholdingTaxRateBps: z.number().optional(),
 });
 
 export async function PATCH(request: NextRequest) {
@@ -28,6 +29,7 @@ export async function PATCH(request: NextRequest) {
     name?: string;
     timezone?: string;
     defaultCurrency?: string;
+    defaultWithholdingTaxRateBps?: number;
   } = {};
 
   if (parsed.data.name && parsed.data.name.trim().length > 0) {
@@ -39,6 +41,9 @@ export async function PATCH(request: NextRequest) {
   if (parsed.data.defaultCurrency && parsed.data.defaultCurrency.trim().length === 3) {
     dataToUpdate.defaultCurrency = parsed.data.defaultCurrency.trim().toUpperCase();
   }
+  if (parsed.data.defaultWithholdingTaxRateBps !== undefined) {
+    dataToUpdate.defaultWithholdingTaxRateBps = parsed.data.defaultWithholdingTaxRateBps;
+  }
 
   const updated = await prisma.user.update({
     where: { id: session.userId },
@@ -49,6 +54,7 @@ export async function PATCH(request: NextRequest) {
       email: true,
       timezone: true,
       defaultCurrency: true,
+      defaultWithholdingTaxRateBps: true,
     },
   });
 
@@ -69,6 +75,7 @@ export async function GET() {
       email: true,
       timezone: true,
       defaultCurrency: true,
+      defaultWithholdingTaxRateBps: true,
     },
   });
 

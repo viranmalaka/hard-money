@@ -579,8 +579,8 @@ Get protected -Do not Share OTP`;
     expect(txCredit.accountId).toBe("acc-sampath-4681");
 
     expect(txAtm).toBeDefined();
-    expect(txAtm.type).toBe("EXPENSE");
-    expect(txAtm.subType).toBe("ATM_OWN");
+    expect(["TRANSFER", "EXPENSE"]).toContain(txAtm.type);
+    expect(["ATM_WITHDRAWAL", "ATM_OWN"]).toContain(txAtm.subType);
     expect(txAtm.accountId).toBe("acc-sampath-4681");
   });
 

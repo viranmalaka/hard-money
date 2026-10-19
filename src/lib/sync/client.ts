@@ -83,6 +83,11 @@ export async function syncNow(
         db.budgetSnapshots,
         db.creditCardStatements,
         db.installmentPlans,
+        db.fixedDeposits,
+        db.fixedDepositPayouts,
+        db.loans,
+        db.loanScheduleEntries,
+        db.loanPayments,
         db.syncMeta,
       ],
       async () => {
@@ -141,6 +146,38 @@ export async function syncNow(
           } else {
             await db.installmentPlans.put(plan);
           }
+        }
+        // Fixed Deposits
+        for (const fd of data.fixedDeposits || []) {
+          if (fd.deletedAt) {
+            await db.fixedDeposits.delete(fd.id);
+          } else {
+            await db.fixedDeposits.put(fd);
+          }
+        }
+        // Fixed Deposit Payouts
+        for (const fdp of data.fixedDepositPayouts || []) {
+          await db.fixedDepositPayouts.put(fdp);
+        }
+        // Loans
+        for (const l of data.loans || []) {
+          if (l.deletedAt) {
+            await db.loans.delete(l.id);
+          } else {
+            await db.loans.put(l);
+          }
+        }
+        // Loan Schedule Entries
+        for (const se of data.loanScheduleEntries || []) {
+          if (se.deletedAt) {
+            await db.loanScheduleEntries.delete(se.id);
+          } else {
+            await db.loanScheduleEntries.put(se);
+          }
+        }
+        // Loan Payments
+        for (const lp of data.loanPayments || []) {
+          await db.loanPayments.put(lp);
         }
 
         if (data.cursor !== undefined) {
@@ -652,5 +689,386 @@ export async function localDeleteInstallmentPlan(db: HardMoneyDB, id: string): P
     await db.outbox.add(mutation);
   });
 }
+
+export async function localCreateFixedDeposit(
+  db: HardMoneyDB,
+  fd: Omit<import("../db").LocalFixedDeposit, "id" | "serverSeq" | "createdAt" | "updatedAt"> & { id?: string }
+): Promise<import("../db").LocalFixedDeposit> {
+  const now = new Date().toISOString();
+  const id = fd.id || uuidv4();
+  const fullFd: import("../db").LocalFixedDeposit = {
+    ...fd,
+    id,
+    serverSeq: 0,
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  const mutation: OutboxMutation = {
+    mutationId: uuidv4(),
+    entity: "fixedDeposit",
+    op: "CREATE",
+    id,
+    payload: fullFd,
+    createdAt: now,
+    status: "pending",
+  };
+
+  await db.transaction("rw", [db.fixedDeposits, db.transactions, db.outbox], async () => {
+    await db.fixedDeposits.put(fullFd);
+    if (fullFd.fundingAccountId && fullFd.principalAmountMinor > 0) {
+      const placementTxId = `${id}-placement`;
+      const placementTx: import("../db").LocalTransaction = {
+        id: placementTxId,
+        userId: fullFd.userId || "",
+        accountId: fullFd.fundingAccountId,
+        amountMinor: fullFd.principalAmountMinor,
+        type: "EXPENSE",
+        subType: "FD_PLACEMENT",
+        source: "SYSTEM",
+        isSplit: false,
+        createdByUserId: fullFd.userId || "",
+        updatedByUserId: fullFd.userId || "",
+        transactionDate: fullFd.startDate || now,
+        note: `Fixed Deposit Placement: ${fullFd.bankName}`,
+        excludeFromBudget: true,
+        excludeFromStats: true,
+        excludeFromBalance: false,
+        serverSeq: 0,
+        createdAt: now,
+        updatedAt: now,
+      };
+      await db.transactions.put(placementTx);
+    }
+    await db.outbox.add(mutation);
+  });
+
+  return fullFd;
+}
+
+export async function localUpdateFixedDeposit(
+  db: HardMoneyDB,
+  id: string,
+  patch: Partial<import("../db").LocalFixedDeposit>
+): Promise<void> {
+  const existing = await db.fixedDeposits.get(id);
+  if (!existing) return;
+
+  const now = new Date().toISOString();
+  const updated: import("../db").LocalFixedDeposit = { ...existing, ...patch, updatedAt: now };
+
+  const mutation: OutboxMutation = {
+    mutationId: uuidv4(),
+    entity: "fixedDeposit",
+    op: "UPDATE",
+    id,
+    payload: patch,
+    createdAt: now,
+    status: "pending",
+  };
+
+  await db.transaction("rw", [db.fixedDeposits, db.outbox], async () => {
+    await db.fixedDeposits.put(updated);
+    await db.outbox.add(mutation);
+  });
+}
+
+export async function localDeleteFixedDeposit(db: HardMoneyDB, id: string): Promise<void> {
+  const now = new Date().toISOString();
+  const mutation: OutboxMutation = {
+    mutationId: uuidv4(),
+    entity: "fixedDeposit",
+    op: "DELETE",
+    id,
+    createdAt: now,
+    status: "pending",
+  };
+
+  await db.transaction("rw", [db.fixedDeposits, db.outbox], async () => {
+    await db.fixedDeposits.delete(id);
+    await db.outbox.add(mutation);
+  });
+}
+
+export async function localCreateLoan(
+  db: HardMoneyDB,
+  loan: Omit<import("../db").LocalLoan, "id" | "serverSeq" | "createdAt" | "updatedAt"> & { id?: string }
+): Promise<import("../db").LocalLoan> {
+  const now = new Date().toISOString();
+  const id = loan.id || uuidv4();
+
+  // Generate schedule rows
+  const { generateAmortizationSchedule } = await import("../finance-core/loans");
+  const scheduleRows = generateAmortizationSchedule(
+    loan.originalPrincipalMinor,
+    loan.annualInterestRateBps,
+    loan.tenureMonths,
+    loan.calculationType,
+    loan.residualValueMinor || 0
+  );
+
+  const monthlyEmi = loan.monthlyEmiAmountMinor || scheduleRows[0]?.emiAmountMinor || 0;
+
+  const fullLoan: import("../db").LocalLoan = {
+    ...loan,
+    monthlyEmiAmountMinor: monthlyEmi,
+    id,
+    serverSeq: 0,
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  const loanMutation: OutboxMutation = {
+    mutationId: uuidv4(),
+    entity: "loan",
+    op: "CREATE",
+    id,
+    payload: fullLoan,
+    createdAt: now,
+    status: "pending",
+  };
+
+  const baseDate = new Date(fullLoan.startDate || now);
+  const entries: import("../db").LocalLoanScheduleEntry[] = [];
+  const entryMutations: OutboxMutation[] = [];
+
+  for (const row of scheduleRows) {
+    const entryId = uuidv4();
+    const dueDate = new Date(baseDate);
+    dueDate.setMonth(dueDate.getMonth() + row.installmentNumber);
+
+    const entry: import("../db").LocalLoanScheduleEntry = {
+      id: entryId,
+      loanId: id,
+      installmentNumber: row.installmentNumber,
+      dueDate: dueDate.toISOString(),
+      principalComponentMinor: row.principalComponentMinor,
+      interestComponentMinor: row.interestComponentMinor,
+      openingBalanceMinor: row.openingBalanceMinor,
+      closingBalanceMinor: row.closingBalanceMinor,
+      status: "SCHEDULED",
+      serverSeq: 0,
+      createdAt: now,
+      updatedAt: now,
+    };
+    entries.push(entry);
+
+    entryMutations.push({
+      mutationId: uuidv4(),
+      entity: "loanScheduleEntry",
+      op: "CREATE",
+      id: entryId,
+      payload: entry,
+      createdAt: now,
+      status: "pending",
+    });
+  }
+
+  await db.transaction(
+    "rw",
+    [db.loans, db.loanScheduleEntries, db.transactions, db.outbox],
+    async () => {
+      await db.loans.put(fullLoan);
+      for (const entry of entries) {
+        await db.loanScheduleEntries.put(entry);
+      }
+      if (fullLoan.linkedDisbursementAccountId && fullLoan.originalPrincipalMinor > 0) {
+        const disbursementTxId = `${id}-disbursement`;
+        const disbursementTx: import("../db").LocalTransaction = {
+          id: disbursementTxId,
+          userId: fullLoan.userId || "",
+          accountId: fullLoan.linkedDisbursementAccountId,
+          amountMinor: fullLoan.originalPrincipalMinor,
+          type: "INCOME",
+          subType: "LOAN_DISBURSEMENT",
+          source: "SYSTEM",
+          isSplit: false,
+          createdByUserId: fullLoan.userId || "",
+          updatedByUserId: fullLoan.userId || "",
+          transactionDate: fullLoan.startDate || now,
+          note: `${fullLoan.kind === "LEASE" ? "Lease" : "Loan"} Disbursement: ${fullLoan.lenderName}`,
+          excludeFromBudget: true,
+          excludeFromStats: true,
+          excludeFromBalance: false,
+          serverSeq: 0,
+          createdAt: now,
+          updatedAt: now,
+        };
+        await db.transactions.put(disbursementTx);
+      }
+      await db.outbox.add(loanMutation);
+      for (const m of entryMutations) {
+        await db.outbox.add(m);
+      }
+    }
+  );
+
+  return fullLoan;
+}
+
+export async function localUpdateLoan(
+  db: HardMoneyDB,
+  id: string,
+  patch: Partial<import("../db").LocalLoan>
+): Promise<void> {
+  const existing = await db.loans.get(id);
+  if (!existing) return;
+
+  const now = new Date().toISOString();
+  const updated: import("../db").LocalLoan = { ...existing, ...patch, updatedAt: now };
+
+  const mutation: OutboxMutation = {
+    mutationId: uuidv4(),
+    entity: "loan",
+    op: "UPDATE",
+    id,
+    payload: patch,
+    createdAt: now,
+    status: "pending",
+  };
+
+  await db.transaction("rw", [db.loans, db.outbox], async () => {
+    await db.loans.put(updated);
+    await db.outbox.add(mutation);
+  });
+}
+
+export async function localDeleteLoan(db: HardMoneyDB, id: string): Promise<void> {
+  const now = new Date().toISOString();
+  const mutation: OutboxMutation = {
+    mutationId: uuidv4(),
+    entity: "loan",
+    op: "DELETE",
+    id,
+    createdAt: now,
+    status: "pending",
+  };
+
+  await db.transaction("rw", [db.loans, db.loanScheduleEntries, db.outbox], async () => {
+    await db.loans.delete(id);
+    const entries = await db.loanScheduleEntries.where("loanId").equals(id).toArray();
+    for (const e of entries) {
+      await db.loanScheduleEntries.delete(e.id);
+    }
+    await db.outbox.add(mutation);
+  });
+}
+
+export async function localCreateLoanPayment(
+  db: HardMoneyDB,
+  payment: Omit<import("../db").LocalLoanPayment, "id" | "serverSeq" | "createdAt"> & { id?: string }
+): Promise<import("../db").LocalLoanPayment> {
+  const now = new Date().toISOString();
+  const id = payment.id || uuidv4();
+  const fullPayment: import("../db").LocalLoanPayment = {
+    ...payment,
+    id,
+    serverSeq: 0,
+    createdAt: now,
+  };
+
+  const paymentMutation: OutboxMutation = {
+    mutationId: uuidv4(),
+    entity: "loanPayment",
+    op: "CREATE",
+    id,
+    payload: fullPayment,
+    createdAt: now,
+    status: "pending",
+  };
+
+  await db.transaction(
+    "rw",
+    [db.loanPayments, db.loanScheduleEntries, db.loans, db.outbox],
+    async () => {
+      await db.loanPayments.put(fullPayment);
+      await db.outbox.add(paymentMutation);
+
+      if (fullPayment.scheduleEntryId) {
+        const entry = await db.loanScheduleEntries.get(fullPayment.scheduleEntryId);
+        if (entry) {
+          const updatedEntry: import("../db").LocalLoanScheduleEntry = {
+            ...entry,
+            status: "PAID",
+            updatedAt: now,
+          };
+          await db.loanScheduleEntries.put(updatedEntry);
+
+          const entryMutation: OutboxMutation = {
+            mutationId: uuidv4(),
+            entity: "loanScheduleEntry",
+            op: "UPDATE",
+            id: entry.id,
+            payload: { status: "PAID" },
+            createdAt: now,
+            status: "pending",
+          };
+          await db.outbox.add(entryMutation);
+        }
+      }
+
+      // Check if all entries for this loan are now PAID
+      const remainingScheduled = await db.loanScheduleEntries
+        .where("loanId")
+        .equals(fullPayment.loanId)
+        .filter((e) => e.status !== "PAID")
+        .count();
+
+      if (remainingScheduled === 0) {
+        const loan = await db.loans.get(fullPayment.loanId);
+        if (loan && loan.status !== "CLOSED") {
+          const updatedLoan: import("../db").LocalLoan = {
+            ...loan,
+            status: "CLOSED",
+            closedAt: now,
+            updatedAt: now,
+          };
+          await db.loans.put(updatedLoan);
+
+          const loanMutation: OutboxMutation = {
+            mutationId: uuidv4(),
+            entity: "loan",
+            op: "UPDATE",
+            id: loan.id,
+            payload: { status: "CLOSED", closedAt: now },
+            createdAt: now,
+            status: "pending",
+          };
+          await db.outbox.add(loanMutation);
+        }
+      }
+    }
+  );
+
+  return fullPayment;
+}
+
+export async function localUpdateLoanScheduleEntry(
+  db: HardMoneyDB,
+  id: string,
+  patch: Partial<import("../db").LocalLoanScheduleEntry>
+): Promise<void> {
+  const existing = await db.loanScheduleEntries.get(id);
+  if (!existing) return;
+
+  const now = new Date().toISOString();
+  const updated: import("../db").LocalLoanScheduleEntry = { ...existing, ...patch, updatedAt: now };
+
+  const mutation: OutboxMutation = {
+    mutationId: uuidv4(),
+    entity: "loanScheduleEntry",
+    op: "UPDATE",
+    id,
+    payload: patch,
+    createdAt: now,
+    status: "pending",
+  };
+
+  await db.transaction("rw", [db.loanScheduleEntries, db.outbox], async () => {
+    await db.loanScheduleEntries.put(updated);
+    await db.outbox.add(mutation);
+  });
+}
+
 
 

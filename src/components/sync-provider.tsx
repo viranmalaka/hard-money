@@ -79,6 +79,7 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (typeof window !== "undefined") {
       (window as unknown as { __hardMoneyDb?: HardMoneyDB }).__hardMoneyDb = db;
+      (window as unknown as { __hardMoneyTriggerSync?: () => Promise<void> }).__hardMoneyTriggerSync = triggerSync;
     }
     if (userId) {
       triggerSync();
@@ -191,6 +192,31 @@ export function useCreditCardStatements(): LocalCreditCardStatement[] {
 export function useInstallmentPlans(): LocalInstallmentPlan[] {
   const { db } = useSync();
   return useLiveQuery(() => db.installmentPlans.filter((p) => !p.deletedAt).toArray(), [db]) || [];
+}
+
+export function useFixedDeposits(): import("@/lib/db").LocalFixedDeposit[] {
+  const { db } = useSync();
+  return useLiveQuery(() => db.fixedDeposits.filter((fd) => !fd.deletedAt).toArray(), [db]) || [];
+}
+
+export function useFixedDepositPayouts(): import("@/lib/db").LocalFixedDepositPayout[] {
+  const { db } = useSync();
+  return useLiveQuery(() => db.fixedDepositPayouts.toArray(), [db]) || [];
+}
+
+export function useLoans(): import("@/lib/db").LocalLoan[] {
+  const { db } = useSync();
+  return useLiveQuery(() => db.loans.filter((l) => !l.deletedAt).toArray(), [db]) || [];
+}
+
+export function useLoanScheduleEntries(): import("@/lib/db").LocalLoanScheduleEntry[] {
+  const { db } = useSync();
+  return useLiveQuery(() => db.loanScheduleEntries.toArray(), [db]) || [];
+}
+
+export function useLoanPayments(): import("@/lib/db").LocalLoanPayment[] {
+  const { db } = useSync();
+  return useLiveQuery(() => db.loanPayments.toArray(), [db]) || [];
 }
 
 export function SyncIndicator({ isMobile }: { isMobile?: boolean }) {

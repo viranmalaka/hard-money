@@ -172,25 +172,43 @@ export function parseBankSmsTemplate(
     }
   }
 
-  // Determine transaction type
-  const isCredit = /\b(?:credited|deposit|inward)\b/i.test(text);
-  const transactionType: ParsedTransactionPayload["transactionType"] = isCredit ? "CREDIT" : "DEBIT";
-
-  // Determine channel
+  // Determine transaction type and channel
+  const isRefund = /\b(?:refund|refunded|reversal)\b/i.test(text);
+  const isCardPayment = /\b(?:payment.*received for card|card payment|credit card settlement)\b/i.test(text);
+  const isBankFee =
+    /\b(?:withdrawal fee|bank fee|atm fee|bank charge|service charge|annual fee|for atm.*fee)\b/i.test(text) &&
+    !/\bvia atm\b/i.test(text);
+  const isAtmOther = /\batm\b/i.test(text) && /\b(?:other bank|other-bank|other)\b/i.test(text);
   const isAtm = /\batm\b/i.test(text) || /\bwithdrawn\b/i.test(text);
+  const isCredit = /\b(?:credited|deposit|inward|salary)\b/i.test(text);
   const isTransfer = /\b(?:ceft|transfer|donation|vsrpmt)\b/i.test(text);
-  const isCashDeposit = isCredit && /\bcash\b/i.test(text);
 
+  let transactionType: ParsedTransactionPayload["transactionType"] = "DEBIT";
   let channel: ParsedTransactionPayload["channel"] = "POS";
-  if (isAtm) {
+
+  if (isRefund) {
+    transactionType = "REFUND_REVERSAL";
+    channel = "UNKNOWN";
+  } else if (isCardPayment) {
+    transactionType = "CREDIT";
+    channel = "CARD_PAYMENT";
+  } else if (isBankFee) {
+    transactionType = "DEBIT";
+    channel = "BANK_CHARGE";
+  } else if (isAtmOther) {
+    transactionType = "DEBIT";
+    channel = "ATM_OTHER";
+  } else if (isAtm) {
+    transactionType = "DEBIT";
     channel = "ATM_OWN";
-  } else if (isCashDeposit) {
-    channel = "SALARY_OR_DEPOSIT";
   } else if (isTransfer) {
+    transactionType = isCredit ? "CREDIT" : "DEBIT";
     channel = "ONLINE_TRANSFER";
   } else if (isCredit) {
+    transactionType = "CREDIT";
     channel = "SALARY_OR_DEPOSIT";
   } else {
+    transactionType = "DEBIT";
     channel = "POS";
   }
 

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -44,6 +44,8 @@ export default function MorePage() {
   const [name, setName] = useState("");
   const [timezone, setTimezone] = useState("Asia/Colombo");
   const [currency, setCurrency] = useState("LKR");
+  const [whtRate, setWhtRate] = useState("0.0");
+  const isWhtDirtyRef = useRef(false);
   const [savedNotice, setSavedNotice] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -117,6 +119,9 @@ export default function MorePage() {
           setName(data.user.name || "");
           setTimezone(data.user.timezone || "Asia/Colombo");
           setCurrency(data.user.defaultCurrency || "LKR");
+          if (!isWhtDirtyRef.current && data.user.defaultWithholdingTaxRateBps !== undefined) {
+            setWhtRate(((data.user.defaultWithholdingTaxRateBps || 0) / 100).toFixed(1));
+          }
         }
       })
       .catch(() => {});
@@ -175,6 +180,7 @@ export default function MorePage() {
           name: name.trim(),
           timezone: timezone.trim(),
           defaultCurrency: currency.trim().toUpperCase(),
+          defaultWithholdingTaxRateBps: Math.round(parseFloat(whtRate || "0") * 100),
         }),
       });
 
@@ -185,6 +191,9 @@ export default function MorePage() {
           setName(data.user.name);
           setTimezone(data.user.timezone);
           setCurrency(data.user.defaultCurrency);
+          if (data.user.defaultWithholdingTaxRateBps !== undefined) {
+            setWhtRate(((data.user.defaultWithholdingTaxRateBps || 0) / 100).toFixed(1));
+          }
         }
         setSavedNotice(true);
       }
@@ -307,7 +316,7 @@ export default function MorePage() {
           User Settings
         </span>
         <form onSubmit={handleSaveSettings} className="flat-card p-4 space-y-3">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
             <div className="space-y-1">
               <label
                 htmlFor="settings-name"
@@ -381,6 +390,34 @@ export default function MorePage() {
                 <option value="JPY" />
                 <option value="SGD" />
               </datalist>
+            </div>
+
+            <div className="space-y-1">
+              <label
+                htmlFor="settings-wht-rate"
+                className="block text-xs font-medium text-[var(--text-muted)]"
+              >
+                Default WHT (%)
+              </label>
+              <input
+                id="settings-wht-rate"
+                data-testid="settings-wht-rate"
+                type="number"
+                step="0.1"
+                min="0"
+                value={whtRate}
+                onFocus={() => {
+                  isWhtDirtyRef.current = true;
+                }}
+                onInput={() => {
+                  isWhtDirtyRef.current = true;
+                }}
+                onChange={(e) => {
+                  isWhtDirtyRef.current = true;
+                  setWhtRate(e.target.value);
+                }}
+                className="w-full h-8 px-2.5 rounded bg-[var(--bg)] border border-hairline text-xs text-[var(--text)] focus:outline-none focus:border-[var(--accent)] font-mono"
+              />
             </div>
           </div>
 

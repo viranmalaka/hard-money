@@ -13,6 +13,9 @@ export interface LocalAccount {
   bankSenderIds: string[];
   accessScope: "PRIVATE" | "SHARED_HOUSEHOLD";
   feeRules?: unknown;
+  ownAtmFeeMinor?: number | null;
+  otherAtmFeeMinor?: number | null;
+  balanceMismatchHint?: { statedBalanceMinor: number; ledgerBalanceMinor: number; asOf: string } | null;
   creditLimitMinor?: number | null;
   statementCutoffDay?: number | null;
   paymentDueDay?: number | null;
@@ -85,6 +88,8 @@ export interface LocalTransaction {
   excludeFromStats: boolean;
   excludeFromBalance: boolean;
   installmentPlanId?: string | null;
+  feeTransactionId?: string | null;
+  possibleDuplicateOfTransactionId?: string | null;
   serverSeq: number;
   createdAt: string;
   updatedAt: string;
@@ -159,9 +164,110 @@ export interface LocalInstallmentPlan {
   deletedAt?: string | null;
 }
 
+export interface LocalFixedDeposit {
+  id: string;
+  userId: string;
+  householdId?: string | null;
+  bankName: string;
+  accountNumber?: string | null;
+  principalAmountMinor: number;
+  annualInterestRateBps: number;
+  tenureMonths: number;
+  startDate: string;
+  maturityDate: string;
+  compoundingFrequency: "MONTHLY" | "QUARTERLY" | "ANNUALLY" | "AT_MATURITY";
+  payoutMode: "REINVEST_COMPOUND" | "MONTHLY_PAYOUT_TO_ACCOUNT";
+  linkedPayoutAccountId?: string | null;
+  fundingAccountId?: string | null;
+  withholdingTaxRateBps: number;
+  autoRenew: boolean;
+  status: "ACTIVE" | "MATURED" | "CLOSED";
+  closedAt?: string | null;
+  prematureClosure: boolean;
+  serverSeq: number;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt?: string | null;
+}
+
+export interface LocalFixedDepositPayout {
+  id: string;
+  fixedDepositId: string;
+  periodEnd: string;
+  grossInterestMinor: number;
+  taxWithheldMinor: number;
+  netInterestMinor: number;
+  transactionId?: string | null;
+  serverSeq: number;
+  createdAt: string;
+}
+
+export interface LocalLoan {
+  id: string;
+  userId: string;
+  householdId?: string | null;
+  kind: "LOAN" | "LEASE";
+  lenderName: string;
+  originalPrincipalMinor: number;
+  residualValueMinor?: number | null;
+  annualInterestRateBps: number;
+  tenureMonths: number;
+  startDate: string;
+  monthlyEmiAmountMinor: number;
+  calculationType: "REDUCING_BALANCE" | "FLAT_RATE";
+  linkedDisbursementAccountId?: string | null;
+  status: "ACTIVE" | "CLOSED";
+  closedAt?: string | null;
+  serverSeq: number;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt?: string | null;
+}
+
+export interface LocalLoanScheduleEntry {
+  id: string;
+  loanId: string;
+  installmentNumber: number;
+  dueDate: string;
+  principalComponentMinor: number;
+  interestComponentMinor: number;
+  emiAmountMinor?: number;
+  openingBalanceMinor: number;
+  closingBalanceMinor: number;
+  status: "SCHEDULED" | "PAID" | "OVERRIDDEN";
+  serverSeq: number;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt?: string | null;
+}
+
+export interface LocalLoanPayment {
+  id: string;
+  loanId: string;
+  transactionId?: string | null;
+  scheduleEntryId?: string | null;
+  principalComponentMinor: number;
+  interestComponentMinor: number;
+  isExtraPrincipal: boolean;
+  paymentDate: string;
+  serverSeq: number;
+  createdAt: string;
+}
+
 export interface OutboxMutation {
   mutationId: string;
-  entity: "account" | "category" | "transaction" | "template" | "budget" | "statement" | "installmentPlan";
+  entity:
+    | "account"
+    | "category"
+    | "transaction"
+    | "template"
+    | "budget"
+    | "statement"
+    | "installmentPlan"
+    | "fixedDeposit"
+    | "loan"
+    | "loanScheduleEntry"
+    | "loanPayment";
   op: "CREATE" | "UPDATE" | "DELETE";
   id: string;
   payload?: unknown;
@@ -184,6 +290,11 @@ export class HardMoneyDB extends Dexie {
   budgetSnapshots!: Table<LocalBudgetMonthSnapshot, string>;
   creditCardStatements!: Table<LocalCreditCardStatement, string>;
   installmentPlans!: Table<LocalInstallmentPlan, string>;
+  fixedDeposits!: Table<LocalFixedDeposit, string>;
+  fixedDepositPayouts!: Table<LocalFixedDepositPayout, string>;
+  loans!: Table<LocalLoan, string>;
+  loanScheduleEntries!: Table<LocalLoanScheduleEntry, string>;
+  loanPayments!: Table<LocalLoanPayment, string>;
   outbox!: Table<OutboxMutation, string>;
   syncMeta!: Table<SyncMeta, string>;
 
@@ -215,6 +326,41 @@ export class HardMoneyDB extends Dexie {
       budgetSnapshots: "id, userId, categoryId, month, serverSeq",
       creditCardStatements: "id, userId, accountId, cycleCutoffDate, serverSeq",
       installmentPlans: "id, userId, accountId, status, serverSeq, deletedAt",
+      outbox: "mutationId, entity, op, id, status, createdAt",
+      syncMeta: "key",
+    });
+
+    // Version 4: fixed deposits and payouts
+    this.version(4).stores({
+      accounts: "id, userId, householdId, name, type, serverSeq, deletedAt, isArchived",
+      categories: "id, userId, householdId, name, serverSeq, deletedAt",
+      transactions: "id, userId, accountId, toAccountId, categoryId, transactionDate, serverSeq, deletedAt",
+      templates: "id, userId, name, serverSeq, deletedAt",
+      budgets: "id, userId, categoryId, serverSeq, deletedAt",
+      budgetSnapshots: "id, userId, categoryId, month, serverSeq",
+      creditCardStatements: "id, userId, accountId, cycleCutoffDate, serverSeq",
+      installmentPlans: "id, userId, accountId, status, serverSeq, deletedAt",
+      fixedDeposits: "id, userId, bankName, status, maturityDate, serverSeq, deletedAt",
+      fixedDepositPayouts: "id, fixedDepositId, periodEnd, serverSeq",
+      outbox: "mutationId, entity, op, id, status, createdAt",
+      syncMeta: "key",
+    });
+
+    // Version 5: loans, schedule entries, and loan payments
+    this.version(5).stores({
+      accounts: "id, userId, householdId, name, type, serverSeq, deletedAt, isArchived",
+      categories: "id, userId, householdId, name, serverSeq, deletedAt",
+      transactions: "id, userId, accountId, toAccountId, categoryId, transactionDate, serverSeq, deletedAt",
+      templates: "id, userId, name, serverSeq, deletedAt",
+      budgets: "id, userId, categoryId, serverSeq, deletedAt",
+      budgetSnapshots: "id, userId, categoryId, month, serverSeq",
+      creditCardStatements: "id, userId, accountId, cycleCutoffDate, serverSeq",
+      installmentPlans: "id, userId, accountId, status, serverSeq, deletedAt",
+      fixedDeposits: "id, userId, bankName, status, maturityDate, serverSeq, deletedAt",
+      fixedDepositPayouts: "id, fixedDepositId, periodEnd, serverSeq",
+      loans: "id, userId, kind, status, serverSeq, deletedAt",
+      loanScheduleEntries: "id, loanId, installmentNumber, status, dueDate, serverSeq, deletedAt",
+      loanPayments: "id, loanId, transactionId, scheduleEntryId, paymentDate, serverSeq",
       outbox: "mutationId, entity, op, id, status, createdAt",
       syncMeta: "key",
     });

@@ -2,8 +2,8 @@
 
 import React, { useState, useMemo, Suspense } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
-import { ArrowLeft, Wallet, Building2, CreditCard, ArrowLeftRight, Scale } from "lucide-react";
+import { useParams, useSearchParams } from "next/navigation";
+import { ArrowLeft, Wallet, Building2, CreditCard, ArrowLeftRight, Scale, AlertTriangle } from "lucide-react";
 import { useAccounts, useTransactions, useCategories, useCreditCardStatements, useInstallmentPlans, useSync } from "@/components/sync-provider";
 import { calculateLedgerBalance, LedgerTransaction } from "@/lib/finance-core/ledger";
 import { formatMoney } from "@/lib/finance-core/money";
@@ -41,7 +41,8 @@ function AccountDetailContent() {
   const installmentPlans = useInstallmentPlans();
 
   const { db } = useSync();
-  const [isCalibrateOpen, setIsCalibrateOpen] = useState(false);
+  const searchParams = useSearchParams();
+  const [isCalibrateOpen, setIsCalibrateOpen] = useState(() => searchParams?.get("calibrate") === "true");
   const [isSettleOpen, setIsSettleOpen] = useState(false);
   const [selectedTxForEdit, setSelectedTxForEdit] = useState<LocalTransaction | null>(null);
   const [payoffPlan, setPayoffPlan] = useState<LocalInstallmentPlan | null>(null);
@@ -256,6 +257,32 @@ function AccountDetailContent() {
           </div>
         </div>
       </div>
+
+      {/* Balance Mismatch Warning Banner */}
+      {account.balanceMismatchHint && (
+        <div
+          data-testid="balance-mismatch-hint"
+          className="p-3 rounded bg-amber-500/10 border border-amber-500/30 flex items-center justify-between text-xs"
+        >
+          <div className="space-y-0.5">
+            <div className="flex items-center gap-1.5 text-amber-600 dark:text-amber-400 font-semibold">
+              <AlertTriangle size={15} />
+              <span>Balance mismatch detected from bank SMS</span>
+            </div>
+            <div className="text-[11px] text-[var(--text-muted)]">
+              SMS balance: {formatMoney(account.balanceMismatchHint.statedBalanceMinor)} • Ledger balance: {formatMoney(account.balanceMismatchHint.ledgerBalanceMinor)}
+            </div>
+          </div>
+          <button
+            type="button"
+            data-testid="calibrate-btn"
+            onClick={() => setIsCalibrateOpen(true)}
+            className="px-3 py-1 rounded bg-amber-500 text-white font-medium text-xs hover:bg-amber-600 transition-colors shrink-0"
+          >
+            Calibrate
+          </button>
+        </div>
+      )}
 
       {/* Account Info Stats */}
       {isCreditCard && cycle && (

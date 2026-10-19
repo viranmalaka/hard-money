@@ -35,6 +35,8 @@ model User {
   creditCardStatements         CreditCardStatement[]
   installmentPlans             CreditCardInstallmentPlan[]
   bankSmsList                  BankSms[]
+  fixedDeposits                FixedDeposit[]
+  loans                        Loan[]
 }
 
 model Household {
@@ -94,6 +96,9 @@ model Account {
   bankSenderIds              String[]  @default([])
   accessScope                String    @default("PRIVATE") // PRIVATE | SHARED_HOUSEHOLD
   feeRules                   Json?
+  ownAtmFeeMinor             Int?              @default(0)
+  otherAtmFeeMinor           Int?              @default(0)
+  balanceMismatchHint        Json?
   creditLimitMinor           Int?
   statementCutoffDay         Int?
   paymentDueDay              Int?
@@ -109,6 +114,9 @@ model Account {
   transfersTo                Transaction[] @relation("TransferToAccount")
   creditCardStatements       CreditCardStatement[]
   installmentPlans           CreditCardInstallmentPlan[]
+  fdPayoutAccounts           FixedDeposit[]            @relation("FdPayoutAccount")
+  fdFundingAccounts          FixedDeposit[]            @relation("FdFundingAccount")
+  loanDisbursements          Loan[]                    @relation("LoanDisbursementAccount")
 
   @@index([userId])
   @@index([householdId])
@@ -150,7 +158,13 @@ model Transaction {
   reversals                    Transaction[] @relation("TransactionReversals")
   installmentPlanId            String?
   installmentPlan              CreditCardInstallmentPlan? @relation("PlanTransactions", fields: [installmentPlanId], references: [id], onDelete: SetNull)
+  feeTransactionId             String?
+  feeParent                    Transaction?  @relation("FeeParentChild", fields: [feeTransactionId], references: [id], onDelete: SetNull)
+  feeChildren                  Transaction[] @relation("FeeParentChild")
+  possibleDuplicateOfTransactionId String?
   bankSmsList                  BankSms[]
+  fdPayouts                    FixedDepositPayout[]
+  loanPayments                 LoanPayment[]
 
   @@index([userId])
   @@index([accountId])
@@ -331,5 +345,137 @@ model BankSms {
   @@index([userId])
   @@index([status])
   @@index([transactionId])
+}
+
+model FixedDeposit {
+  id                    String                @id @default(uuid())
+  userId                String
+  householdId           String?
+  bankName              String
+  accountNumber         String?
+  principalAmountMinor  Int
+  annualInterestRateBps Int
+  tenureMonths          Int
+  startDate             DateTime
+  maturityDate          DateTime
+  compoundingFrequency  String                @default("MONTHLY") // MONTHLY | QUARTERLY | ANNUALLY | AT_MATURITY
+  payoutMode            String                @default("MONTHLY_PAYOUT_TO_ACCOUNT") // REINVEST_COMPOUND | MONTHLY_PAYOUT_TO_ACCOUNT
+  linkedPayoutAccountId String?
+  fundingAccountId      String?
+  withholdingTaxRateBps Int                   @default(0)
+  autoRenew             Boolean               @default(false)
+  status                String                @default("ACTIVE") // ACTIVE | MATURED | CLOSED
+  closedAt              DateTime?
+  prematureClosure      Boolean               @default(false)
+  serverSeq             BigInt                @default(0)
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
+  deletedAt             DateTime?
+
+  user                  User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  linkedPayoutAccount   Account?              @relation("FdPayoutAccount", fields: [linkedPayoutAccountId], references: [id], onDelete: SetNull)
+  fundingAccount        Account?              @relation("FdFundingAccount", fields: [fundingAccountId], references: [id], onDelete: SetNull)
+  payouts               FixedDepositPayout[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([maturityDate])
+  @@index([serverSeq])
+}
+
+model FixedDepositPayout {
+  id                 String       @id // UUIDv5 deterministic
+  fixedDepositId     String
+  periodEnd          DateTime
+  grossInterestMinor Int
+  taxWithheldMinor   Int
+  netInterestMinor   Int
+  transactionId      String?
+  serverSeq          BigInt       @default(0)
+  createdAt          DateTime     @default(now())
+
+  fixedDeposit       FixedDeposit @relation(fields: [fixedDepositId], references: [id], onDelete: Cascade)
+  transaction        Transaction? @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+
+  @@index([fixedDepositId])
+  @@index([serverSeq])
+}
+
+model Loan {
+  id                          String              @id @default(uuid())
+  userId                      String
+  householdId                 String?
+  kind                        String              @default("LOAN") // LOAN | LEASE
+  lenderName                  String
+  originalPrincipalMinor      Int
+  residualValueMinor          Int?                @default(0) // Balloon/residual for LEASE
+  annualInterestRateBps       Int
+  tenureMonths                Int
+  startDate                   DateTime
+  monthlyEmiAmountMinor       Int
+  calculationType             String              @default("REDUCING_BALANCE") // REDUCING_BALANCE | FLAT_RATE
+  linkedDisbursementAccountId String?
+  status                      String              @default("ACTIVE") // ACTIVE | CLOSED
+  closedAt                    DateTime?
+  serverSeq                   BigInt              @default(0)
+  createdAt                   DateTime            @default(now())
+  updatedAt                   DateTime            @updatedAt
+  deletedAt                   DateTime?
+
+  user                        User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  disbursementAccount         Account?            @relation("LoanDisbursementAccount", fields: [linkedDisbursementAccountId], references: [id], onDelete: SetNull)
+  scheduleEntries             LoanScheduleEntry[]
+  payments                    LoanPayment[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([serverSeq])
+}
+
+model LoanScheduleEntry {
+  id                      String        @id @default(uuid())
+  loanId                  String
+  installmentNumber       Int
+  dueDate                 DateTime
+  principalComponentMinor Int
+  interestComponentMinor  Int
+  openingBalanceMinor     Int
+  closingBalanceMinor     Int
+  status                  String        @default("SCHEDULED") // SCHEDULED | PAID | OVERRIDDEN
+  serverSeq               BigInt        @default(0)
+  createdAt               DateTime      @default(now())
+  updatedAt               DateTime      @updatedAt
+  deletedAt               DateTime?
+
+  loan                    Loan          @relation(fields: [loanId], references: [id], onDelete: Cascade)
+  payments                LoanPayment[]
+
+  @@index([loanId])
+  @@index([status])
+  @@index([dueDate])
+  @@index([serverSeq])
+}
+
+model LoanPayment {
+  id                      String             @id @default(uuid())
+  loanId                  String
+  transactionId           String?
+  scheduleEntryId         String?
+  principalComponentMinor Int
+  interestComponentMinor  Int
+  isExtraPrincipal        Boolean            @default(false)
+  paymentDate             DateTime           @default(now())
+  serverSeq               BigInt             @default(0)
+  createdAt               DateTime           @default(now())
+
+  loan                    Loan               @relation(fields: [loanId], references: [id], onDelete: Cascade)
+  transaction             Transaction?       @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+  scheduleEntry           LoanScheduleEntry? @relation(fields: [scheduleEntryId], references: [id], onDelete: SetNull)
+
+  @@index([loanId])
+  @@index([transactionId])
+  @@index([scheduleEntryId])
+  @@index([paymentDate])
+  @@index([serverSeq])
 }
 

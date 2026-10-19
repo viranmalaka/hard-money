@@ -19,10 +19,22 @@ export interface SyncMutation {
     | "Budget"
     | "installmentplan"
     | "InstallmentPlan"
-    | "installmentPlan";
+    | "installmentPlan"
+    | "fixeddeposit"
+    | "FixedDeposit"
+    | "fixedDeposit"
+    | "loan"
+    | "Loan"
+    | "loanscheduleentry"
+    | "LoanScheduleEntry"
+    | "loanScheduleEntry"
+    | "loanpayment"
+    | "LoanPayment"
+    | "loanPayment";
   op: "CREATE" | "UPDATE" | "DELETE";
   id: string;
   payload?: any;
+  createdAt?: string;
 }
 
 export async function POST(request: NextRequest) {
@@ -32,7 +44,34 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json().catch(() => ({}));
-  const mutations: SyncMutation[] = Array.isArray(body.mutations) ? body.mutations : [];
+  const rawMutations: SyncMutation[] = Array.isArray(body.mutations) ? body.mutations : [];
+
+  const ENTITY_PRIORITY: Record<string, number> = {
+    account: 1,
+    category: 2,
+    budget: 3,
+    template: 4,
+    fixeddeposit: 5,
+    loan: 6,
+    installmentplan: 7,
+    creditcardstatement: 8,
+    loanscheduleentry: 9,
+    fixeddepositpayout: 10,
+    loanpayment: 11,
+    transaction: 12,
+  };
+
+  const sortedMutations = [...rawMutations].sort((a, b) => {
+    if (a.op === "DELETE" && b.op === "DELETE") {
+      const prioA = ENTITY_PRIORITY[a.entity.toLowerCase()] || 99;
+      const prioB = ENTITY_PRIORITY[b.entity.toLowerCase()] || 99;
+      return prioB - prioA;
+    }
+    const prioA = ENTITY_PRIORITY[a.entity.toLowerCase()] || 99;
+    const prioB = ENTITY_PRIORITY[b.entity.toLowerCase()] || 99;
+    if (prioA !== prioB) return prioA - prioB;
+    return (a.createdAt || "").localeCompare(b.createdAt || "");
+  });
 
   const results: Array<{
     mutationId: string;
@@ -40,7 +79,7 @@ export async function POST(request: NextRequest) {
     reason?: string;
   }> = [];
 
-  for (const mutation of mutations) {
+  for (const mutation of sortedMutations) {
     try {
       // 1. Idempotency check: has this mutationId already been processed?
       const existing = await prisma.appliedMutation.findUnique({
@@ -203,6 +242,40 @@ export async function POST(request: NextRequest) {
       } else if (entityLower === "transaction") {
         const payload = mutation.payload || {};
         if (mutation.op === "CREATE") {
+          let possibleDuplicateOfTransactionId: string | null =
+            payload.possibleDuplicateOfTransactionId || null;
+
+          if (
+            !possibleDuplicateOfTransactionId &&
+            payload.source !== "SMS" &&
+            payload.accountId &&
+            payload.amountMinor
+          ) {
+            const txDate = payload.transactionDate
+              ? new Date(payload.transactionDate)
+              : new Date();
+            const twoHoursMs = 2 * 60 * 60 * 1000;
+            const minTime = new Date(txDate.getTime() - twoHoursMs);
+            const maxTime = new Date(txDate.getTime() + twoHoursMs);
+
+            const smsCandidate = await prisma.transaction.findFirst({
+              where: {
+                userId: user.id,
+                accountId: payload.accountId,
+                amountMinor: payload.amountMinor,
+                source: "SMS",
+                deletedAt: null,
+                transactionDate: { gte: minTime, lte: maxTime },
+                id: { not: mutation.id },
+              },
+              orderBy: { transactionDate: "desc" },
+            });
+
+            if (smsCandidate) {
+              possibleDuplicateOfTransactionId = smsCandidate.id;
+            }
+          }
+
           await prisma.transaction.upsert({
             where: { id: mutation.id },
             create: {
@@ -223,6 +296,8 @@ export async function POST(request: NextRequest) {
               note: payload.note || null,
               isSplit: payload.isSplit ?? false,
               reversalOfTransactionId: payload.reversalOfTransactionId || null,
+              feeTransactionId: payload.feeTransactionId || null,
+              possibleDuplicateOfTransactionId,
               excludeFromBudget: payload.excludeFromBudget ?? false,
               excludeFromStats: payload.excludeFromStats ?? false,
               excludeFromBalance: payload.excludeFromBalance ?? false,
@@ -244,6 +319,12 @@ export async function POST(request: NextRequest) {
               note: payload.note,
               isSplit: payload.isSplit,
               reversalOfTransactionId: payload.reversalOfTransactionId,
+              ...(payload.feeTransactionId !== undefined && {
+                feeTransactionId: payload.feeTransactionId,
+              }),
+              ...(possibleDuplicateOfTransactionId !== null && {
+                possibleDuplicateOfTransactionId,
+              }),
               excludeFromBudget: payload.excludeFromBudget,
               excludeFromStats: payload.excludeFromStats,
               excludeFromBalance: payload.excludeFromBalance,
@@ -560,17 +641,280 @@ export async function POST(request: NextRequest) {
             },
           });
         }
+      } else if (entityLower === "fixeddeposit") {
+        const payload = mutation.payload || {};
+        if (mutation.op === "CREATE") {
+          if (payload.fundingAccountId && payload.principalAmountMinor > 0) {
+            const placementTxId = `${mutation.id}-placement`;
+            const placementDate = payload.startDate ? new Date(payload.startDate) : new Date();
+            await (prisma as any).transaction.upsert({
+              where: { id: placementTxId },
+              create: {
+                id: placementTxId,
+                userId: user.id,
+                accountId: payload.fundingAccountId,
+                amountMinor: payload.principalAmountMinor,
+                type: "EXPENSE",
+                subType: "FD_PLACEMENT",
+                source: "SYSTEM",
+                createdByUserId: user.id,
+                updatedByUserId: user.id,
+                transactionDate: placementDate,
+                note: `Fixed Deposit Placement: ${payload.bankName || "FD"}`,
+                excludeFromBudget: true,
+                excludeFromStats: true,
+                excludeFromBalance: false,
+                serverSeq: nextSeq,
+                deletedAt: null,
+              },
+              update: {},
+            });
+          }
+
+          await (prisma as any).fixedDeposit.upsert({
+            where: { id: mutation.id },
+            create: {
+              id: mutation.id,
+              userId: user.id,
+              householdId: payload.householdId || null,
+              bankName: payload.bankName || "Fixed Deposit",
+              accountNumber: payload.accountNumber || null,
+              principalAmountMinor: payload.principalAmountMinor ?? 0,
+              annualInterestRateBps: payload.annualInterestRateBps ?? 0,
+              tenureMonths: payload.tenureMonths ?? 12,
+              startDate: payload.startDate ? new Date(payload.startDate) : new Date(),
+              maturityDate: payload.maturityDate ? new Date(payload.maturityDate) : new Date(),
+              compoundingFrequency: payload.compoundingFrequency || "MONTHLY",
+              payoutMode: payload.payoutMode || "MONTHLY_PAYOUT_TO_ACCOUNT",
+              linkedPayoutAccountId: payload.linkedPayoutAccountId || null,
+              fundingAccountId: payload.fundingAccountId || null,
+              withholdingTaxRateBps: payload.withholdingTaxRateBps ?? 0,
+              autoRenew: payload.autoRenew ?? false,
+              status: payload.status || "ACTIVE",
+              closedAt: payload.closedAt ? new Date(payload.closedAt) : null,
+              prematureClosure: payload.prematureClosure ?? false,
+              serverSeq: nextSeq,
+              deletedAt: null,
+            },
+            update: {
+              bankName: payload.bankName,
+              accountNumber: payload.accountNumber,
+              principalAmountMinor: payload.principalAmountMinor,
+              annualInterestRateBps: payload.annualInterestRateBps,
+              tenureMonths: payload.tenureMonths,
+              startDate: payload.startDate ? new Date(payload.startDate) : undefined,
+              maturityDate: payload.maturityDate ? new Date(payload.maturityDate) : undefined,
+              compoundingFrequency: payload.compoundingFrequency,
+              payoutMode: payload.payoutMode,
+              linkedPayoutAccountId: payload.linkedPayoutAccountId,
+              fundingAccountId: payload.fundingAccountId,
+              withholdingTaxRateBps: payload.withholdingTaxRateBps,
+              autoRenew: payload.autoRenew,
+              status: payload.status,
+              closedAt: payload.closedAt ? new Date(payload.closedAt) : undefined,
+              prematureClosure: payload.prematureClosure,
+              serverSeq: nextSeq,
+              deletedAt: null,
+            },
+          });
+        } else if (mutation.op === "UPDATE") {
+          await (prisma as any).fixedDeposit.updateMany({
+            where: { id: mutation.id, userId: user.id },
+            data: {
+              ...(payload.bankName !== undefined && { bankName: payload.bankName }),
+              ...(payload.accountNumber !== undefined && { accountNumber: payload.accountNumber }),
+              ...(payload.status !== undefined && { status: payload.status }),
+              ...(payload.autoRenew !== undefined && { autoRenew: payload.autoRenew }),
+              ...(payload.closedAt !== undefined && { closedAt: payload.closedAt ? new Date(payload.closedAt) : null }),
+              ...(payload.prematureClosure !== undefined && { prematureClosure: payload.prematureClosure }),
+              ...(payload.startDate !== undefined && { startDate: new Date(payload.startDate) }),
+              ...(payload.maturityDate !== undefined && { maturityDate: new Date(payload.maturityDate) }),
+              ...(payload.principalAmountMinor !== undefined && { principalAmountMinor: payload.principalAmountMinor }),
+              serverSeq: nextSeq,
+            },
+          });
+        } else if (mutation.op === "DELETE") {
+          await (prisma as any).fixedDeposit.updateMany({
+            where: { id: mutation.id, userId: user.id },
+            data: {
+              deletedAt: new Date(),
+              serverSeq: nextSeq,
+            },
+          });
+        }
+      } else if (entityLower === "loan") {
+        const payload = mutation.payload || {};
+        if (mutation.op === "CREATE") {
+          if (payload.linkedDisbursementAccountId && payload.originalPrincipalMinor > 0) {
+            const disbursementTxId = `${mutation.id}-disbursement`;
+            const disDate = payload.startDate ? new Date(payload.startDate) : new Date();
+            await (prisma as any).transaction.upsert({
+              where: { id: disbursementTxId },
+              create: {
+                id: disbursementTxId,
+                userId: user.id,
+                accountId: payload.linkedDisbursementAccountId,
+                amountMinor: payload.originalPrincipalMinor,
+                type: "INCOME",
+                subType: "LOAN_DISBURSEMENT",
+                source: "SYSTEM",
+                createdByUserId: user.id,
+                updatedByUserId: user.id,
+                transactionDate: disDate,
+                note: `${payload.kind === "LEASE" ? "Lease" : "Loan"} Disbursement: ${payload.lenderName || "Disbursement"}`,
+                excludeFromBudget: true,
+                excludeFromStats: true,
+                excludeFromBalance: false,
+                serverSeq: nextSeq,
+                deletedAt: null,
+              },
+              update: {},
+            });
+          }
+
+          await (prisma as any).loan.upsert({
+            where: { id: mutation.id },
+            create: {
+              id: mutation.id,
+              userId: user.id,
+              householdId: payload.householdId || null,
+              kind: payload.kind || "LOAN",
+              lenderName: payload.lenderName || "Lender",
+              originalPrincipalMinor: payload.originalPrincipalMinor ?? 0,
+              residualValueMinor: payload.residualValueMinor ?? 0,
+              annualInterestRateBps: payload.annualInterestRateBps ?? 0,
+              tenureMonths: payload.tenureMonths ?? 12,
+              startDate: payload.startDate ? new Date(payload.startDate) : new Date(),
+              monthlyEmiAmountMinor: payload.monthlyEmiAmountMinor ?? 0,
+              calculationType: payload.calculationType || "REDUCING_BALANCE",
+              linkedDisbursementAccountId: payload.linkedDisbursementAccountId || null,
+              status: payload.status || "ACTIVE",
+              closedAt: payload.closedAt ? new Date(payload.closedAt) : null,
+              serverSeq: nextSeq,
+              deletedAt: null,
+            },
+            update: {
+              kind: payload.kind,
+              lenderName: payload.lenderName,
+              originalPrincipalMinor: payload.originalPrincipalMinor,
+              residualValueMinor: payload.residualValueMinor,
+              annualInterestRateBps: payload.annualInterestRateBps,
+              tenureMonths: payload.tenureMonths,
+              startDate: payload.startDate ? new Date(payload.startDate) : undefined,
+              monthlyEmiAmountMinor: payload.monthlyEmiAmountMinor,
+              calculationType: payload.calculationType,
+              linkedDisbursementAccountId: payload.linkedDisbursementAccountId,
+              status: payload.status,
+              closedAt: payload.closedAt ? new Date(payload.closedAt) : undefined,
+              serverSeq: nextSeq,
+              deletedAt: null,
+            },
+          });
+        } else if (mutation.op === "UPDATE") {
+          await (prisma as any).loan.updateMany({
+            where: { id: mutation.id, userId: user.id },
+            data: {
+              ...(payload.lenderName !== undefined && { lenderName: payload.lenderName }),
+              ...(payload.status !== undefined && { status: payload.status }),
+              ...(payload.closedAt !== undefined && { closedAt: payload.closedAt ? new Date(payload.closedAt) : null }),
+              ...(payload.monthlyEmiAmountMinor !== undefined && { monthlyEmiAmountMinor: payload.monthlyEmiAmountMinor }),
+              ...(payload.tenureMonths !== undefined && { tenureMonths: payload.tenureMonths }),
+              serverSeq: nextSeq,
+            },
+          });
+        } else if (mutation.op === "DELETE") {
+          await (prisma as any).loan.updateMany({
+            where: { id: mutation.id, userId: user.id },
+            data: {
+              deletedAt: new Date(),
+              serverSeq: nextSeq,
+            },
+          });
+        }
+      } else if (entityLower === "loanscheduleentry") {
+        const payload = mutation.payload || {};
+        if (mutation.op === "CREATE") {
+          await (prisma as any).loanScheduleEntry.upsert({
+            where: { id: mutation.id },
+            create: {
+              id: mutation.id,
+              loanId: payload.loanId,
+              installmentNumber: payload.installmentNumber,
+              dueDate: payload.dueDate ? new Date(payload.dueDate) : new Date(),
+              principalComponentMinor: payload.principalComponentMinor ?? 0,
+              interestComponentMinor: payload.interestComponentMinor ?? 0,
+              openingBalanceMinor: payload.openingBalanceMinor ?? 0,
+              closingBalanceMinor: payload.closingBalanceMinor ?? 0,
+              status: payload.status || "SCHEDULED",
+              serverSeq: nextSeq,
+              deletedAt: null,
+            },
+            update: {
+              principalComponentMinor: payload.principalComponentMinor,
+              interestComponentMinor: payload.interestComponentMinor,
+              openingBalanceMinor: payload.openingBalanceMinor,
+              closingBalanceMinor: payload.closingBalanceMinor,
+              status: payload.status,
+              dueDate: payload.dueDate ? new Date(payload.dueDate) : undefined,
+              serverSeq: nextSeq,
+              deletedAt: null,
+            },
+          });
+        } else if (mutation.op === "UPDATE") {
+          await (prisma as any).loanScheduleEntry.updateMany({
+            where: { id: mutation.id },
+            data: {
+              ...(payload.principalComponentMinor !== undefined && { principalComponentMinor: payload.principalComponentMinor }),
+              ...(payload.interestComponentMinor !== undefined && { interestComponentMinor: payload.interestComponentMinor }),
+              ...(payload.openingBalanceMinor !== undefined && { openingBalanceMinor: payload.openingBalanceMinor }),
+              ...(payload.closingBalanceMinor !== undefined && { closingBalanceMinor: payload.closingBalanceMinor }),
+              ...(payload.status !== undefined && { status: payload.status }),
+              serverSeq: nextSeq,
+            },
+          });
+        } else if (mutation.op === "DELETE") {
+          await (prisma as any).loanScheduleEntry.updateMany({
+            where: { id: mutation.id },
+            data: {
+              deletedAt: new Date(),
+              serverSeq: nextSeq,
+            },
+          });
+        }
+      } else if (entityLower === "loanpayment") {
+        const payload = mutation.payload || {};
+        if (mutation.op === "CREATE") {
+          await (prisma as any).loanPayment.upsert({
+            where: { id: mutation.id },
+            create: {
+              id: mutation.id,
+              loanId: payload.loanId,
+              transactionId: payload.transactionId || null,
+              scheduleEntryId: payload.scheduleEntryId || null,
+              principalComponentMinor: payload.principalComponentMinor ?? 0,
+              interestComponentMinor: payload.interestComponentMinor ?? 0,
+              isExtraPrincipal: payload.isExtraPrincipal ?? false,
+              paymentDate: payload.paymentDate ? new Date(payload.paymentDate) : new Date(),
+              serverSeq: nextSeq,
+            },
+            update: {},
+          });
+        }
       }
 
       // Record applied mutation for idempotency
-      await prisma.appliedMutation.upsert({
-        where: { id: mutation.mutationId },
-        create: {
-          id: mutation.mutationId,
-          userId: user.id,
-        },
-        update: {},
-      });
+      try {
+        await prisma.appliedMutation.upsert({
+          where: { id: mutation.mutationId },
+          create: {
+            id: mutation.mutationId,
+            userId: user.id,
+          },
+          update: {},
+        });
+      } catch {
+        // If already inserted concurrently, consider applied
+      }
 
       results.push({ mutationId: mutation.mutationId, status: "accepted" });
     } catch (err: any) {

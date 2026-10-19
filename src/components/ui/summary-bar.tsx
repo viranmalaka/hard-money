@@ -35,7 +35,7 @@ export function SummaryBar({
             data-testid="income-amount"
             className="text-[var(--income)] font-semibold tabular-nums text-xs mt-0.5"
           >
-            {formatAmount(incomeMinor)}
+            <span data-testid="stats-total-income">{formatAmount(incomeMinor)}</span>
           </span>
         </div>
 
@@ -45,7 +45,7 @@ export function SummaryBar({
             data-testid="expense-amount"
             className="text-[var(--expense)] font-semibold tabular-nums text-xs mt-0.5"
           >
-            {formatAmount(expenseMinor)}
+            <span data-testid="stats-total-expense">{formatAmount(expenseMinor)}</span>
           </span>
         </div>
 

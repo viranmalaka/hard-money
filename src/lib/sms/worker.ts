@@ -1,10 +1,10 @@
 import { prisma } from "@/lib/prisma";
-import { getNextServerSeq } from "@/lib/server-seq";
 import { parseBankSmsTemplate, amountTextToMinor } from "./template-parser";
 import { matchAccountForSms } from "./account-matcher";
 import { parseWithGemini } from "./gemini-provider";
 import { decryptAesGcm } from "@/lib/encryption";
 import { ParsedTransactionPayload } from "./types";
+import { ingestParsedBankSms } from "./ingestion";
 
 let workerPaused = false;
 
@@ -97,50 +97,14 @@ export async function processBankSms(smsId: string): Promise<void> {
       }
     }
 
-    const matchedAccount = await matchAccountForSms(
-      sms.userId,
-      sms.sender,
-      payload.accountLast4
-    );
-
-    if (!matchedAccount) {
-      await prisma.bankSms.update({
-        where: { id: smsId },
-        data: {
-          status: "NEEDS_REVIEW",
-          reviewReason: "ACCOUNT_UNMATCHED",
-          parseMethod: "TEMPLATE",
-          parsedPayload: payload as any,
-        },
-      });
-      return;
-    }
-
-    const nextSeq = await getNextServerSeq();
-    const tx = await prisma.transaction.create({
-      data: {
-        userId: sms.userId,
-        accountId: matchedAccount.id,
-        amountMinor,
-        type: payload.transactionType === "CREDIT" ? "INCOME" : "EXPENSE",
-        subType: payload.channel,
-        source: "SMS",
-        note: payload.merchantOrEntity || sms.sender,
-        transactionDate: sms.receivedAt,
-        createdByUserId: sms.userId,
-        updatedByUserId: sms.userId,
-        serverSeq: nextSeq,
-      },
-    });
-
-    await prisma.bankSms.update({
-      where: { id: smsId },
-      data: {
-        status: "PROCESSED",
-        parseMethod: "TEMPLATE",
-        parsedPayload: payload as any,
-        transactionId: tx.id,
-      },
+    await ingestParsedBankSms({
+      smsId,
+      userId: sms.userId,
+      sender: sms.sender,
+      rawMessage: sms.rawMessage,
+      receivedAt: sms.receivedAt,
+      parseMethod: "TEMPLATE",
+      payload,
     });
     return;
   }
@@ -290,34 +254,15 @@ export async function processBankSms(smsId: string): Promise<void> {
     return;
   }
 
-  // All gates passed: Auto-post transaction
-  const nextSeq = await getNextServerSeq();
-  const tx = await prisma.transaction.create({
-    data: {
-      userId: sms.userId,
-      accountId: matchedAccount.id,
-      amountMinor,
-      type: payload.transactionType === "CREDIT" ? "INCOME" : "EXPENSE",
-      subType: payload.channel,
-      source: "SMS",
-      note: payload.merchantOrEntity || sms.sender,
-      transactionDate: payload.transactionTimestamp
-        ? new Date(payload.transactionTimestamp)
-        : sms.receivedAt,
-      createdByUserId: sms.userId,
-      updatedByUserId: sms.userId,
-      serverSeq: nextSeq,
-    },
-  });
-
-  await prisma.bankSms.update({
-    where: { id: smsId },
-    data: {
-      status: "PROCESSED",
-      parseMethod: "GEMINI",
-      parsedPayload: payload as any,
-      transactionId: tx.id,
-    },
+  // All gates passed: Auto-post transaction via Ingestion Service
+  await ingestParsedBankSms({
+    smsId,
+    userId: sms.userId,
+    sender: sms.sender,
+    rawMessage: sms.rawMessage,
+    receivedAt: sms.receivedAt,
+    parseMethod: "GEMINI",
+    payload,
   });
 }
 
@@ -327,6 +272,18 @@ export async function processBankSms(smsId: string): Promise<void> {
 export async function processAllPendingBankSms(userId?: string): Promise<number> {
   if (workerPaused) {
     return 0;
+  }
+
+  // Wait briefly if any SMS are currently in PROCESSING state
+  for (let attempt = 0; attempt < 15; attempt++) {
+    const inFlight = await prisma.bankSms.count({
+      where: {
+        status: "PROCESSING",
+        ...(userId ? { userId } : {}),
+      },
+    });
+    if (inFlight === 0) break;
+    await new Promise((r) => setTimeout(r, 50));
   }
 
   const pending = await prisma.bankSms.findMany({

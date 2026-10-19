@@ -3,6 +3,10 @@ import { getServerNow } from "@/lib/server-clock";
 import { getNextServerSeq } from "@/lib/server-seq";
 import { calculateStatementCycle, getEffectiveDayOfMonth } from "@/lib/finance-core/credit-card";
 import { calculateAccountBalance, calculateOutstandingDebt } from "@/lib/finance-core/ledger";
+import { calculateMonthlyPayout, calculateCompoundMaturity } from "@/lib/finance-core/investments";
+import { v5 as uuidv5 } from "uuid";
+
+const FD_NAMESPACE = "6ba7b810-9dad-11d1-80b4-00c04fd430c8";
 
 /**
  * Returns date in YYYY-MM-DD format in Asia/Colombo timezone
@@ -33,6 +37,7 @@ export async function runCronTick(options?: { now?: Date }): Promise<{
   processedBudgets: number;
   processedStatements: number;
   processedInstallmentPlans: number;
+  processedFixedDepositPayouts: number;
 }> {
   const now = options?.now || getServerNow();
   const colomboNowStr = getColomboDateString(now);
@@ -363,11 +368,155 @@ export async function runCronTick(options?: { now?: Date }): Promise<{
     processedInstallmentPlans++;
   }
 
+  // 4. Fixed Deposit Monthly Payouts & Maturation
+  let processedFixedDepositPayouts = 0;
+  const fds = await (prisma as any).fixedDeposit.findMany({
+    where: {
+      deletedAt: null,
+      status: { in: ["ACTIVE", "MATURED"] },
+    },
+    include: {
+      payouts: true,
+    },
+  });
+
+  for (const fd of fds) {
+    if (fd.payoutMode === "MONTHLY_PAYOUT_TO_ACCOUNT" && fd.linkedPayoutAccountId) {
+      const startDate = new Date(fd.startDate);
+      const maturityDate = new Date(fd.maturityDate);
+
+      for (let monthIdx = 1; monthIdx <= fd.tenureMonths; monthIdx++) {
+        const payoutDate = new Date(startDate);
+        payoutDate.setMonth(payoutDate.getMonth() + monthIdx);
+
+        if (payoutDate.getTime() > now.getTime()) {
+          break;
+        }
+
+        const periodEndIso = getColomboDateString(payoutDate);
+        const deterministicPayoutId = uuidv5(`${fd.id}:PAYOUT:${periodEndIso}`, FD_NAMESPACE);
+        const deterministicTxId = uuidv5(`${fd.id}:PAYOUT_TX:${periodEndIso}`, FD_NAMESPACE);
+
+        const existingPayout = fd.payouts?.some((p: any) => p.id === deterministicPayoutId) ||
+          await (prisma as any).fixedDepositPayout.findUnique({ where: { id: deterministicPayoutId } });
+
+        if (existingPayout) {
+          continue;
+        }
+
+        const payoutCalc = calculateMonthlyPayout(
+          fd.principalAmountMinor,
+          fd.annualInterestRateBps,
+          fd.withholdingTaxRateBps
+        );
+
+        const nextSeq = await getNextServerSeq();
+
+        let investmentCategory = await prisma.category.findFirst({
+          where: {
+            name: "Investment Yield",
+            OR: [{ userId: fd.userId }, { userId: null }],
+          },
+        });
+        if (!investmentCategory) {
+          investmentCategory = await prisma.category.create({
+            data: {
+              userId: fd.userId,
+              name: "Investment Yield",
+              icon: "📈",
+              color: "#10b981",
+              serverSeq: nextSeq,
+            },
+          });
+        }
+
+        await (prisma as any).transaction.create({
+          data: {
+            id: deterministicTxId,
+            userId: fd.userId,
+            accountId: fd.linkedPayoutAccountId,
+            categoryId: investmentCategory.id,
+            amountMinor: payoutCalc.netInterestMinor,
+            type: "INCOME",
+            subType: "FD_INTEREST",
+            source: "SYSTEM",
+            createdByUserId: fd.userId,
+            updatedByUserId: fd.userId,
+            transactionDate: payoutDate,
+            note: `Fixed Deposit Interest: ${fd.bankName}`,
+            excludeFromBudget: false,
+            excludeFromStats: false,
+            excludeFromBalance: false,
+            serverSeq: nextSeq,
+          },
+        });
+
+        await (prisma as any).fixedDepositPayout.create({
+          data: {
+            id: deterministicPayoutId,
+            fixedDepositId: fd.id,
+            periodEnd: payoutDate,
+            grossInterestMinor: payoutCalc.grossInterestMinor,
+            taxWithheldMinor: payoutCalc.taxWithheldMinor,
+            netInterestMinor: payoutCalc.netInterestMinor,
+            transactionId: deterministicTxId,
+            serverSeq: nextSeq,
+          },
+        });
+
+        processedFixedDepositPayouts++;
+      }
+    }
+
+    // Check maturation
+    const maturityDate = new Date(fd.maturityDate);
+    if (now.getTime() >= maturityDate.getTime() && fd.status === "ACTIVE") {
+      const nextSeq = await getNextServerSeq();
+      if (fd.autoRenew) {
+        const newStartDate = new Date(maturityDate);
+        const newMaturityDate = new Date(maturityDate);
+        newMaturityDate.setMonth(newMaturityDate.getMonth() + fd.tenureMonths);
+
+        let newPrincipalMinor = fd.principalAmountMinor;
+        if (fd.payoutMode === "REINVEST_COMPOUND") {
+          const comp = calculateCompoundMaturity(
+            fd.principalAmountMinor,
+            fd.annualInterestRateBps,
+            fd.tenureMonths,
+            fd.compoundingFrequency,
+            fd.withholdingTaxRateBps
+          );
+          newPrincipalMinor = comp.maturityNetAmountMinor;
+        }
+
+        await (prisma as any).fixedDeposit.update({
+          where: { id: fd.id },
+          data: {
+            principalAmountMinor: newPrincipalMinor,
+            startDate: newStartDate,
+            maturityDate: newMaturityDate,
+            status: "ACTIVE",
+            serverSeq: nextSeq,
+          },
+        });
+      } else {
+        await (prisma as any).fixedDeposit.update({
+          where: { id: fd.id },
+          data: {
+            status: "MATURED",
+            serverSeq: nextSeq,
+          },
+        });
+      }
+    }
+  }
+
   return {
     ok: true,
     timestamp: now.toISOString(),
     processedBudgets,
     processedStatements,
     processedInstallmentPlans,
+    processedFixedDepositPayouts,
   };
 }

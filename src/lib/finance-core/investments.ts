@@ -91,3 +91,47 @@ export function calculateCompoundMaturity(
     maturityNetAmountMinor,
   };
 }
+
+/**
+ * Calculates current accrued value of a Fixed Deposit (principal + accrued net interest).
+ */
+export function calculateAccruedFdValue(
+  fd: {
+    principalAmountMinor: number;
+    annualInterestRateBps: number;
+    tenureMonths: number;
+    compoundingFrequency: CompoundingFrequency;
+    payoutMode: PayoutMode;
+    withholdingTaxRateBps: number;
+    startDate: Date | string;
+    maturityDate: Date | string;
+    status: string;
+  },
+  asOfDate: Date = new Date()
+): number {
+  if (fd.status === "CLOSED") {
+    return 0;
+  }
+
+  if (fd.payoutMode === "MONTHLY_PAYOUT_TO_ACCOUNT") {
+    return fd.principalAmountMinor;
+  }
+
+  const start = new Date(fd.startDate).getTime();
+  const maturity = new Date(fd.maturityDate).getTime();
+  const now = asOfDate.getTime();
+  const totalDuration = Math.max(1, maturity - start);
+  const elapsedRatio = Math.min(1, Math.max(0, (now - start) / totalDuration));
+
+  const comp = calculateCompoundMaturity(
+    fd.principalAmountMinor,
+    fd.annualInterestRateBps,
+    fd.tenureMonths,
+    fd.compoundingFrequency,
+    fd.withholdingTaxRateBps
+  );
+
+  const accruedNetInterest = roundHalfUp(comp.netInterestMinor * elapsedRatio);
+  return fd.principalAmountMinor + accruedNetInterest;
+}
+

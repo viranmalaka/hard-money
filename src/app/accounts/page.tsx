@@ -2,17 +2,22 @@
 
 import React, { useState, useMemo } from "react";
 import Link from "next/link";
-import { Wallet, Plus, CreditCard, Building2, Banknote, Edit2, Archive, Trash2, X } from "lucide-react";
+import { Wallet, Plus, CreditCard, Building2, Banknote, Edit2, Archive, Trash2, X, AlertTriangle, PiggyBank, Landmark } from "lucide-react";
 import { EmptyState } from "@/components/ui/empty-state";
-import { useAccounts, useTransactions, useInstallmentPlans, useSync, SyncIndicator } from "@/components/sync-provider";
-import { localCreateAccount, localUpdateAccount, localDeleteAccount, localUpdateTransaction, localDeleteInstallmentPlan } from "@/lib/sync/client";
-import { LocalAccount, LocalInstallmentPlan } from "@/lib/db";
+import { useAccounts, useTransactions, useInstallmentPlans, useFixedDeposits, useLoans, useLoanPayments, useSync, SyncIndicator } from "@/components/sync-provider";
+import { localCreateAccount, localUpdateAccount, localDeleteAccount, localUpdateTransaction, localDeleteInstallmentPlan, localUpdateFixedDeposit } from "@/lib/sync/client";
+import { LocalAccount, LocalInstallmentPlan, LocalFixedDeposit, LocalLoan } from "@/lib/db";
 import { formatMoney, parseMoneyToMinor } from "@/lib/finance-core/money";
 import { calculateLedgerBalance, LedgerTransaction } from "@/lib/finance-core/ledger";
 import { calculateStatementCycle, calculateInstallmentProgress } from "@/lib/finance-core/credit-card";
+import { calculateAccruedFdValue, calculateMonthlyPayout, calculateCompoundMaturity } from "@/lib/finance-core/investments";
 import { SettleModal } from "@/components/account/settle-modal";
 import { InstallmentPlanModal } from "@/components/account/installment-plan-modal";
 import { EarlyPayoffModal } from "@/components/account/early-payoff-modal";
+import { FixedDepositModal } from "@/components/account/fixed-deposit-modal";
+import { FdCloseModal } from "@/components/account/fd-close-modal";
+import { LoanModal } from "@/components/account/loan-modal";
+import { LoanDetailModal } from "@/components/account/loan-detail-modal";
 
 export default function AccountsPage() {
   const accounts = useAccounts();
@@ -20,6 +25,9 @@ export default function AccountsPage() {
   const { db } = useSync();
 
   const installmentPlans = useInstallmentPlans();
+  const fixedDeposits = useFixedDeposits();
+  const loans = useLoans();
+  const loanPayments = useLoanPayments();
   const [showArchived, setShowArchived] = useState(false);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingAccount, setEditingAccount] = useState<LocalAccount | null>(null);
@@ -27,6 +35,14 @@ export default function AccountsPage() {
   const [isInstallmentModalOpen, setIsInstallmentModalOpen] = useState(false);
   const [payoffPlan, setPayoffPlan] = useState<LocalInstallmentPlan | null>(null);
   const [payoffRemainingMinor, setPayoffRemainingMinor] = useState(0);
+
+  // Fixed Deposits modal states
+  const [isFdModalOpen, setIsFdModalOpen] = useState(false);
+  const [closeFd, setCloseFd] = useState<LocalFixedDeposit | null>(null);
+
+  // Loans modal states
+  const [isLoanModalOpen, setIsLoanModalOpen] = useState(false);
+  const [selectedLoan, setSelectedLoan] = useState<LocalLoan | null>(null);
 
   // Form State
   const [name, setName] = useState("");
@@ -153,6 +169,30 @@ export default function AccountsPage() {
     [creditAccounts, accountBalances]
   );
 
+  const fixedDepositsSubtotal = useMemo(() => {
+    return fixedDeposits
+      .filter((fd) => fd.status !== "CLOSED")
+      .reduce((sum, fd) => sum + calculateAccruedFdValue(fd, new Date()), 0);
+  }, [fixedDeposits]);
+
+  const loanRemainingMap = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const loan of loans) {
+      const paidPrincipal = loanPayments
+        .filter((p) => p.loanId === loan.id)
+        .reduce((sum, p) => sum + p.principalComponentMinor, 0);
+      const remaining = Math.max(0, loan.originalPrincipalMinor - paidPrincipal);
+      map.set(loan.id, remaining);
+    }
+    return map;
+  }, [loans, loanPayments]);
+
+  const loansSubtotal = useMemo(() => {
+    return loans
+      .filter((l) => l.status === "ACTIVE")
+      .reduce((sum, l) => sum + (loanRemainingMap.get(l.id) ?? l.originalPrincipalMinor), 0);
+  }, [loans, loanRemainingMap]);
+
   // Net Worth Totals
   const { assetsTotal, liabilitiesTotal, netWorthTotal } = useMemo(() => {
     let assets = 0;
@@ -176,12 +216,40 @@ export default function AccountsPage() {
       }
     }
 
+    // Include active fixed deposits in assets
+    assets += fixedDepositsSubtotal;
+
+    // Include active loans in liabilities
+    liabilities += loansSubtotal;
+
     return {
       assetsTotal: assets,
       liabilitiesTotal: liabilities,
       netWorthTotal: assets - liabilities,
     };
-  }, [visibleAccounts, accountBalances, accountBlockedPrincipalMap]);
+  }, [visibleAccounts, accountBalances, accountBlockedPrincipalMap, fixedDepositsSubtotal, loansSubtotal]);
+
+  const handleDepositProceeds = async (fd: LocalFixedDeposit) => {
+    const targetAccountId =
+      fd.linkedPayoutAccountId ||
+      fd.fundingAccountId ||
+      visibleAccounts.find((a) => a.type === "BANK_SAVINGS" || a.type === "CASH")?.id;
+
+    try {
+      await fetch(`/api/fixed-deposits/${fd.id}/deposit-proceeds`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ targetAccountId }),
+      });
+    } catch {
+      // offline fallback
+    }
+
+    await localUpdateFixedDeposit(db, fd.id, {
+      status: "CLOSED",
+      closedAt: new Date().toISOString(),
+    });
+  };
 
   const openCreateForm = () => {
     setEditingAccount(null);
@@ -355,14 +423,14 @@ export default function AccountsPage() {
       </div>
 
       {/* Account Groups */}
-      {visibleAccounts.length === 0 ? (
-        <EmptyState
-          title="No accounts created"
-          description="Add cash, bank accounts, or credit cards to begin tracking balances and net worth."
-          icon={<Wallet size={24} />}
-        />
-      ) : (
-        <div className="space-y-4">
+      <div className="space-y-4">
+        {visibleAccounts.length === 0 && (
+          <EmptyState
+            title="No accounts created"
+            description="Add cash, bank accounts, or credit cards to begin tracking balances and net worth."
+            icon={<Wallet size={24} />}
+          />
+        )}
           {/* Cash Group */}
           {cashAccounts.length > 0 && (
             <section data-testid="group-cash" className="space-y-2">
@@ -576,8 +644,265 @@ export default function AccountsPage() {
               </div>
             )}
           </section>
+
+          {/* Fixed Deposits Group */}
+          <section data-testid="group-fixed-deposits" className="space-y-2">
+            <div className="flex items-center justify-between text-xs font-medium text-[var(--text-muted)] px-1">
+              <span className="flex items-center gap-1.5">
+                <PiggyBank size={14} />
+                <span>Fixed Deposits</span>
+              </span>
+              <div className="flex items-center gap-3">
+                <span data-testid="subtotal-fixed-deposits" className="tabular-nums font-semibold text-[var(--text)]">
+                  {formatMoney(fixedDepositsSubtotal)}
+                </span>
+                <button
+                  type="button"
+                  data-testid="add-fd-btn"
+                  onClick={() => setIsFdModalOpen(true)}
+                  className="flex items-center gap-1 text-[11px] font-medium text-[var(--text)] px-2 py-0.5 rounded border border-hairline hover:bg-[var(--border)] transition-colors"
+                >
+                  <Plus size={12} />
+                  <span>Add Fixed Deposit</span>
+                </button>
+              </div>
+            </div>
+
+            {fixedDeposits.length === 0 ? (
+              <div className="p-4 rounded border border-hairline flat-card text-center text-xs text-[var(--text-muted)]">
+                No fixed deposits created.
+              </div>
+            ) : (
+              <div className="grid gap-2">
+                {fixedDeposits.map((fd) => {
+                  const isMonthly = fd.payoutMode === "MONTHLY_PAYOUT_TO_ACCOUNT";
+                  const monthlyPayout = calculateMonthlyPayout(
+                    fd.principalAmountMinor,
+                    fd.annualInterestRateBps,
+                    fd.withholdingTaxRateBps
+                  );
+                  const compoundMaturity = calculateCompoundMaturity(
+                    fd.principalAmountMinor,
+                    fd.annualInterestRateBps,
+                    fd.tenureMonths,
+                    fd.compoundingFrequency,
+                    fd.withholdingTaxRateBps
+                  );
+
+                  return (
+                    <div
+                      key={fd.id}
+                      data-testid={`fd-item-${fd.id}`}
+                      className="p-3 rounded border border-hairline flat-card space-y-2"
+                    >
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-semibold text-[var(--text)]">{fd.bankName}</span>
+                            {fd.accountNumber && (
+                              <span className="text-[11px] text-[var(--text-muted)] font-mono">
+                                #{fd.accountNumber}
+                              </span>
+                            )}
+                            <span
+                              className={`px-1.5 py-0.2 rounded font-semibold text-[10px] ${
+                                fd.status === "ACTIVE"
+                                  ? "bg-blue-500/10 text-blue-600 dark:text-blue-400"
+                                  : fd.status === "MATURED"
+                                  ? "bg-amber-500/10 text-amber-600 dark:text-amber-400"
+                                  : "bg-gray-500/10 text-gray-500"
+                              }`}
+                            >
+                              {fd.status}
+                            </span>
+                            {fd.autoRenew && (
+                              <span className="px-1.5 py-0.2 rounded bg-purple-500/10 text-purple-600 dark:text-purple-400 font-semibold text-[10px]">
+                                AUTO-RENEW
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-[11px] text-[var(--text-muted)] flex items-center gap-3 mt-1">
+                            <span>Principal: {formatMoney(fd.principalAmountMinor)}</span>
+                            <span>APR: {(fd.annualInterestRateBps / 100).toFixed(2)}%</span>
+                            <span>Tenure: {fd.tenureMonths} mo</span>
+                            <span>WHT: {(fd.withholdingTaxRateBps / 100).toFixed(1)}%</span>
+                          </div>
+                        </div>
+
+                        <div className="text-right">
+                          {isMonthly ? (
+                            <div>
+                              <span className="text-[10px] text-[var(--text-muted)] block">Monthly Net</span>
+                              <span
+                                data-testid="fd-monthly-net"
+                                className="text-xs font-semibold text-[var(--income)] tabular-nums"
+                              >
+                                {formatMoney(monthlyPayout.netInterestMinor)}
+                              </span>
+                            </div>
+                          ) : (
+                            <div>
+                              <span className="text-[10px] text-[var(--text-muted)] block">Maturity Net</span>
+                              <span
+                                data-testid="fd-maturity-net"
+                                className="text-xs font-semibold text-[var(--income)] tabular-nums"
+                              >
+                                {formatMoney(compoundMaturity.maturityNetAmountMinor)}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between pt-1 border-t border-hairline/50 text-[11px]">
+                        <span className="text-[var(--text-muted)]">
+                          Maturity: {new Date(fd.maturityDate).toLocaleDateString()}
+                        </span>
+
+                        <div className="flex items-center gap-2">
+                          {fd.status === "MATURED" && (
+                            <button
+                              type="button"
+                              data-testid="fd-deposit-proceeds-btn"
+                              onClick={() => handleDepositProceeds(fd)}
+                              className="px-2.5 py-1 rounded bg-[var(--income)] text-white text-xs font-semibold hover:opacity-90 active:scale-95 transition-all"
+                            >
+                              Deposit proceeds
+                            </button>
+                          )}
+
+                          {fd.status !== "CLOSED" && (
+                            <button
+                              type="button"
+                              data-testid="fd-close-btn"
+                              onClick={() => setCloseFd(fd)}
+                              className="px-2 py-0.5 rounded border border-hairline text-xs font-medium text-[var(--expense)] hover:bg-[var(--border)] transition-colors"
+                            >
+                              Premature Close
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+
+          {/* Loans & Leases Group */}
+          <section data-testid="group-loans" className="space-y-2">
+            <div className="flex items-center justify-between text-xs font-medium text-[var(--text-muted)] px-1">
+              <span className="flex items-center gap-1.5">
+                <Landmark size={14} />
+                <span>Loans & Leases</span>
+              </span>
+              <div className="flex items-center gap-3">
+                <span data-testid="subtotal-loans" className="tabular-nums font-semibold text-[var(--text)]">
+                  {formatMoney(loansSubtotal)}
+                </span>
+                <button
+                  type="button"
+                  data-testid="add-loan-btn"
+                  onClick={() => setIsLoanModalOpen(true)}
+                  className="flex items-center gap-1 text-[11px] font-medium text-[var(--text)] px-2 py-0.5 rounded border border-hairline hover:bg-[var(--border)] transition-colors"
+                >
+                  <Plus size={12} />
+                  <span>Add Loan / Lease</span>
+                </button>
+              </div>
+            </div>
+
+            {loans.length === 0 ? (
+              <div className="p-4 rounded border border-hairline flat-card text-center text-xs text-[var(--text-muted)]">
+                No loans or leases active.
+              </div>
+            ) : (
+              <div className="grid gap-2">
+                {loans.map((loan) => {
+                  const remPrincipal = loanRemainingMap.get(loan.id) ?? loan.originalPrincipalMinor;
+                  return (
+                    <div
+                      key={loan.id}
+                      data-testid={`loan-item-${loan.id}`}
+                      className="p-3 rounded border border-hairline flat-card space-y-2"
+                    >
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span data-testid="loan-lender-name" className="text-xs font-semibold text-[var(--text)]">
+                              {loan.lenderName}
+                            </span>
+                            <span
+                              className={`px-1.5 py-0.2 rounded font-semibold text-[10px] ${
+                                loan.kind === "LEASE"
+                                  ? "bg-purple-500/10 text-purple-600 dark:text-purple-400"
+                                  : "bg-blue-500/10 text-blue-600 dark:text-blue-400"
+                              }`}
+                            >
+                              {loan.kind}
+                            </span>
+                            <span
+                              className={`px-1.5 py-0.2 rounded font-semibold text-[10px] ${
+                                loan.status === "ACTIVE"
+                                  ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                                  : "bg-gray-500/10 text-gray-500"
+                              }`}
+                            >
+                              {loan.status}
+                            </span>
+                            <span className="px-1.5 py-0.2 rounded font-semibold text-[10px] bg-slate-500/10 text-slate-600 dark:text-slate-400">
+                              {loan.calculationType === "FLAT_RATE" ? "FLAT RATE" : "REDUCING BAL"}
+                            </span>
+                          </div>
+                          <div className="text-[11px] text-[var(--text-muted)] flex items-center gap-3 mt-1">
+                            <span>Principal: {formatMoney(loan.originalPrincipalMinor)}</span>
+                            <span>APR: {(loan.annualInterestRateBps / 100).toFixed(2)}%</span>
+                            <span>Tenure: {loan.tenureMonths} mo</span>
+                            {loan.residualValueMinor ? (
+                              <span>Residual: {formatMoney(loan.residualValueMinor)}</span>
+                            ) : null}
+                          </div>
+                        </div>
+
+                        <div className="text-right">
+                          <span className="text-[10px] text-[var(--text-muted)] block">Monthly EMI</span>
+                          <span
+                            data-testid="loan-monthly-emi"
+                            className="text-xs font-semibold tabular-nums text-[var(--text)]"
+                          >
+                            {formatMoney(loan.monthlyEmiAmountMinor)}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between pt-1 border-t border-hairline/50 text-[11px]">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[var(--text-muted)]">Remaining Principal:</span>
+                          <span
+                            data-testid="loan-remaining-principal"
+                            className="font-mono font-semibold tabular-nums text-[var(--text)]"
+                          >
+                            {formatMoney(remPrincipal)}
+                          </span>
+                        </div>
+
+                        <button
+                          type="button"
+                          data-testid="loan-details-btn"
+                          onClick={() => setSelectedLoan(loan)}
+                          className="px-2 py-0.5 rounded border border-hairline text-xs font-medium text-[var(--text)] hover:bg-[var(--border)] transition-colors"
+                        >
+                          Details & Schedule
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </section>
         </div>
-      )}
 
       {/* Account Creation & Edit Modal / Drawer */}
       {isFormOpen && (
@@ -809,6 +1134,44 @@ export default function AccountsPage() {
           }}
         />
       )}
+
+      {/* Fixed Deposit Modal */}
+      {isFdModalOpen && (
+        <FixedDepositModal
+          isOpen={isFdModalOpen}
+          onClose={() => setIsFdModalOpen(false)}
+          accounts={accounts}
+        />
+      )}
+
+      {/* Premature Close Modal */}
+      {closeFd && (
+        <FdCloseModal
+          fd={closeFd}
+          isOpen={!!closeFd}
+          onClose={() => setCloseFd(null)}
+          accounts={accounts}
+        />
+      )}
+
+      {/* Loan Modal */}
+      {isLoanModalOpen && (
+        <LoanModal
+          isOpen={isLoanModalOpen}
+          onClose={() => setIsLoanModalOpen(false)}
+          accounts={accounts}
+        />
+      )}
+
+      {/* Loan Detail Modal */}
+      {selectedLoan && (
+        <LoanDetailModal
+          loan={selectedLoan}
+          isOpen={!!selectedLoan}
+          onClose={() => setSelectedLoan(null)}
+          accounts={accounts}
+        />
+      )}
     </main>
   );
 }
@@ -829,87 +1192,113 @@ function AccountCard({
   return (
     <div
       data-testid={`account-item-${account.id}`}
-      className={`flex items-center justify-between p-3 rounded border border-hairline flat-card transition-colors ${
+      className={`p-3 rounded border border-hairline flat-card transition-colors space-y-2 ${
         account.isArchived ? "opacity-60 bg-[var(--border)]" : ""
       }`}
     >
-      <Link
-        href={`/accounts/${account.id}`}
-        data-testid="account-detail-link"
-        className="space-y-0.5 min-w-0 flex-1 hover:opacity-80 transition-opacity cursor-pointer"
-      >
-        <div className="flex items-center gap-2">
-          <span data-testid="account-card-name" className="text-xs font-semibold text-[var(--text)] truncate">
-            {account.name}
-          </span>
-          {account.isArchived && (
-            <span className="text-[10px] px-1 rounded bg-[var(--border)] text-[var(--text-muted)]">Archived</span>
-          )}
-        </div>
-        <div className="text-[11px] text-[var(--text-muted)] flex items-center gap-2">
-          {account.accountNumberLast4 && <span>•••• {account.accountNumberLast4}</span>}
-          {account.bankSenderIds?.[0] && <span>{account.bankSenderIds[0]}</span>}
-          {account.type === "CREDIT_CARD" && (
-            <>
-              {account.creditLimitMinor && <span>Limit: {formatMoney(account.creditLimitMinor)}</span>}
-              {account.statementCutoffDay && <span>Cutoff: Day {account.statementCutoffDay}</span>}
-              {account.paymentDueDay && <span>Due: Day {account.paymentDueDay}</span>}
-            </>
-          )}
-        </div>
-      </Link>
-
-      <div className="flex items-center gap-3 shrink-0">
-        {account.type === "CREDIT_CARD" && balance < 0 ? (
-          <div className="text-right">
-            <div data-testid="card-outstanding" className="font-semibold text-xs tabular-nums text-expense">
-              Outstanding {formatMoney(Math.abs(balance))}
-            </div>
-            <div data-testid="account-card-balance" className="text-[10px] text-[var(--text-muted)] tabular-nums">
-              {formatMoney(balance)}
-            </div>
+      <div className="flex items-center justify-between">
+        <Link
+          href={`/accounts/${account.id}`}
+          data-testid="account-detail-link"
+          className="space-y-0.5 min-w-0 flex-1 hover:opacity-80 transition-opacity cursor-pointer"
+        >
+          <div className="flex items-center gap-2">
+            <span data-testid="account-card-name" className="text-xs font-semibold text-[var(--text)] truncate">
+              {account.name}
+            </span>
+            {account.isArchived && (
+              <span className="text-[10px] px-1 rounded bg-[var(--border)] text-[var(--text-muted)]">Archived</span>
+            )}
           </div>
-        ) : (
-          <span
-            data-testid="account-card-balance"
-            className={`font-semibold text-xs tabular-nums ${
-              balance < 0 ? "text-expense" : balance > 0 ? "text-income" : "text-[var(--text)]"
-            }`}
-          >
-            {formatMoney(balance)}
-          </span>
-        )}
+          <div className="text-[11px] text-[var(--text-muted)] flex items-center gap-2">
+            {account.accountNumberLast4 && <span>•••• {account.accountNumberLast4}</span>}
+            {account.bankSenderIds?.[0] && <span>{account.bankSenderIds[0]}</span>}
+            {account.type === "CREDIT_CARD" && (
+              <>
+                {account.creditLimitMinor && <span>Limit: {formatMoney(account.creditLimitMinor)}</span>}
+                {account.statementCutoffDay && <span>Cutoff: Day {account.statementCutoffDay}</span>}
+                {account.paymentDueDay && <span>Due: Day {account.paymentDueDay}</span>}
+              </>
+            )}
+          </div>
+        </Link>
 
-        <div className="flex items-center gap-1">
-          <button
-            type="button"
-            data-testid="account-edit-btn"
-            onClick={onEdit}
-            title="Edit"
-            className="p-1.5 rounded hover:bg-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text)] transition-colors"
-          >
-            <Edit2 size={13} />
-          </button>
-          <button
-            type="button"
-            data-testid="account-archive-btn"
-            onClick={onArchive}
-            title={account.isArchived ? "Unarchive" : "Archive"}
-            className="p-1.5 rounded hover:bg-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text)] transition-colors"
-          >
-            <Archive size={13} />
-          </button>
-          <button
-            type="button"
-            data-testid="account-delete-btn"
-            onClick={onDelete}
-            title="Delete"
-            className="p-1.5 rounded hover:bg-[var(--border)] text-[var(--text-muted)] hover:text-red-500 transition-colors"
-          >
-            <Trash2 size={13} />
-          </button>
+        <div className="flex items-center gap-3 shrink-0">
+          {account.type === "CREDIT_CARD" && balance < 0 ? (
+            <div className="text-right">
+              <div data-testid="card-outstanding" className="font-semibold text-xs tabular-nums text-expense">
+                Outstanding {formatMoney(Math.abs(balance))}
+              </div>
+              <div data-testid="account-card-balance" className="text-[10px] text-[var(--text-muted)] tabular-nums">
+                {formatMoney(balance)}
+              </div>
+            </div>
+          ) : (
+            <span
+              data-testid="account-card-balance"
+              className={`font-semibold text-xs tabular-nums ${
+                balance < 0 ? "text-expense" : balance > 0 ? "text-income" : "text-[var(--text)]"
+              }`}
+            >
+              {formatMoney(balance)}
+            </span>
+          )}
+
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              data-testid="account-edit-btn"
+              onClick={onEdit}
+              title="Edit"
+              className="p-1.5 rounded hover:bg-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text)] transition-colors"
+            >
+              <Edit2 size={13} />
+            </button>
+            <button
+              type="button"
+              data-testid="account-archive-btn"
+              onClick={onArchive}
+              title={account.isArchived ? "Unarchive" : "Archive"}
+              className="p-1.5 rounded hover:bg-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text)] transition-colors"
+            >
+              <Archive size={13} />
+            </button>
+            <button
+              type="button"
+              data-testid="account-delete-btn"
+              onClick={onDelete}
+              title="Delete"
+              className="p-1.5 rounded hover:bg-[var(--border)] text-[var(--text-muted)] hover:text-red-500 transition-colors"
+            >
+              <Trash2 size={13} />
+            </button>
+          </div>
         </div>
       </div>
+
+      {account.balanceMismatchHint && (
+        <div
+          data-testid="balance-mismatch-hint"
+          className="p-2 rounded bg-amber-500/10 border border-amber-500/20 flex items-center justify-between text-xs"
+        >
+          <div className="space-y-0.5">
+            <div className="flex items-center gap-1.5 text-amber-600 dark:text-amber-400 font-medium">
+              <AlertTriangle size={13} />
+              <span>Balance mismatch detected from bank SMS</span>
+            </div>
+            <div className="text-[11px] text-[var(--text-muted)]">
+              SMS balance: {formatMoney(account.balanceMismatchHint.statedBalanceMinor)} • Ledger: {formatMoney(account.balanceMismatchHint.ledgerBalanceMinor)}
+            </div>
+          </div>
+          <Link
+            href={`/accounts/${account.id}?calibrate=true`}
+            data-testid="calibrate-btn"
+            className="px-2.5 py-1 rounded bg-amber-500 text-white font-medium text-[11px] hover:bg-amber-600 transition-colors"
+          >
+            Calibrate
+          </Link>
+        </div>
+      )}
     </div>
   );
 }
@@ -1066,7 +1455,7 @@ function CreditCardAccountCard({
           ) : (
             <span>
               Outstanding:{" "}
-              <span className="font-semibold text-expense tabular-nums">
+              <span data-testid="card-outstanding" className="font-semibold text-expense tabular-nums">
                 {formatMoney(cycle.outstandingDebtMinor)}
               </span>
             </span>
@@ -1076,6 +1465,30 @@ function CreditCardAccountCard({
           Balance: {formatMoney(balance)}
         </div>
       </div>
+
+      {account.balanceMismatchHint && (
+        <div
+          data-testid="balance-mismatch-hint"
+          className="p-2 rounded bg-amber-500/10 border border-amber-500/20 flex items-center justify-between text-xs"
+        >
+          <div className="space-y-0.5">
+            <div className="flex items-center gap-1.5 text-amber-600 dark:text-amber-400 font-medium">
+              <AlertTriangle size={13} />
+              <span>Balance mismatch detected from bank SMS</span>
+            </div>
+            <div className="text-[11px] text-[var(--text-muted)]">
+              SMS balance: {formatMoney(account.balanceMismatchHint.statedBalanceMinor)} • Ledger: {formatMoney(account.balanceMismatchHint.ledgerBalanceMinor)}
+            </div>
+          </div>
+          <Link
+            href={`/accounts/${account.id}?calibrate=true`}
+            data-testid="calibrate-btn"
+            className="px-2.5 py-1 rounded bg-amber-500 text-white font-medium text-[11px] hover:bg-amber-600 transition-colors"
+          >
+            Calibrate
+          </Link>
+        </div>
+      )}
     </div>
   );
 }

@@ -3,7 +3,6 @@
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { ArrowLeft, RefreshCw, Filter, ChevronDown, ChevronUp, FileText, Code } from "lucide-react";
-import { formatMoney } from "@/lib/finance-core/money";
 
 interface BankSmsItem {
   id: string;
@@ -170,6 +169,18 @@ export default function SmsActivityPage() {
                         >
                           {item.parseMethod}
                         </span>
+                      )}
+
+                      {/* Transaction Link */}
+                      {item.transaction?.id && (
+                        <Link
+                          href={`/?highlight=${item.transaction.id}`}
+                          data-testid="sms-tx-link"
+                          onClick={(e) => e.stopPropagation()}
+                          className="inline-flex items-center gap-1 text-[10px] text-blue-500 hover:underline font-medium"
+                        >
+                          <span>View Transaction →</span>
+                        </Link>
                       )}
                     </div>
 

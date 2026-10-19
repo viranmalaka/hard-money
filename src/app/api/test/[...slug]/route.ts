@@ -40,7 +40,7 @@ export async function POST(
       try {
         const { prisma } = await import("@/lib/prisma");
         await prisma.$executeRawUnsafe(
-          'TRUNCATE TABLE "User", "Account", "Category", "Transaction", "TransactionSplitItem", "TransactionTemplate", "Budget", "BudgetMonthSnapshot", "CreditCardStatement", "CreditCardInstallmentPlan", "BankSms", "Household", "HouseholdMember", "SyncSequence", "AppliedMutation" CASCADE;'
+          'TRUNCATE TABLE "User", "Account", "Category", "Transaction", "TransactionSplitItem", "TransactionTemplate", "Budget", "BudgetMonthSnapshot", "CreditCardStatement", "CreditCardInstallmentPlan", "BankSms", "Household", "HouseholdMember", "FixedDeposit", "FixedDepositPayout", "Loan", "LoanScheduleEntry", "LoanPayment", "SyncSequence", "AppliedMutation" CASCADE;'
         );
         try {
           await prisma.$executeRawUnsafe("ALTER SEQUENCE IF EXISTS global_server_seq RESTART WITH 1");
@@ -131,6 +131,8 @@ export async function POST(
               statementCutoffDay: acc.statementCutoffDay ?? null,
               paymentDueDay: acc.paymentDueDay ?? null,
               accountNumberLast4: acc.accountNumberLast4 ?? null,
+              ownAtmFeeMinor: acc.ownAtmFeeMinor ?? 0,
+              otherAtmFeeMinor: acc.otherAtmFeeMinor ?? 0,
               bankSenderIds: senderIds,
               serverSeq: nextSeq,
             },
@@ -143,6 +145,8 @@ export async function POST(
               statementCutoffDay: acc.statementCutoffDay ?? null,
               paymentDueDay: acc.paymentDueDay ?? null,
               accountNumberLast4: acc.accountNumberLast4 ?? null,
+              ownAtmFeeMinor: acc.ownAtmFeeMinor ?? 0,
+              otherAtmFeeMinor: acc.otherAtmFeeMinor ?? 0,
               bankSenderIds: senderIds,
               serverSeq: nextSeq,
             },
@@ -233,6 +237,8 @@ export async function POST(
               excludeFromStats: t.excludeFromStats || false,
               excludeFromBalance: t.excludeFromBalance || false,
               installmentPlanId: t.installmentPlanId || null,
+              feeTransactionId: t.feeTransactionId || null,
+              possibleDuplicateOfTransactionId: t.possibleDuplicateOfTransactionId || null,
               serverSeq: nextSeq,
             },
             update: {
@@ -243,6 +249,8 @@ export async function POST(
               excludeFromStats: t.excludeFromStats || false,
               excludeFromBalance: t.excludeFromBalance || false,
               installmentPlanId: t.installmentPlanId || null,
+              feeTransactionId: t.feeTransactionId || null,
+              possibleDuplicateOfTransactionId: t.possibleDuplicateOfTransactionId || null,
               serverSeq: nextSeq,
             },
           });
@@ -277,6 +285,145 @@ export async function POST(
             },
             update: {
               status: plan.status,
+              serverSeq: nextSeq,
+            },
+          });
+        }
+      }
+
+      if (Array.isArray(body.fixedDeposits)) {
+        for (const fd of body.fixedDeposits) {
+          const nextSeq = await getNextServerSeq();
+          await (prisma as any).fixedDeposit.upsert({
+            where: { id: fd.id },
+            create: {
+              id: fd.id,
+              userId: fd.userId,
+              householdId: fd.householdId || null,
+              bankName: fd.bankName,
+              accountNumber: fd.accountNumber || null,
+              principalAmountMinor: fd.principalAmountMinor,
+              annualInterestRateBps: fd.annualInterestRateBps,
+              tenureMonths: fd.tenureMonths,
+              startDate: new Date(fd.startDate),
+              maturityDate: new Date(fd.maturityDate),
+              compoundingFrequency: fd.compoundingFrequency || "MONTHLY",
+              payoutMode: fd.payoutMode || "MONTHLY_PAYOUT_TO_ACCOUNT",
+              linkedPayoutAccountId: fd.linkedPayoutAccountId || null,
+              fundingAccountId: fd.fundingAccountId || null,
+              withholdingTaxRateBps: fd.withholdingTaxRateBps ?? 0,
+              autoRenew: fd.autoRenew ?? false,
+              status: fd.status || "ACTIVE",
+              closedAt: fd.closedAt ? new Date(fd.closedAt) : null,
+              prematureClosure: fd.prematureClosure ?? false,
+              serverSeq: nextSeq,
+            },
+            update: {
+              status: fd.status,
+              principalAmountMinor: fd.principalAmountMinor,
+              serverSeq: nextSeq,
+            },
+          });
+        }
+      }
+
+      if (Array.isArray(body.fixedDepositPayouts)) {
+        for (const p of body.fixedDepositPayouts) {
+          const nextSeq = await getNextServerSeq();
+          await (prisma as any).fixedDepositPayout.upsert({
+            where: { id: p.id },
+            create: {
+              id: p.id,
+              fixedDepositId: p.fixedDepositId,
+              periodEnd: new Date(p.periodEnd),
+              grossInterestMinor: p.grossInterestMinor,
+              taxWithheldMinor: p.taxWithheldMinor,
+              netInterestMinor: p.netInterestMinor,
+              transactionId: p.transactionId || null,
+              serverSeq: nextSeq,
+            },
+            update: {
+              serverSeq: nextSeq,
+            },
+          });
+        }
+      }
+
+      if (Array.isArray(body.loans)) {
+        for (const l of body.loans) {
+          const nextSeq = await getNextServerSeq();
+          await (prisma as any).loan.upsert({
+            where: { id: l.id },
+            create: {
+              id: l.id,
+              userId: l.userId,
+              householdId: l.householdId || null,
+              kind: l.kind || "LOAN",
+              lenderName: l.lenderName || "Lender",
+              originalPrincipalMinor: l.originalPrincipalMinor,
+              residualValueMinor: l.residualValueMinor || 0,
+              annualInterestRateBps: l.annualInterestRateBps,
+              tenureMonths: l.tenureMonths,
+              startDate: new Date(l.startDate),
+              monthlyEmiAmountMinor: l.monthlyEmiAmountMinor,
+              calculationType: l.calculationType || "REDUCING_BALANCE",
+              linkedDisbursementAccountId: l.linkedDisbursementAccountId || null,
+              status: l.status || "ACTIVE",
+              closedAt: l.closedAt ? new Date(l.closedAt) : null,
+              serverSeq: nextSeq,
+            },
+            update: {
+              status: l.status,
+              serverSeq: nextSeq,
+            },
+          });
+        }
+      }
+
+      if (Array.isArray(body.loanScheduleEntries)) {
+        for (const se of body.loanScheduleEntries) {
+          const nextSeq = await getNextServerSeq();
+          await (prisma as any).loanScheduleEntry.upsert({
+            where: { id: se.id },
+            create: {
+              id: se.id,
+              loanId: se.loanId,
+              installmentNumber: se.installmentNumber,
+              dueDate: new Date(se.dueDate),
+              principalComponentMinor: se.principalComponentMinor,
+              interestComponentMinor: se.interestComponentMinor,
+              openingBalanceMinor: se.openingBalanceMinor,
+              closingBalanceMinor: se.closingBalanceMinor,
+              status: se.status || "SCHEDULED",
+              serverSeq: nextSeq,
+            },
+            update: {
+              status: se.status,
+              principalComponentMinor: se.principalComponentMinor,
+              interestComponentMinor: se.interestComponentMinor,
+              serverSeq: nextSeq,
+            },
+          });
+        }
+      }
+
+      if (Array.isArray(body.loanPayments)) {
+        for (const lp of body.loanPayments) {
+          const nextSeq = await getNextServerSeq();
+          await (prisma as any).loanPayment.upsert({
+            where: { id: lp.id },
+            create: {
+              id: lp.id,
+              loanId: lp.loanId,
+              transactionId: lp.transactionId || null,
+              scheduleEntryId: lp.scheduleEntryId || null,
+              principalComponentMinor: lp.principalComponentMinor,
+              interestComponentMinor: lp.interestComponentMinor,
+              isExtraPrincipal: lp.isExtraPrincipal ?? false,
+              paymentDate: lp.paymentDate ? new Date(lp.paymentDate) : new Date(),
+              serverSeq: nextSeq,
+            },
+            update: {
               serverSeq: nextSeq,
             },
           });
@@ -360,7 +507,21 @@ export async function GET(
     case "snapshot": {
       try {
         const { prisma } = await import("@/lib/prisma");
-        const [accounts, categories, transactions, budgets, budgetSnapshots, creditCardStatements, installmentPlans, bankSms] = await Promise.all([
+        const [
+          accounts,
+          categories,
+          transactions,
+          budgets,
+          budgetSnapshots,
+          creditCardStatements,
+          installmentPlans,
+          bankSms,
+          fixedDeposits,
+          fixedDepositPayouts,
+          loans,
+          loanScheduleEntries,
+          loanPayments,
+        ] = await Promise.all([
           prisma.account.findMany({ where: { deletedAt: null } }),
           prisma.category.findMany({ where: { deletedAt: null } }),
           prisma.transaction.findMany({ where: { deletedAt: null } }),
@@ -369,6 +530,11 @@ export async function GET(
           prisma.creditCardStatement.findMany(),
           prisma.creditCardInstallmentPlan.findMany({ where: { deletedAt: null } }),
           prisma.bankSms.findMany({ orderBy: { receivedAt: "desc" } }),
+          (prisma as any).fixedDeposit.findMany({ where: { deletedAt: null } }),
+          (prisma as any).fixedDepositPayout.findMany(),
+          (prisma as any).loan.findMany({ where: { deletedAt: null } }),
+          (prisma as any).loanScheduleEntry.findMany({ where: { deletedAt: null } }),
+          (prisma as any).loanPayment.findMany(),
         ]);
 
         const balances: Record<string, number> = {};
@@ -386,6 +552,11 @@ export async function GET(
           creditCardStatements: creditCardStatements.map((ccs: any) => ({ ...ccs, serverSeq: Number(ccs.serverSeq) })),
           installmentPlans: installmentPlans.map((p: any) => ({ ...p, serverSeq: Number(p.serverSeq) })),
           bankSms,
+          fixedDeposits: fixedDeposits.map((fd: any) => ({ ...fd, serverSeq: Number(fd.serverSeq) })),
+          fixedDepositPayouts: fixedDepositPayouts.map((fdp: any) => ({ ...fdp, serverSeq: Number(fdp.serverSeq) })),
+          loans: loans.map((l: any) => ({ ...l, serverSeq: Number(l.serverSeq) })),
+          loanScheduleEntries: loanScheduleEntries.map((se: any) => ({ ...se, serverSeq: Number(se.serverSeq) })),
+          loanPayments: loanPayments.map((lp: any) => ({ ...lp, serverSeq: Number(lp.serverSeq) })),
           balances,
         });
       } catch (err: unknown) {

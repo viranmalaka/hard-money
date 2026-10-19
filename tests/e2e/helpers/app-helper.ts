@@ -1,7 +1,7 @@
 import { Page, BrowserContext, expect } from "@playwright/test";
 import { TestApiClient } from "./test-api";
 
-export type NavDestination = "trans" | "stats" | "budget" | "accounts" | "more" | "dashboard";
+export type NavDestination = "trans" | "transactions" | "stats" | "budget" | "accounts" | "more" | "dashboard";
 
 export class AuthHelper {
   constructor(public page: Page) {}
@@ -19,6 +19,9 @@ export class AuthHelper {
     );
     await this.page.click('[data-testid="register-submit"]');
     await expect(this.page).toHaveURL("/");
+    const sessionRes = await this.page.request.get("http://localhost:3000/api/auth/session");
+    const sessionData = await sessionRes.json().catch(() => ({}));
+    return sessionData.user || { id: "current-user", email: data.email, name: data.name };
   }
 
   async login(credentials: { email: string; password?: string }) {
@@ -52,13 +55,14 @@ export class AppHelper {
    */
   async go(destination: NavDestination) {
     const isMobile = this.page.viewportSize() ? this.page.viewportSize()!.width < 768 : false;
+    const navKey = destination === "transactions" ? "trans" : destination;
 
-    const path = destination === "trans" ? "/" : `/${destination}`;
+    const path = navKey === "trans" ? "/" : `/${navKey}`;
     if (isMobile) {
-      const bottomTab = this.page.locator(`[data-testid="bottom-nav-${destination}"]`);
+      const bottomTab = this.page.locator(`[data-testid="bottom-nav-${navKey}"]`);
       await bottomTab.click();
     } else {
-      const sidebarItem = this.page.locator(`[data-testid="sidebar-nav-${destination}"]`);
+      const sidebarItem = this.page.locator(`[data-testid="sidebar-nav-${navKey}"]`);
       await sidebarItem.click();
     }
 
@@ -91,7 +95,14 @@ export class AppHelper {
    * Dispatches online event to trigger sync and waits for idle
    */
   async triggerSync() {
-    await this.page.evaluate(() => window.dispatchEvent(new Event("online")));
+    await this.page.evaluate(async () => {
+      const syncFn = (window as unknown as { __hardMoneyTriggerSync?: () => Promise<void> }).__hardMoneyTriggerSync;
+      if (syncFn) {
+        await syncFn();
+      } else {
+        window.dispatchEvent(new Event("online"));
+      }
+    });
     await this.waitForSyncIdle();
   }
 

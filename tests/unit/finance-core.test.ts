@@ -152,3 +152,173 @@ describe("finance-core budget calculations", () => {
     expect(res2.reduce((a: number, b: number) => a + b, 0)).toBe(100);
   });
 });
+
+describe("finance-core fixed deposit calculations (golden vectors)", () => {
+  it("calculates monthly payout with withholding tax (1,000,000 at 12%, WHT 5%)", () => {
+    // 1,000,000 LKR = 100,000,000 minor
+    // Or in minor: principal 100,000,000, 1200 bps, 500 bps WHT
+    // (1,000,000 * 0.12) / 12 = 10,000 gross
+    // 10,000 * 0.05 = 500 tax
+    // net = 9,500
+    const res = import("../../src/lib/finance-core/investments").then(({ calculateMonthlyPayout }) => {
+      const payout = calculateMonthlyPayout(100000000, 1200, 500);
+      expect(payout.grossInterestMinor).toBe(1000000); // 10,000.00
+      expect(payout.taxWithheldMinor).toBe(50000); // 500.00
+      expect(payout.netInterestMinor).toBe(950000); // 9,500.00
+    });
+    return res;
+  });
+
+  it("calculates compound monthly for 12 months (1,000,000 at 12%)", async () => {
+    const { calculateCompoundMaturity } = await import("../../src/lib/finance-core/investments");
+    // Principal: 100,000,000 minor (1,000,000.00)
+    // 1,000,000 * (1 + 0.12/12)^12 = 1,126,825.03
+    // gross interest = 126,825.03 (12,682,503 minor)
+    // WHT 5% on 126,825.03 = 6,341.25 (634,125 minor)
+    // net interest = 120,483.78 (12,048,378 minor)
+    const res = calculateCompoundMaturity(100000000, 1200, 12, "MONTHLY", 500);
+    expect(res.maturityGrossAmountMinor).toBe(112682503);
+    expect(res.grossInterestMinor).toBe(12682503);
+    expect(res.taxWithheldMinor).toBe(634125);
+    expect(res.netInterestMinor).toBe(12048378);
+    expect(res.maturityNetAmountMinor).toBe(112048378);
+  });
+
+  it("handles 0% withholding tax override", async () => {
+    const { calculateMonthlyPayout, calculateCompoundMaturity } = await import("../../src/lib/finance-core/investments");
+    const payout = calculateMonthlyPayout(100000000, 1200, 0);
+    expect(payout.grossInterestMinor).toBe(1000000);
+    expect(payout.taxWithheldMinor).toBe(0);
+    expect(payout.netInterestMinor).toBe(1000000);
+
+    const compound = calculateCompoundMaturity(100000000, 1200, 12, "MONTHLY", 0);
+    expect(compound.taxWithheldMinor).toBe(0);
+    expect(compound.netInterestMinor).toBe(12682503);
+  });
+
+  it("calculates accrued FD net worth value correctly", async () => {
+    const { calculateAccruedFdValue } = await import("../../src/lib/finance-core/investments");
+    const start = new Date("2026-01-01T00:00:00Z");
+    const maturity = new Date("2027-01-01T00:00:00Z");
+
+    const fd = {
+      principalAmountMinor: 100000000,
+      annualInterestRateBps: 1200,
+      tenureMonths: 12,
+      compoundingFrequency: "MONTHLY" as const,
+      payoutMode: "REINVEST_COMPOUND" as const,
+      withholdingTaxRateBps: 500,
+      startDate: start,
+      maturityDate: maturity,
+      status: "ACTIVE",
+    };
+
+    // At start: value equals principal
+    expect(calculateAccruedFdValue(fd, start)).toBe(100000000);
+
+    // At maturity: value equals principal + net compound interest
+    expect(calculateAccruedFdValue(fd, maturity)).toBe(112048378);
+
+    // Closed FD: 0
+    expect(calculateAccruedFdValue({ ...fd, status: "CLOSED" }, maturity)).toBe(0);
+
+    // Monthly payout FD: remains principal
+    expect(calculateAccruedFdValue({ ...fd, payoutMode: "MONTHLY_PAYOUT_TO_ACCOUNT" }, maturity)).toBe(100000000);
+  });
+});
+
+describe("finance-core loans and leases calculations (golden vectors)", () => {
+  it("calculates reducing balance loan (1,200,000 at 12%, 12 months -> EMI 106,618.55, first interest 12,000, final balance 0)", async () => {
+    const { calculateReducingBalanceEmi, generateAmortizationSchedule } = await import(
+      "../../src/lib/finance-core/loans"
+    );
+    // 1,200,000.00 = 120,000,000 minor
+    const emi = calculateReducingBalanceEmi(120000000, 1200, 12);
+    expect(emi).toBe(10661855); // 106,618.55
+
+    const schedule = generateAmortizationSchedule(120000000, 1200, 12, "REDUCING_BALANCE");
+    expect(schedule.length).toBe(12);
+    // First installment
+    expect(schedule[0].interestComponentMinor).toBe(1200000); // 12,000.00
+    expect(schedule[0].principalComponentMinor).toBe(10661855 - 1200000); // 94,618.55
+    expect(schedule[0].openingBalanceMinor).toBe(120000000);
+
+    // Final installment clears to exactly 0
+    expect(schedule[11].closingBalanceMinor).toBe(0);
+
+    // Total principal amortized equals exactly 120,000,000
+    const totalPrincipal = schedule.reduce((sum, row) => sum + row.principalComponentMinor, 0);
+    expect(totalPrincipal).toBe(120000000);
+  });
+
+  it("calculates flat rate loan (1,200,000 at 12% flat, 12 months -> total interest 144,000, EMI 112,000)", async () => {
+    const { calculateFlatRateEmi, generateAmortizationSchedule } = await import(
+      "../../src/lib/finance-core/loans"
+    );
+    const { monthlyEmiMinor, totalInterestMinor } = calculateFlatRateEmi(120000000, 1200, 12);
+    expect(totalInterestMinor).toBe(14400000); // 144,000.00
+    expect(monthlyEmiMinor).toBe(11200000); // 112,000.00
+
+    const schedule = generateAmortizationSchedule(120000000, 1200, 12, "FLAT_RATE");
+    expect(schedule.length).toBe(12);
+    expect(schedule[11].closingBalanceMinor).toBe(0);
+
+    const totalPrincipal = schedule.reduce((sum, row) => sum + row.principalComponentMinor, 0);
+    expect(totalPrincipal).toBe(120000000);
+
+    const totalInterest = schedule.reduce((sum, row) => sum + row.interestComponentMinor, 0);
+    expect(totalInterest).toBe(14400000);
+  });
+
+  it("calculates lease with residual (1,200,000, 12%, 12 months, residual 200,000 -> final balance 200,000)", async () => {
+    const { generateAmortizationSchedule } = await import("../../src/lib/finance-core/loans");
+    // 1,200,000 = 120,000,000 minor, residual 200,000 = 20,000,000 minor
+    const schedule = generateAmortizationSchedule(
+      120000000,
+      1200,
+      12,
+      "REDUCING_BALANCE",
+      20000000
+    );
+
+    expect(schedule.length).toBe(12);
+    expect(schedule[11].closingBalanceMinor).toBe(20000000); // Final balance is exactly residual
+
+    const totalPrincipalAmortized = schedule.reduce((sum, row) => sum + row.principalComponentMinor, 0);
+    expect(totalPrincipalAmortized).toBe(100000000); // 120M - 20M = 100M
+  });
+
+  it("reamortizes remaining schedule when extra principal is paid (shorter tenure vs lower EMI)", async () => {
+    const { reamortizeRemainingSchedule } = await import("../../src/lib/finance-core/loans");
+    // Suppose remaining principal after extra payment is 900,000 (90,000,000 minor)
+    // 9 remaining months at 12%
+    // 1. Lower EMI
+    const lowerEmiRows = reamortizeRemainingSchedule(
+      90000000,
+      4,
+      9,
+      1200,
+      "REDUCING_BALANCE",
+      0,
+      "LOWER_EMI"
+    );
+    expect(lowerEmiRows.length).toBe(9);
+    expect(lowerEmiRows[8].closingBalanceMinor).toBe(0);
+
+    // 2. Shorter tenure with target EMI 106,618.55 (10,661,855 minor) and extra principal (balance 70,000,000)
+    const shorterTenureRows = reamortizeRemainingSchedule(
+      70000000,
+      4,
+      9,
+      1200,
+      "REDUCING_BALANCE",
+      0,
+      "SHORTER_TENURE",
+      10661855
+    );
+    expect(shorterTenureRows.length).toBeLessThan(9);
+    expect(shorterTenureRows[shorterTenureRows.length - 1].closingBalanceMinor).toBe(0);
+  });
+});
+
+
