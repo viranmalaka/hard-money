@@ -9,6 +9,7 @@ import { Sidebar } from "@/components/navigation/sidebar";
 import { BottomNav } from "@/components/navigation/bottom-nav";
 import { Fab } from "@/components/ui/fab";
 import { PwaManager } from "@/components/pwa-manager";
+import { ScrollContainer } from "@/components/navigation/scroll-container";
 
 export const viewport: Viewport = {
   width: "device-width",
@@ -61,9 +62,9 @@ export default function RootLayout({
 
                   {/* Main Application Area */}
                   <div className="flex-1 flex flex-col h-full min-w-0 overflow-hidden relative">
-                    <div className="flex-1 overflow-y-auto pb-nav-safe">
+                    <ScrollContainer className="flex-1 overflow-y-auto pb-nav-safe">
                       {children}
-                    </div>
+                    </ScrollContainer>
 
                     {/* Floating Action Button */}
                     <Fab />

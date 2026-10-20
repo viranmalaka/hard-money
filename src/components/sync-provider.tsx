@@ -30,6 +30,67 @@ interface SyncContextValue {
 
 const SyncContext = createContext<SyncContextValue | null>(null);
 
+/**
+ * In-memory snapshot of the last result of each live query, per database.
+ * `useLiveQuery` returns `undefined` on its first render (Dexie is async), which made
+ * every screen render empty first and then pop in its data. Serving the last known
+ * value lets screens paint fully on the first frame — essential for smooth page
+ * transitions. Dexie's live subscription still replaces it with fresh data.
+ */
+const liveCache = new WeakMap<HardMoneyDB, Map<string, unknown>>();
+const EMPTY: never[] = [];
+
+function cacheFor(db: HardMoneyDB): Map<string, unknown> {
+  let cache = liveCache.get(db);
+  if (!cache) {
+    cache = new Map();
+    liveCache.set(db, cache);
+  }
+  return cache;
+}
+
+function useCachedLiveQuery<T>(db: HardMoneyDB, key: string, querier: () => Promise<T[]>): T[] {
+  const live = useLiveQuery(querier, [db]);
+  const cache = cacheFor(db);
+  if (live !== undefined) {
+    cache.set(key, live); // idempotent write of latest snapshot
+    return live;
+  }
+  return (cache.get(key) as T[] | undefined) ?? EMPTY;
+}
+
+/** Pre-populate the cache on startup so even the first visit to a screen is instant. */
+async function warmLiveCache(db: HardMoneyDB) {
+  const cache = cacheFor(db);
+  const notDeleted = <R extends { deletedAt?: unknown }>(r: R) => !r.deletedAt;
+  const entries: [string, () => Promise<unknown[]>][] = [
+    ["useAccounts", () => db.accounts.filter(notDeleted).toArray()],
+    ["useCategories", () => db.categories.filter(notDeleted).toArray()],
+    ["useTransactions", () => db.transactions.filter(notDeleted).toArray()],
+    ["useTemplates", () => db.templates.filter(notDeleted).toArray()],
+    ["useBudgets", () => db.budgets.filter(notDeleted).toArray()],
+    ["useBudgetSnapshots", () => db.budgetSnapshots.toArray()],
+    ["useCreditCardStatements", () => db.creditCardStatements.toArray()],
+    ["useInstallmentPlans", () => db.installmentPlans.filter(notDeleted).toArray()],
+    ["useFixedDeposits", () => db.fixedDeposits.filter(notDeleted).toArray()],
+    ["useFixedDepositPayouts", () => db.fixedDepositPayouts.toArray()],
+    ["useLoans", () => db.loans.filter(notDeleted).toArray()],
+    ["useLoanScheduleEntries", () => db.loanScheduleEntries.toArray()],
+    ["useLoanPayments", () => db.loanPayments.toArray()],
+  ];
+  await Promise.all(
+    entries.map(async ([key, q]) => {
+      if (cache.has(key)) return;
+      try {
+        const rows = await q();
+        if (!cache.has(key)) cache.set(key, rows);
+      } catch {
+        // ignore; the live query will fill it later
+      }
+    })
+  );
+}
+
 export function SyncProvider({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [userId, setUserId] = useState<string | null>(() => {
@@ -59,6 +120,10 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
   }, [pathname]);
 
   const db = useMemo(() => getDatabase(userId), [userId]);
+
+  useEffect(() => {
+    void warmLiveCache(db);
+  }, [db]);
 
   const liveOutbox = useLiveQuery(() => db.outbox.toArray(), [db]);
   const outboxMutations = useMemo(() => liveOutbox || [], [liveOutbox]);
@@ -156,67 +221,67 @@ export function useSync() {
 
 export function useAccounts(): LocalAccount[] {
   const { db } = useSync();
-  return useLiveQuery(() => db.accounts.filter((a) => !a.deletedAt).toArray(), [db]) || [];
+  return useCachedLiveQuery(db, "useAccounts", () => db.accounts.filter((a) => !a.deletedAt).toArray());
 }
 
 export function useCategories(): LocalCategory[] {
   const { db } = useSync();
-  return useLiveQuery(() => db.categories.filter((c) => !c.deletedAt).toArray(), [db]) || [];
+  return useCachedLiveQuery(db, "useCategories", () => db.categories.filter((c) => !c.deletedAt).toArray());
 }
 
 export function useTransactions(): LocalTransaction[] {
   const { db } = useSync();
-  return useLiveQuery(() => db.transactions.filter((t) => !t.deletedAt).toArray(), [db]) || [];
+  return useCachedLiveQuery(db, "useTransactions", () => db.transactions.filter((t) => !t.deletedAt).toArray());
 }
 
 export function useTemplates(): LocalTemplate[] {
   const { db } = useSync();
-  return useLiveQuery(() => db.templates.filter((tmpl) => !tmpl.deletedAt).toArray(), [db]) || [];
+  return useCachedLiveQuery(db, "useTemplates", () => db.templates.filter((tmpl) => !tmpl.deletedAt).toArray());
 }
 
 export function useBudgets(): LocalBudget[] {
   const { db } = useSync();
-  return useLiveQuery(() => db.budgets.filter((b) => !b.deletedAt).toArray(), [db]) || [];
+  return useCachedLiveQuery(db, "useBudgets", () => db.budgets.filter((b) => !b.deletedAt).toArray());
 }
 
 export function useBudgetSnapshots(): LocalBudgetMonthSnapshot[] {
   const { db } = useSync();
-  return useLiveQuery(() => db.budgetSnapshots.toArray(), [db]) || [];
+  return useCachedLiveQuery(db, "useBudgetSnapshots", () => db.budgetSnapshots.toArray());
 }
 
 export function useCreditCardStatements(): LocalCreditCardStatement[] {
   const { db } = useSync();
-  return useLiveQuery(() => db.creditCardStatements.toArray(), [db]) || [];
+  return useCachedLiveQuery(db, "useCreditCardStatements", () => db.creditCardStatements.toArray());
 }
 
 export function useInstallmentPlans(): LocalInstallmentPlan[] {
   const { db } = useSync();
-  return useLiveQuery(() => db.installmentPlans.filter((p) => !p.deletedAt).toArray(), [db]) || [];
+  return useCachedLiveQuery(db, "useInstallmentPlans", () => db.installmentPlans.filter((p) => !p.deletedAt).toArray());
 }
 
 export function useFixedDeposits(): import("@/lib/db").LocalFixedDeposit[] {
   const { db } = useSync();
-  return useLiveQuery(() => db.fixedDeposits.filter((fd) => !fd.deletedAt).toArray(), [db]) || [];
+  return useCachedLiveQuery(db, "useFixedDeposits", () => db.fixedDeposits.filter((fd) => !fd.deletedAt).toArray());
 }
 
 export function useFixedDepositPayouts(): import("@/lib/db").LocalFixedDepositPayout[] {
   const { db } = useSync();
-  return useLiveQuery(() => db.fixedDepositPayouts.toArray(), [db]) || [];
+  return useCachedLiveQuery(db, "useFixedDepositPayouts", () => db.fixedDepositPayouts.toArray());
 }
 
 export function useLoans(): import("@/lib/db").LocalLoan[] {
   const { db } = useSync();
-  return useLiveQuery(() => db.loans.filter((l) => !l.deletedAt).toArray(), [db]) || [];
+  return useCachedLiveQuery(db, "useLoans", () => db.loans.filter((l) => !l.deletedAt).toArray());
 }
 
 export function useLoanScheduleEntries(): import("@/lib/db").LocalLoanScheduleEntry[] {
   const { db } = useSync();
-  return useLiveQuery(() => db.loanScheduleEntries.toArray(), [db]) || [];
+  return useCachedLiveQuery(db, "useLoanScheduleEntries", () => db.loanScheduleEntries.toArray());
 }
 
 export function useLoanPayments(): import("@/lib/db").LocalLoanPayment[] {
   const { db } = useSync();
-  return useLiveQuery(() => db.loanPayments.toArray(), [db]) || [];
+  return useCachedLiveQuery(db, "useLoanPayments", () => db.loanPayments.toArray());
 }
 
 export function SyncIndicator({ isMobile }: { isMobile?: boolean }) {
