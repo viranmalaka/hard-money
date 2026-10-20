@@ -12,6 +12,7 @@ export default defineConfig({
     trace: "on-first-retry",
     timezoneId: "Asia/Colombo",
     locale: "en-LK",
+    serviceWorkers: "block",
   },
   projects: [
     {

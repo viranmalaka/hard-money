@@ -34,7 +34,7 @@ test.describe("Step 1 — App Shell & Flat Design System @s01", () => {
     await expect(sidebar).toHaveAttribute("data-collapsed", "false");
 
     // Collapse sidebar
-    await page.locator('[data-testid="sidebar-toggle"]').click({ force: true });
+    await page.locator('[data-testid="sidebar-toggle"]').click();
     await expect(sidebar).toHaveAttribute("data-collapsed", "true");
 
     // Persists across reload
@@ -47,7 +47,7 @@ test.describe("Step 1 — App Shell & Flat Design System @s01", () => {
     );
 
     // Expand back
-    await page.locator('[data-testid="sidebar-toggle"]').click({ force: true });
+    await page.locator('[data-testid="sidebar-toggle"]').click();
     await expect(page.locator('[data-testid="sidebar"]')).toHaveAttribute(
       "data-collapsed",
       "false",

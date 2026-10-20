@@ -8,6 +8,10 @@ export function PwaManager() {
   const [waitingWorker, setWaitingWorker] = useState<ServiceWorker | null>(null);
 
   useEffect(() => {
+    if (process.env.NODE_ENV !== "production") {
+      return;
+    }
+
     if (typeof window === "undefined" || !("serviceWorker" in navigator)) {
       return;
     }
@@ -62,7 +66,8 @@ export function PwaManager() {
 
     (window as unknown as { __hardMoneyPrimeAssets?: () => Promise<void> }).__hardMoneyPrimeAssets = primeAssetCache;
 
-    // Register service worker
+
+    // Register service worker in production
     navigator.serviceWorker
       .register("/sw.js")
       .then((reg) => {

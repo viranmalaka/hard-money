@@ -60,7 +60,7 @@ export function RegisterForm() {
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="flat-card p-5 space-y-4">
+      <form action="javascript:void(0);" onSubmit={handleSubmit} className="flat-card p-5 space-y-4">
         <div className="space-y-1.5">
           <label
             htmlFor="register-name"

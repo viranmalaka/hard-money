@@ -236,7 +236,7 @@ export default function TransactionsPage() {
             type="button"
             data-testid="theme-toggle"
             onClick={toggleTheme}
-            title={`Switch to ${resolvedTheme === "dark" ? "light" : "dark"} mode`}
+            title={mounted ? `Switch to ${resolvedTheme === "dark" ? "light" : "dark"} mode` : "Toggle Theme"}
             className="p-1.5 rounded text-[var(--text-muted)] hover:text-[var(--text)] transition-colors"
             aria-label="Toggle Theme"
           >

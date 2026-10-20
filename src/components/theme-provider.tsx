@@ -25,10 +25,35 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     const savedTheme = (localStorage.getItem("hardmoney-theme") as Theme) || "system";
     const savedColorSwap = localStorage.getItem("hardmoney-color-swap") === "true";
     queueMicrotask(() => {
-      if (savedTheme !== "system") setThemeState(savedTheme);
-      if (savedColorSwap) setColorSwapState(true);
+      if (savedTheme !== "system") {
+        setThemeState(savedTheme);
+      }
+      if (savedColorSwap) {
+        setColorSwapState(true);
+      }
     });
   }, []);
+
+  const applyTheme = (t: Theme, swap: boolean) => {
+    if (typeof document === "undefined") return;
+    const root = document.documentElement;
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    const isDark = t === "dark" || (t === "system" && media.matches);
+
+    if (t === "system") {
+      root.removeAttribute("data-theme");
+    } else {
+      root.setAttribute("data-theme", t);
+    }
+
+    if (isDark) {
+      root.classList.add("dark");
+    } else {
+      root.classList.remove("dark");
+    }
+
+    root.setAttribute("data-color-swap", swap ? "true" : "false");
+  };
 
   useEffect(() => {
     const media = window.matchMedia("(prefers-color-scheme: dark)");
@@ -37,24 +62,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         theme === "system" ? (media.matches ? "dark" : "light") : theme;
 
       setResolvedTheme(effectiveTheme);
-
-      const root = document.documentElement;
-      if (theme === "system") {
-        root.removeAttribute("data-theme");
-        root.classList.remove("dark");
-        if (media.matches) {
-          root.classList.add("dark");
-        }
-      } else {
-        root.setAttribute("data-theme", theme);
-        if (theme === "dark") {
-          root.classList.add("dark");
-        } else {
-          root.classList.remove("dark");
-        }
-      }
-
-      root.setAttribute("data-color-swap", colorSwap ? "true" : "false");
+      applyTheme(theme, colorSwap);
     };
 
     updateTheme();
@@ -65,18 +73,25 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const toggleTheme = () => {
     const nextTheme: Theme = resolvedTheme === "dark" ? "light" : "dark";
     setThemeState(nextTheme);
+    setResolvedTheme(nextTheme);
     localStorage.setItem("hardmoney-theme", nextTheme);
+    applyTheme(nextTheme, colorSwap);
   };
 
   const setTheme = (newTheme: Theme) => {
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    const effective = newTheme === "system" ? (media.matches ? "dark" : "light") : newTheme;
     setThemeState(newTheme);
+    setResolvedTheme(effective);
     localStorage.setItem("hardmoney-theme", newTheme);
+    applyTheme(newTheme, colorSwap);
   };
 
   const toggleColorSwap = () => {
     setColorSwapState((prev) => {
       const next = !prev;
       localStorage.setItem("hardmoney-color-swap", next ? "true" : "false");
+      applyTheme(theme, next);
       return next;
     });
   };
@@ -84,6 +99,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const setColorSwap = (swap: boolean) => {
     setColorSwapState(swap);
     localStorage.setItem("hardmoney-color-swap", swap ? "true" : "false");
+    applyTheme(theme, swap);
   };
 
   return (

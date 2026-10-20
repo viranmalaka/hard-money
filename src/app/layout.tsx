@@ -13,7 +13,6 @@ import { PwaManager } from "@/components/pwa-manager";
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
   viewportFit: "cover",
   themeColor: [
     { media: "(prefers-color-scheme: light)", color: "#FFFFFF" },
@@ -43,14 +42,13 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <head>
+      <head />
+      <body className="h-screen w-screen overflow-hidden bg-app text-[var(--text)]">
         <script
           dangerouslySetInnerHTML={{
             __html: `(function(){try{var t=localStorage.getItem("hardmoney-theme");var m=window.matchMedia("(prefers-color-scheme: dark)");var d=t==="dark"||(!t&&m.matches);if(d){document.documentElement.classList.add("dark");document.documentElement.setAttribute("data-theme","dark");}else{document.documentElement.classList.remove("dark");document.documentElement.setAttribute("data-theme","light");}if(localStorage.getItem("hardmoney-color-swap")==="true"){document.documentElement.setAttribute("data-color-swap","true");}}catch(e){}})();`,
           }}
         />
-      </head>
-      <body className="h-screen w-screen overflow-hidden bg-app text-[var(--text)]">
         <ThemeProvider>
           <Suspense fallback={null}>
             <SyncProvider>

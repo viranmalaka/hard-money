@@ -30,7 +30,7 @@ test.describe("Step 3: Offline Data Layer & Sync Engine @s03", () => {
     // Appears instantly in UI without network
     await expect(page.getByText("Offline Cash Wallet")).toBeVisible();
     const isMobile = page.viewportSize() ? page.viewportSize()!.width < 768 : false;
-    const indicator = page.getByTestId(isMobile ? "sync-indicator-mobile" : "sync-indicator-desktop");
+    const indicator = page.locator(isMobile ? '[data-testid="sync-indicator-mobile"]:visible' : '[data-testid="sync-indicator-desktop"]:visible');
     await expect(indicator).toBeVisible();
     await expect(indicator).toHaveAttribute("data-sync-state", "offline");
   });
@@ -250,9 +250,8 @@ test.describe("Step 3: Offline Data Layer & Sync Engine @s03", () => {
     // Wait for sync to process
     await page.waitForTimeout(1000);
 
-    // Error badge is shown
     const isMobile = page.viewportSize() ? page.viewportSize()!.width < 768 : false;
-    const indicator = page.getByTestId(isMobile ? "sync-indicator-mobile" : "sync-indicator-desktop");
+    const indicator = page.locator(isMobile ? '[data-testid="sync-indicator-mobile"]:visible' : '[data-testid="sync-indicator-desktop"]:visible');
     await expect(indicator).toBeVisible();
     await expect(indicator).toHaveAttribute("data-sync-state", "error");
 
@@ -341,8 +340,7 @@ test.describe("Step 3: Offline Data Layer & Sync Engine @s03", () => {
     await app.go("accounts");
     await app.waitForSyncIdle();
 
-    const indicatorTestId = isMobile ? "sync-indicator-mobile" : "sync-indicator-desktop";
-    const indicator = page.getByTestId(indicatorTestId);
+    const indicator = page.locator(isMobile ? '[data-testid="sync-indicator-mobile"]:visible' : '[data-testid="sync-indicator-desktop"]:visible');
     await expect(indicator).toBeVisible();
 
     // When offline

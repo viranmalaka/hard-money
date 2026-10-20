@@ -142,7 +142,7 @@ export function Sidebar() {
           type="button"
           data-testid="theme-toggle"
           onClick={toggleTheme}
-          title={`Switch to ${resolvedTheme === "dark" ? "light" : "dark"} mode`}
+          title={mounted ? `Switch to ${resolvedTheme === "dark" ? "light" : "dark"} mode` : "Toggle Theme"}
           className={`w-full flex items-center gap-3 p-2 rounded text-xs text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--border)] transition-colors ${
             collapsed ? "justify-center" : ""
           }`}

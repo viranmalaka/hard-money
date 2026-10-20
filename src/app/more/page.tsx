@@ -45,6 +45,9 @@ export default function MorePage() {
   const [timezone, setTimezone] = useState("Asia/Colombo");
   const [currency, setCurrency] = useState("LKR");
   const [whtRate, setWhtRate] = useState("0.0");
+  const isNameDirtyRef = useRef(false);
+  const isTimezoneDirtyRef = useRef(false);
+  const isCurrencyDirtyRef = useRef(false);
   const isWhtDirtyRef = useRef(false);
   const [savedNotice, setSavedNotice] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -141,17 +144,19 @@ export default function MorePage() {
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
     fetch("/api/user/settings", { cache: "no-store" })
       .then((res) => {
         if (!res.ok) return null;
         return res.json();
       })
       .then((data) => {
+        if (cancelled) return;
         if (data?.user) {
           setUser(data.user);
-          setName(data.user.name || "");
-          setTimezone(data.user.timezone || "Asia/Colombo");
-          setCurrency(data.user.defaultCurrency || "LKR");
+          if (!isNameDirtyRef.current) setName(data.user.name || "");
+          if (!isTimezoneDirtyRef.current) setTimezone(data.user.timezone || "Asia/Colombo");
+          if (!isCurrencyDirtyRef.current) setCurrency(data.user.defaultCurrency || "LKR");
           if (!isWhtDirtyRef.current && data.user.defaultWithholdingTaxRateBps !== undefined) {
             setWhtRate(((data.user.defaultWithholdingTaxRateBps || 0) / 100).toFixed(1));
           }
@@ -163,6 +168,10 @@ export default function MorePage() {
     fetchGeminiSettings();
     fetchInboxCount();
     fetchPushSettings();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const handleSaveReminders = async (e: React.FormEvent) => {
@@ -271,6 +280,10 @@ export default function MorePage() {
       });
 
       if (res.ok) {
+        isNameDirtyRef.current = false;
+        isTimezoneDirtyRef.current = false;
+        isCurrencyDirtyRef.current = false;
+        isWhtDirtyRef.current = false;
         const data = await res.json();
         if (data?.user) {
           setUser(data.user);
@@ -415,7 +428,13 @@ export default function MorePage() {
                 data-testid="settings-name"
                 type="text"
                 value={name}
-                onChange={(e) => setName(e.target.value)}
+                onFocus={() => {
+                  isNameDirtyRef.current = true;
+                }}
+                onChange={(e) => {
+                  isNameDirtyRef.current = true;
+                  setName(e.target.value);
+                }}
                 className="w-full h-8 px-2.5 rounded bg-[var(--bg)] border border-hairline text-xs text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
               />
             </div>
@@ -433,7 +452,13 @@ export default function MorePage() {
                 type="text"
                 list="timezones-list"
                 value={timezone}
-                onChange={(e) => setTimezone(e.target.value)}
+                onFocus={() => {
+                  isTimezoneDirtyRef.current = true;
+                }}
+                onChange={(e) => {
+                  isTimezoneDirtyRef.current = true;
+                  setTimezone(e.target.value);
+                }}
                 className="w-full h-8 px-2.5 rounded bg-[var(--bg)] border border-hairline text-xs text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
               />
               <datalist id="timezones-list">
@@ -463,7 +488,13 @@ export default function MorePage() {
                 list="currencies-list"
                 maxLength={3}
                 value={currency}
-                onChange={(e) => setCurrency(e.target.value.toUpperCase())}
+                onFocus={() => {
+                  isCurrencyDirtyRef.current = true;
+                }}
+                onChange={(e) => {
+                  isCurrencyDirtyRef.current = true;
+                  setCurrency(e.target.value.toUpperCase());
+                }}
                 className="w-full h-8 px-2.5 rounded bg-[var(--bg)] border border-hairline text-xs text-[var(--text)] uppercase focus:outline-none focus:border-[var(--accent)]"
               />
               <datalist id="currencies-list">

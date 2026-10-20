@@ -93,7 +93,11 @@ export function SettleModal({
         excludeFromBalance: false,
       });
 
-      await sync();
+      try {
+        await sync();
+      } catch {
+        // Background sync will retry
+      }
       onClose();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to process settlement");

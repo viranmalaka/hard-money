@@ -7,17 +7,17 @@ export class AuthHelper {
   constructor(public page: Page) {}
 
   async register(data: { name: string; email: string; password?: string }) {
+    await this.page.context().clearCookies();
     await this.page.goto("/register");
-    const nameInput = this.page.locator('[data-testid="register-name"]');
+    const nameInput = this.page.locator('[data-testid="register-name"]').first();
     await nameInput.waitFor({ state: "visible" });
     await nameInput.click();
     await nameInput.fill(data.name);
-    await this.page.fill('[data-testid="register-email"]', data.email);
-    await this.page.fill(
-      '[data-testid="register-password"]',
+    await this.page.locator('[data-testid="register-email"]').first().fill(data.email);
+    await this.page.locator('[data-testid="register-password"]').first().fill(
       data.password || "password123"
     );
-    await this.page.click('[data-testid="register-submit"]');
+    await this.page.locator('[data-testid="register-submit"]').first().click();
     await expect(this.page).toHaveURL("/");
     const sessionRes = await this.page.request.get("http://localhost:3000/api/auth/session");
     const sessionData = await sessionRes.json().catch(() => ({}));
@@ -25,13 +25,13 @@ export class AuthHelper {
   }
 
   async login(credentials: { email: string; password?: string }) {
+    await this.page.context().clearCookies();
     await this.page.goto("/login");
-    await this.page.fill('[data-testid="login-email"]', credentials.email);
-    await this.page.fill(
-      '[data-testid="login-password"]',
+    await this.page.locator('[data-testid="login-email"]').first().fill(credentials.email);
+    await this.page.locator('[data-testid="login-password"]').first().fill(
       credentials.password || "password123"
     );
-    await this.page.click('[data-testid="login-submit"]');
+    await this.page.locator('[data-testid="login-submit"]').first().click();
     await expect(this.page).toHaveURL("/");
   }
 

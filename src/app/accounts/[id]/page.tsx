@@ -307,7 +307,7 @@ function AccountDetailContent() {
           </div>
           <div>
             <span className="text-[11px] text-[var(--text-muted)] block">Available Credit</span>
-            <span data-testid="credit-available-amount" className="font-mono font-semibold text-income">
+            <span data-testid="available-credit-display" className="font-mono font-semibold text-income">
               {formatMoney(cycle.availableCreditMinor)}
             </span>
           </div>

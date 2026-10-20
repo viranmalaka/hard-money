@@ -280,6 +280,7 @@ export async function POST(
               categoryId: t.categoryId || null,
               amountMinor: t.amountMinor,
               type: t.type || "EXPENSE",
+              subType: t.subType || null,
               direction: t.direction || (t.type === "INCOME" ? "IN" : "OUT"),
               source: t.source || "MANUAL",
               createdByUserId: t.createdByUserId || t.userId,
@@ -298,6 +299,8 @@ export async function POST(
             update: {
               amountMinor: t.amountMinor,
               type: t.type || "EXPENSE",
+              subType: t.subType || null,
+              note: t.note || null,
               transactionDate: new Date(t.transactionDate),
               excludeFromBudget: t.excludeFromBudget || false,
               excludeFromStats: t.excludeFromStats || false,

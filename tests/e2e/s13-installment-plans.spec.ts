@@ -124,47 +124,49 @@ test.describe("Step 13 — 0% Installment Plans @s13", () => {
       seededAccounts
     );
 
+    const seededTransactions = (options?.transactions || []).map((t, idx) => ({
+      id: t.id || `tx-${idx + 1}`,
+      userId,
+      accountId: t.accountId || "acc-card",
+      toAccountId: t.toAccountId || null,
+      categoryId: t.categoryId || "cat-general",
+      amountMinor: t.amountMinor,
+      type: t.type || "EXPENSE",
+      subType: t.subType || null,
+      direction: t.direction || (t.type === "INCOME" ? "IN" : "OUT"),
+      source: t.source || "MANUAL",
+      transactionDate: t.transactionDate || "2026-10-15",
+      note: t.note || null,
+      isSplit: false,
+      splitItems: [],
+      excludeFromBudget: t.excludeFromBudget || false,
+      excludeFromStats: t.excludeFromStats || false,
+      excludeFromBalance: t.excludeFromBalance || false,
+      installmentPlanId: t.installmentPlanId || null,
+      serverSeq: 0,
+      createdAt: now,
+      updatedAt: now,
+    }));
+
     // Also seed to server DB so sync push and tick operations have corresponding entities
     await page.request.post("/api/test/seed", {
       data: {
         accounts: seededAccounts,
+        transactions: seededTransactions,
       },
     });
 
-    if (options?.transactions && options.transactions.length > 0) {
+    if (seededTransactions.length > 0) {
       await page.evaluate(
-        async ({ txsToPut, uId, timestamp }) => {
+        async (txs) => {
           const db = (window as unknown as {
             __hardMoneyDb: {
               transactions: { bulkPut: (t: unknown[]) => Promise<void> };
             };
           }).__hardMoneyDb;
-          const fullTxs = txsToPut.map((t, idx) => ({
-            id: t.id || `tx-${idx + 1}`,
-            userId: uId,
-            accountId: t.accountId || "acc-card",
-            toAccountId: t.toAccountId || null,
-            categoryId: t.categoryId || "cat-general",
-            amountMinor: t.amountMinor,
-            type: t.type || "EXPENSE",
-            subType: t.subType || null,
-            direction: t.direction || (t.type === "INCOME" ? "IN" : "OUT"),
-            source: t.source || "MANUAL",
-            transactionDate: t.transactionDate || "2026-10-15",
-            note: t.note || null,
-            isSplit: false,
-            splitItems: [],
-            excludeFromBudget: t.excludeFromBudget || false,
-            excludeFromStats: t.excludeFromStats || false,
-            excludeFromBalance: t.excludeFromBalance || false,
-            installmentPlanId: t.installmentPlanId || null,
-            serverSeq: 0,
-            createdAt: timestamp,
-            updatedAt: timestamp,
-          }));
-          await db.transactions.bulkPut(fullTxs);
+          await db.transactions.bulkPut(txs);
         },
-        { txsToPut: options.transactions, uId: userId, timestamp: now }
+        seededTransactions
       );
     }
 

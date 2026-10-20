@@ -253,9 +253,10 @@ test.describe("Step 7 — Transaction Lifecycle, Splits & Templates @s07", () =>
 
   test("S07-04: Delete syncs: delete on device 1, device 2 loses the row (two contexts)", async ({
     browser,
+    page,
   }) => {
     // Device 1
-    const ctx1 = await browser.newContext();
+    const ctx1 = await browser.newContext({ viewport: page.viewportSize() || undefined });
     const page1 = await ctx1.newPage();
     const app1 = new AppHelper(page1, ctx1);
     await app1.testApi.reset();
@@ -283,7 +284,7 @@ test.describe("Step 7 — Transaction Lifecycle, Splits & Templates @s07", () =>
     await app1.waitForSyncIdle();
 
     // Device 2: login with same account
-    const ctx2 = await browser.newContext();
+    const ctx2 = await browser.newContext({ viewport: page.viewportSize() || undefined });
     const page2 = await ctx2.newPage();
     const app2 = new AppHelper(page2, ctx2);
     await app2.auth.login({ email: "twodevices@example.com", password: "password123" });
@@ -297,12 +298,10 @@ test.describe("Step 7 — Transaction Lifecycle, Splits & Templates @s07", () =>
     await page1.locator('[data-testid^="transaction-row-"]').first().click();
     await page1.click('[data-testid="transaction-delete-btn"]');
     await page1.click('[data-testid="confirm-delete-btn"]');
-    await app1.waitForSyncIdle();
+    await app1.triggerSync();
 
     // Sync on Device 2
-    const isMobile2 = page2.viewportSize() ? page2.viewportSize()!.width < 768 : false;
-    await page2.click(`[data-testid="${isMobile2 ? "sync-indicator-mobile" : "sync-indicator-desktop"}"]`);
-    await app2.waitForSyncIdle();
+    await app2.triggerSync();
 
     // Row is deleted on Device 2
     await expect(page2.locator('[data-testid^="transaction-row-"]')).not.toBeVisible();

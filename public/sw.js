@@ -55,9 +55,10 @@ self.addEventListener("message", (event) => {
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
 
-  // Ignore API requests, HMR sockets & hot updates
+  // Ignore API requests, Next.js assets/HMR sockets & hot updates
   if (
     url.pathname.startsWith("/api/") ||
+    url.pathname.startsWith("/_next/") ||
     url.pathname.includes("webpack-hmr") ||
     url.pathname.includes("hot-update") ||
     event.request.method !== "GET"
