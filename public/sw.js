@@ -1,5 +1,5 @@
 // Hard Money Service Worker - Local-first PWA Shell & Push Notifications
-const CACHE_VERSION = "hardmoney-v4";
+const CACHE_VERSION = "hardmoney-v5";
 const PRECACHE_ASSETS = [
   "/offline",
   "/manifest.json",
