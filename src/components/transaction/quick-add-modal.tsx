@@ -13,6 +13,7 @@ import {
 import { useQuickAdd, TransactionType } from "./quick-add-context";
 import { CategoryIcon } from "@/components/ui/category-icon";
 import { NumberKeypadPopup } from "@/components/ui/number-keypad-popup";
+import { MobileQuickAdd } from "./mobile-quick-add";
 
 /**
  * Returns today's date in YYYY-MM-DD formatted for Asia/Colombo or local timezone
@@ -234,14 +235,46 @@ function QuickAddModalContent() {
   };
 
   return (
-    <div
-      data-testid="quick-add-sheet"
-      className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-end md:items-center justify-center p-0 md:p-4 select-none overflow-y-auto"
-    >
+    <>
+      {/* Mobile Native View (< md) */}
+      <MobileQuickAdd
+        type={type}
+        setType={setType}
+        date={date}
+        setDate={setDate}
+        expression={expression}
+        evalResult={evalResult}
+        onKeypadClick={onKeypadClick}
+        accountId={accountId}
+        setAccountId={setAccountId}
+        toAccountId={toAccountId}
+        setToAccountId={setToAccountId}
+        categoryId={categoryId}
+        setCategoryId={setCategoryId}
+        note={note}
+        setNote={setNote}
+        excludeFromBudget={excludeFromBudget}
+        setExcludeFromBudget={setExcludeFromBudget}
+        activeAccounts={activeAccounts}
+        categories={categories}
+        templates={templates}
+        handleApplyTemplate={handleApplyTemplate}
+        errorMsg={errorMsg}
+        setErrorMsg={setErrorMsg}
+        validateAndSubmit={validateAndSubmit}
+        closeQuickAdd={closeQuickAdd}
+        isDivisionByZero={isDivisionByZero}
+      />
+
+      {/* Desktop Modal Sheet (>= md) */}
       <div
-        data-testid="quick-add-dialog"
-        className="w-full md:max-w-md bg-[var(--surface)] border border-hairline rounded-t-2xl md:rounded-xl shadow-2xl flex flex-col modal-sheet-dialog overflow-hidden"
+        data-testid="quick-add-sheet"
+        className="hidden md:flex fixed inset-0 z-50 bg-black/60 backdrop-blur-xs items-center justify-center p-4 select-none overflow-y-auto"
       >
+        <div
+          data-testid="quick-add-dialog"
+          className="w-full max-w-md bg-[var(--surface)] border border-hairline rounded-xl shadow-2xl flex flex-col modal-sheet-dialog overflow-hidden"
+        >
         {/* Header: Type Tabs & Close */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-hairline bg-[var(--surface)] shrink-0">
           {/* 3-State Type Switcher */}
@@ -545,6 +578,7 @@ function QuickAddModalContent() {
         </div>
       </div>
     </div>
+    </>
   );
 }
 

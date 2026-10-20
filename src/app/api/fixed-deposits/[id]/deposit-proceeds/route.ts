@@ -121,5 +121,11 @@ export async function POST(
     },
   });
 
-  return NextResponse.json({ ok: true, fixedDeposit: updatedFd });
+  return NextResponse.json({
+    ok: true,
+    fixedDeposit: {
+      ...updatedFd,
+      serverSeq: Number(updatedFd.serverSeq),
+    },
+  });
 }
