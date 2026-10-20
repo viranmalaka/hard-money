@@ -20,18 +20,24 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setThemeState] = useState<Theme>("system");
   const [resolvedTheme, setResolvedTheme] = useState<"light" | "dark">("light");
   const [colorSwap, setColorSwapState] = useState<boolean>(false);
+  const initializedRef = React.useRef(false);
 
   useEffect(() => {
-    const savedTheme = (localStorage.getItem("hardmoney-theme") as Theme) || "system";
-    const savedColorSwap = localStorage.getItem("hardmoney-color-swap") === "true";
-    queueMicrotask(() => {
-      if (savedTheme !== "system") {
-        setThemeState(savedTheme);
-      }
-      if (savedColorSwap) {
-        setColorSwapState(true);
-      }
-    });
+    try {
+      const savedTheme = (localStorage.getItem("hardmoney-theme") as Theme) || "system";
+      const savedColorSwap = localStorage.getItem("hardmoney-color-swap") === "true";
+      queueMicrotask(() => {
+        if (savedTheme !== "system") {
+          setThemeState(savedTheme);
+        }
+        if (savedColorSwap) {
+          setColorSwapState(true);
+        }
+        initializedRef.current = true;
+      });
+    } catch {
+      // ignore
+    }
   }, []);
 
   const applyTheme = (t: Theme, swap: boolean) => {
@@ -58,11 +64,20 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const media = window.matchMedia("(prefers-color-scheme: dark)");
     const updateTheme = () => {
+      let activeTheme = theme;
+      let activeSwap = colorSwap;
+      if (!initializedRef.current && typeof window !== "undefined") {
+        const saved = localStorage.getItem("hardmoney-theme") as Theme | null;
+        if (saved) activeTheme = saved;
+        const savedSwap = localStorage.getItem("hardmoney-color-swap");
+        if (savedSwap !== null) activeSwap = savedSwap === "true";
+      }
+
       const effectiveTheme =
-        theme === "system" ? (media.matches ? "dark" : "light") : theme;
+        activeTheme === "system" ? (media.matches ? "dark" : "light") : activeTheme;
 
       setResolvedTheme(effectiveTheme);
-      applyTheme(theme, colorSwap);
+      applyTheme(activeTheme, activeSwap);
     };
 
     updateTheme();

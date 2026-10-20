@@ -163,6 +163,7 @@ test.describe("Step 2 — Authentication & User Settings @s02", () => {
     });
 
     await app.go("more");
+    await page.click('[data-testid="more-preferences-link"]');
 
     // Wait for settings to load
     await expect(page.locator('[data-testid="settings-name"]')).toHaveValue(

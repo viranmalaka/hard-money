@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useMemo, useCallback, useRef } from "react";
-import { X, AlertCircle } from "lucide-react";
+import { X, AlertCircle, Calculator } from "lucide-react";
 import { useAccounts, useCategories, useTemplates, useSync } from "@/components/sync-provider";
 import { LocalTemplate } from "@/lib/db";
 import { localCreateTransaction } from "@/lib/sync/client";
@@ -11,6 +11,8 @@ import {
   KeypadToken,
 } from "@/lib/finance-core/calculator";
 import { useQuickAdd, TransactionType } from "./quick-add-context";
+import { CategoryIcon } from "@/components/ui/category-icon";
+import { NumberKeypadPopup } from "@/components/ui/number-keypad-popup";
 
 /**
  * Returns today's date in YYYY-MM-DD formatted for Asia/Colombo or local timezone
@@ -59,6 +61,7 @@ function QuickAddModalContent() {
   const [note, setNote] = useState<string>("");
   const [excludeFromBudget, setExcludeFromBudget] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string>("");
+  const [isKeypadOpen, setIsKeypadOpen] = useState(true);
 
   const handleApplyTemplate = (tmpl: LocalTemplate) => {
     if (tmpl.type === "EXPENSE" || tmpl.type === "INCOME" || tmpl.type === "TRANSFER") {
@@ -112,10 +115,14 @@ function QuickAddModalContent() {
   }, [expression]);
 
   // Keypad button click handler
-  const onKeypadClick = useCallback((token: KeypadToken) => {
+  const onKeypadClick = useCallback((token: string) => {
     setErrorMsg("");
+    if (token === "C") {
+      setExpression("");
+      return;
+    }
     setExpression((prev) => {
-      const res = handleKeypadPress(prev, token);
+      const res = handleKeypadPress(prev, token as KeypadToken);
       if (res.error) {
         setErrorMsg(res.error);
       }
@@ -393,87 +400,54 @@ function QuickAddModalContent() {
               </span>
             </div>
 
-            <input
-              ref={amountInputRef}
-              type="text"
-              data-testid="quick-add-amount"
-              inputMode="none"
-              value={expression || "0"}
-              onKeyDown={handleKeyDown}
-              readOnly
-              className="w-full text-2xl font-bold font-mono tracking-tight bg-transparent text-[var(--text)] focus:outline-none text-right tabular-nums cursor-default"
-            />
-          </div>
-
-          {/* Embedded Arithmetic Keypad */}
-          <div className="grid grid-cols-4 gap-1.5 p-1 bg-[var(--bg)] rounded-lg border border-hairline">
-            {/* Row 1 */}
-            <KeypadButton id="keypad-7" label="7" onClick={() => onKeypadClick("7")} />
-            <KeypadButton id="keypad-8" label="8" onClick={() => onKeypadClick("8")} />
-            <KeypadButton id="keypad-9" label="9" onClick={() => onKeypadClick("9")} />
-            <KeypadButton
-              id="keypad-divide"
-              label="÷"
-              className="bg-[var(--border)] font-semibold text-sm"
-              onClick={() => onKeypadClick("÷")}
-            />
-
-            {/* Row 2 */}
-            <KeypadButton id="keypad-4" label="4" onClick={() => onKeypadClick("4")} />
-            <KeypadButton id="keypad-5" label="5" onClick={() => onKeypadClick("5")} />
-            <KeypadButton id="keypad-6" label="6" onClick={() => onKeypadClick("6")} />
-            <KeypadButton
-              id="keypad-multiply"
-              label="×"
-              className="bg-[var(--border)] font-semibold text-sm"
-              onClick={() => onKeypadClick("×")}
-            />
-
-            {/* Row 3 */}
-            <KeypadButton id="keypad-1" label="1" onClick={() => onKeypadClick("1")} />
-            <KeypadButton id="keypad-2" label="2" onClick={() => onKeypadClick("2")} />
-            <KeypadButton id="keypad-3" label="3" onClick={() => onKeypadClick("3")} />
-            <KeypadButton
-              id="keypad-minus"
-              label="−"
-              className="bg-[var(--border)] font-semibold text-sm"
-              onClick={() => onKeypadClick("-")}
-            />
-
-            {/* Row 4 */}
-            <KeypadButton id="keypad-dot" label="." onClick={() => onKeypadClick(".")} />
-            <KeypadButton id="keypad-0" label="0" onClick={() => onKeypadClick("0")} />
-            <KeypadButton
-              id="keypad-backspace"
-              label="⌫"
-              className="text-xs"
-              onClick={() => onKeypadClick("⌫")}
-            />
-            <KeypadButton
-              id="keypad-plus"
-              label="+"
-              className="bg-[var(--border)] font-semibold text-sm"
-              onClick={() => onKeypadClick("+")}
-            />
-          </div>
-
-          {/* Equals Row for Explicit Evaluation */}
-          <div className="flex justify-end">
-            <button
-              type="button"
-              data-testid="keypad-equals"
-              onClick={() => onKeypadClick("=")}
-              className="w-full py-1.5 rounded border border-hairline bg-[var(--border)] font-mono text-sm font-semibold hover:bg-[var(--border)]/80 text-[var(--text)] transition-colors"
+            <div
+              onClick={() => setIsKeypadOpen(true)}
+              className="flex items-center justify-between cursor-pointer"
             >
-              =
-            </button>
+              <input
+                ref={amountInputRef}
+                type="text"
+                data-testid="quick-add-amount"
+                inputMode="none"
+                value={expression || "0"}
+                onKeyDown={handleKeyDown}
+                onClick={() => setIsKeypadOpen(true)}
+                onFocus={() => setIsKeypadOpen(true)}
+                readOnly
+                className="w-full text-2xl font-bold font-mono tracking-tight bg-transparent text-[var(--text)] focus:outline-none text-right tabular-nums cursor-pointer"
+              />
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsKeypadOpen(!isKeypadOpen);
+                }}
+                className={`ml-2 p-1.5 rounded border border-hairline transition-colors ${
+                  isKeypadOpen
+                    ? "bg-[var(--accent)] text-white border-[var(--accent)]"
+                    : "bg-[var(--surface)] text-[var(--text-muted)] hover:text-[var(--text)]"
+                }`}
+                title="Toggle Calculator Keypad"
+              >
+                <Calculator size={16} />
+              </button>
+            </div>
           </div>
+
+          {/* On-Demand Pop-Up Arithmetic Keypad */}
+          <NumberKeypadPopup
+            isOpen={isKeypadOpen}
+            onClose={() => setIsKeypadOpen(false)}
+            onKeypadClick={onKeypadClick}
+            expression={expression}
+            previewValue={evalResult.isValid ? evalResult.displayValue : undefined}
+          />
 
           {/* Category Selector Grid (Only for Expense & Income) */}
           {type !== "TRANSFER" && (
             <div className="space-y-1.5">
               <label className="text-[11px] font-medium text-[var(--text-muted)]">Category</label>
-              <div className="grid grid-cols-4 gap-1.5 max-h-32 overflow-y-auto p-1 rounded border border-hairline bg-[var(--bg)]">
+              <div className="grid grid-cols-4 gap-1.5 max-h-36 overflow-y-auto p-1.5 rounded border border-hairline bg-[var(--bg)]">
                 {categories.map((cat) => {
                   const isSelected = categoryId === cat.id;
                   return (
@@ -489,9 +463,11 @@ function QuickAddModalContent() {
                       }`}
                     >
                       <span
-                        className="w-3 h-3 rounded-full mb-1 shrink-0"
+                        className="w-6 h-6 rounded-full flex items-center justify-center mb-1 shrink-0 text-white shadow-xs"
                         style={{ backgroundColor: cat.color || "#888" }}
-                      />
+                      >
+                        <CategoryIcon name={cat.icon} size={13} className="text-white" />
+                      </span>
                       <span className="text-[10px] truncate max-w-full leading-tight">
                         {cat.name}
                       </span>
@@ -572,25 +548,3 @@ function QuickAddModalContent() {
   );
 }
 
-function KeypadButton({
-  id,
-  label,
-  className = "",
-  onClick,
-}: {
-  id: string;
-  label: string;
-  className?: string;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      data-testid={id}
-      onClick={onClick}
-      className={`py-3 rounded font-mono text-sm font-medium hover:bg-[var(--border)] active:bg-[var(--border)] transition-colors text-[var(--text)] ${className}`}
-    >
-      {label}
-    </button>
-  );
-}

@@ -169,6 +169,25 @@ nextjs-portal {
   pointer-events: none !important;
 }
 
+/* Theme-aware styled <select> dropdowns with matching right chevron arrow */
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%236B7075' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.65rem center;
+  background-size: 1rem 1rem;
+  padding-right: 2rem !important;
+  color-scheme: light;
+}
+
+.dark select,
+[data-theme="dark"] select,
+html.dark select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%239A9EA3' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  color-scheme: dark;
+}
+
 /* Prevent iOS Safari auto-zoom on input focus by ensuring at least 16px font-size */
 @media screen and (max-width: 768px) {
   input:not([type="checkbox"]):not([type="radio"]),
@@ -178,9 +197,9 @@ nextjs-portal {
   }
 }
 
-/* Safe-area utilities for notched mobile displays & PWA standalone mode */
+/* Safe-area utilities for notched mobile displays & PWA standalone mode (+5px notch clearance) */
 .pt-shell-safe {
-  padding-top: env(safe-area-inset-top, 0px);
+  padding-top: calc(env(safe-area-inset-top, 0px) + 5px);
   padding-left: env(safe-area-inset-left, 0px);
   padding-right: env(safe-area-inset-right, 0px);
 }
@@ -221,7 +240,7 @@ nextjs-portal {
 }
 
 .modal-sheet-dialog {
-  max-height: calc(100dvh - env(safe-area-inset-top, 0px) - 0.75rem);
+  max-height: calc(100dvh - env(safe-area-inset-top, 0px) - 5px - 0.75rem);
 }
 
 @media (min-width: 768px) {
@@ -229,5 +248,6 @@ nextjs-portal {
     max-height: 90dvh;
   }
 }
+
 
 

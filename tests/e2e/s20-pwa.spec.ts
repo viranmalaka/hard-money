@@ -135,7 +135,7 @@ test.describe("Step 20 — PWA, Offline Shell & Push Reminders @s20", () => {
   test("S20-08: More page displays Notifications & Reminders section", async ({
     page,
   }) => {
-    await page.goto("/more");
+    await page.goto("/more/preferences");
     await expect(page.locator("text=Notifications & Reminders")).toBeVisible();
     await expect(page.locator('[data-testid="toggle-reminders"]')).toBeAttached();
     await expect(page.locator('[data-testid="save-reminders-btn"]')).toBeVisible();

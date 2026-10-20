@@ -14,6 +14,7 @@ test.describe("Step 15: Gemini Fallback, Validation Gate & Review Inbox @s15", (
     await app.waitForSyncIdle();
 
     await app.go("more");
+    await page.click('[data-testid="more-developer-link"]');
 
     const keyInput = page.locator('[data-testid="gemini-api-key-input"]');
     await expect(keyInput).toBeVisible();
@@ -140,7 +141,7 @@ test.describe("Step 15: Gemini Fallback, Validation Gate & Review Inbox @s15", (
 
     // Verify transaction created
     const snapshot = await app.testApi.getSnapshot();
-    const createdTx = snapshot.transactions.find((t: any) => t.accountId === "acc-gemini-auto");
+    const createdTx = snapshot.transactions.find((t: { accountId?: string }) => t.accountId === "acc-gemini-auto");
     expect(createdTx).toBeDefined();
     expect(createdTx.amountMinor).toBe(385050);
 
@@ -549,7 +550,7 @@ test.describe("Step 15: Gemini Fallback, Validation Gate & Review Inbox @s15", (
     expect(snapshot.transactions.length).toBe(0);
 
     // Verify DB item has status IGNORED_NON_TX
-    const dbSms = snapshot.bankSms.find((s: any) => s.sender === "SPAMBANK");
+    const dbSms = snapshot.bankSms.find((s: { sender?: string }) => s.sender === "SPAMBANK");
     expect(dbSms.status).toBe("IGNORED_NON_TX");
   });
 
@@ -674,6 +675,7 @@ test.describe("Step 15: Gemini Fallback, Validation Gate & Review Inbox @s15", (
     await app.waitForSyncIdle();
 
     await app.go("more");
+    await page.click('[data-testid="more-developer-link"]');
 
     // Privacy disclosure visible
     const disclosure = page.locator('[data-testid="gemini-privacy-disclosure"]');

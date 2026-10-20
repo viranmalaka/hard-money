@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useMemo, useCallback } from "react";
-import { X, Scale, AlertCircle } from "lucide-react";
+import { X, Scale, AlertCircle, Calculator } from "lucide-react";
 import { useCategories, useSync } from "@/components/sync-provider";
 import { localCreateTransaction, localCreateCategory } from "@/lib/sync/client";
 import { LocalAccount } from "@/lib/db";
@@ -11,6 +11,7 @@ import {
   handleKeypadPress,
   KeypadToken,
 } from "@/lib/finance-core/calculator";
+import { NumberKeypadPopup } from "@/components/ui/number-keypad-popup";
 
 function getTodayDateString(): string {
   try {
@@ -78,15 +79,20 @@ function CalibrationModalContent({
   const [expression, setExpression] = useState<string>(initialValueStr);
   const [note, setNote] = useState<string>("");
   const [errorMsg, setErrorMsg] = useState<string>("");
+  const [isKeypadOpen, setIsKeypadOpen] = useState(true);
 
   const evalResult = useMemo(() => {
     return evaluateExpression(expression);
   }, [expression]);
 
-  const onKeypadClick = useCallback((token: KeypadToken) => {
+  const onKeypadClick = useCallback((token: string) => {
     setErrorMsg("");
+    if (token === "C") {
+      setExpression("");
+      return;
+    }
     setExpression((prev) => {
-      const res = handleKeypadPress(prev, token);
+      const res = handleKeypadPress(prev, token as KeypadToken);
       if (res.error) {
         setErrorMsg(res.error);
       }
@@ -268,151 +274,48 @@ function CalibrationModalContent({
               </span>
             </div>
 
-            <input
-              type="text"
-              data-testid="real-balance-input"
-              inputMode="none"
-              value={expression || "0"}
-              onKeyDown={handleKeyDown}
-              readOnly
-              className="w-full text-2xl font-bold font-mono tracking-tight bg-transparent text-[var(--text)] focus:outline-none text-right tabular-nums cursor-default"
-            />
+            <div
+              onClick={() => setIsKeypadOpen(true)}
+              className="flex items-center justify-between cursor-pointer"
+            >
+              <input
+                type="text"
+                data-testid="real-balance-input"
+                inputMode="none"
+                value={expression || "0"}
+                onKeyDown={handleKeyDown}
+                onClick={() => setIsKeypadOpen(true)}
+                onFocus={() => setIsKeypadOpen(true)}
+                readOnly
+                className="w-full text-2xl font-bold font-mono tracking-tight bg-transparent text-[var(--text)] focus:outline-none text-right tabular-nums cursor-pointer"
+              />
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsKeypadOpen(!isKeypadOpen);
+                }}
+                className={`ml-2 p-1.5 rounded border border-hairline transition-colors ${
+                  isKeypadOpen
+                    ? "bg-[var(--accent)] text-white border-[var(--accent)]"
+                    : "bg-[var(--surface)] text-[var(--text-muted)] hover:text-[var(--text)]"
+                }`}
+                title="Toggle Calculator Keypad"
+              >
+                <Calculator size={16} />
+              </button>
+            </div>
           </div>
 
-          {/* Keypad */}
-          <div className="grid grid-cols-4 gap-1.5 p-1 bg-[var(--bg)] rounded-lg border border-hairline">
-            <button
-              type="button"
-              data-testid="keypad-7"
-              onClick={() => onKeypadClick("7")}
-              className="py-2.5 rounded font-mono text-sm font-medium hover:bg-[var(--border)] active:bg-[var(--border)] text-[var(--text)]"
-            >
-              7
-            </button>
-            <button
-              type="button"
-              data-testid="keypad-8"
-              onClick={() => onKeypadClick("8")}
-              className="py-2.5 rounded font-mono text-sm font-medium hover:bg-[var(--border)] active:bg-[var(--border)] text-[var(--text)]"
-            >
-              8
-            </button>
-            <button
-              type="button"
-              data-testid="keypad-9"
-              onClick={() => onKeypadClick("9")}
-              className="py-2.5 rounded font-mono text-sm font-medium hover:bg-[var(--border)] active:bg-[var(--border)] text-[var(--text)]"
-            >
-              9
-            </button>
-            <button
-              type="button"
-              data-testid="keypad-divide"
-              onClick={() => onKeypadClick("÷")}
-              className="py-2.5 rounded font-mono text-sm font-semibold bg-[var(--border)] text-[var(--text)]"
-            >
-              ÷
-            </button>
-
-            <button
-              type="button"
-              data-testid="keypad-4"
-              onClick={() => onKeypadClick("4")}
-              className="py-2.5 rounded font-mono text-sm font-medium hover:bg-[var(--border)] active:bg-[var(--border)] text-[var(--text)]"
-            >
-              4
-            </button>
-            <button
-              type="button"
-              data-testid="keypad-5"
-              onClick={() => onKeypadClick("5")}
-              className="py-2.5 rounded font-mono text-sm font-medium hover:bg-[var(--border)] active:bg-[var(--border)] text-[var(--text)]"
-            >
-              5
-            </button>
-            <button
-              type="button"
-              data-testid="keypad-6"
-              onClick={() => onKeypadClick("6")}
-              className="py-2.5 rounded font-mono text-sm font-medium hover:bg-[var(--border)] active:bg-[var(--border)] text-[var(--text)]"
-            >
-              6
-            </button>
-            <button
-              type="button"
-              data-testid="keypad-multiply"
-              onClick={() => onKeypadClick("×")}
-              className="py-2.5 rounded font-mono text-sm font-semibold bg-[var(--border)] text-[var(--text)]"
-            >
-              ×
-            </button>
-
-            <button
-              type="button"
-              data-testid="keypad-1"
-              onClick={() => onKeypadClick("1")}
-              className="py-2.5 rounded font-mono text-sm font-medium hover:bg-[var(--border)] active:bg-[var(--border)] text-[var(--text)]"
-            >
-              1
-            </button>
-            <button
-              type="button"
-              data-testid="keypad-2"
-              onClick={() => onKeypadClick("2")}
-              className="py-2.5 rounded font-mono text-sm font-medium hover:bg-[var(--border)] active:bg-[var(--border)] text-[var(--text)]"
-            >
-              2
-            </button>
-            <button
-              type="button"
-              data-testid="keypad-3"
-              onClick={() => onKeypadClick("3")}
-              className="py-2.5 rounded font-mono text-sm font-medium hover:bg-[var(--border)] active:bg-[var(--border)] text-[var(--text)]"
-            >
-              3
-            </button>
-            <button
-              type="button"
-              data-testid="keypad-minus"
-              onClick={() => onKeypadClick("-")}
-              className="py-2.5 rounded font-mono text-sm font-semibold bg-[var(--border)] text-[var(--text)]"
-            >
-              −
-            </button>
-
-            <button
-              type="button"
-              data-testid="keypad-dot"
-              onClick={() => onKeypadClick(".")}
-              className="py-2.5 rounded font-mono text-sm font-medium hover:bg-[var(--border)] active:bg-[var(--border)] text-[var(--text)]"
-            >
-              .
-            </button>
-            <button
-              type="button"
-              data-testid="keypad-0"
-              onClick={() => onKeypadClick("0")}
-              className="py-2.5 rounded font-mono text-sm font-medium hover:bg-[var(--border)] active:bg-[var(--border)] text-[var(--text)]"
-            >
-              0
-            </button>
-            <button
-              type="button"
-              data-testid="keypad-backspace"
-              onClick={() => onKeypadClick("⌫")}
-              className="py-2.5 rounded font-mono text-sm font-medium hover:bg-[var(--border)] active:bg-[var(--border)] text-[var(--text)]"
-            >
-              ⌫
-            </button>
-            <button
-              type="button"
-              data-testid="keypad-plus"
-              onClick={() => onKeypadClick("+")}
-              className="py-2.5 rounded font-mono text-sm font-semibold bg-[var(--border)] text-[var(--text)]"
-            >
-              +
-            </button>
-          </div>
+          {/* On-Demand Pop-Up Arithmetic Keypad */}
+          <NumberKeypadPopup
+            isOpen={isKeypadOpen}
+            onClose={() => setIsKeypadOpen(false)}
+            onKeypadClick={onKeypadClick}
+            expression={expression}
+            previewValue={evalResult.isValid ? evalResult.displayValue : undefined}
+            title="Balance Keypad"
+          />
 
           {/* Optional Note */}
           <div className="space-y-1">

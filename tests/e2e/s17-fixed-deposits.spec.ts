@@ -319,6 +319,7 @@ test.describe("Step 17 — Fixed Deposits @s17", () => {
 
     // 1. Go to More -> Settings, update default WHT to 5.0%
     await app.go("more");
+    await page.click('[data-testid="more-preferences-link"]');
     const whtInput = page.locator('[data-testid="settings-wht-rate"]');
     await expect(whtInput).toBeVisible();
     await whtInput.fill("5.0");

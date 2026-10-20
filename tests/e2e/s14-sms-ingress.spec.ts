@@ -14,6 +14,7 @@ test.describe("Step 14: SMS Ingress, Archival & Template Parsing @s14", () => {
     await app.waitForSyncIdle();
 
     await app.go("more");
+    await page.click('[data-testid="more-developer-link"]');
 
     const generateBtn = page.locator('[data-testid="generate-webhook-key-btn"]');
     await expect(generateBtn).toBeVisible();
