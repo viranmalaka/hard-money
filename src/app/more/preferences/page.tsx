@@ -185,7 +185,7 @@ export default function PreferencesPage() {
       <div className="flex items-center justify-between py-1">
         <div className="flex items-center gap-2">
           <Link
-            href="/more"
+            href="/more" transitionTypes={["nav-back"]}
             className="p-1.5 rounded text-[var(--text-muted)] hover:text-[var(--text)] transition-colors"
           >
             <ArrowLeft size={16} />

@@ -255,7 +255,7 @@ export default function SmsReviewInboxPage() {
       <div className="flex items-center justify-between py-1">
         <div className="flex items-center gap-2">
           <Link
-            href="/more"
+            href="/more" transitionTypes={["nav-back"]}
             className="p-1 rounded hover:bg-surface text-[var(--text-muted)] transition-colors"
           >
             <ArrowLeft size={18} />

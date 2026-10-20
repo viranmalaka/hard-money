@@ -13,7 +13,7 @@ export default function ShortcutsGuidePage() {
     <main className="flex-1 max-w-3xl mx-auto w-full px-4 py-4 space-y-5">
       <div className="flex items-center gap-3">
         <Link
-          href="/more"
+          href="/more" transitionTypes={["nav-back"]}
           className="p-1.5 rounded hover:bg-surface border border-hairline text-[var(--text-muted)] hover:text-[var(--text)] transition-colors"
         >
           <ArrowLeft size={16} />
@@ -64,7 +64,7 @@ export default function ShortcutsGuidePage() {
             <div className="space-y-1">
               <span className="font-semibold block">Generate your Webhook API Key</span>
               <p className="text-[var(--text-muted)]">
-                Go to <Link href="/more" className="text-[var(--accent)] underline">More &gt; User Settings</Link> and generate a Webhook API Key. Copy the key as it is only displayed once.
+                Go to <Link href="/more" transitionTypes={["nav-back"]} className="text-[var(--accent)] underline">More &gt; User Settings</Link> and generate a Webhook API Key. Copy the key as it is only displayed once.
               </p>
             </div>
           </div>

@@ -232,7 +232,7 @@ export default function HouseholdPage() {
     <main className="flex-1 max-w-4xl mx-auto w-full px-4 py-4 space-y-5">
       <div className="flex items-center gap-3">
         <Link
-          href="/more"
+          href="/more" transitionTypes={["nav-back"]}
           className="p-1 rounded hover:bg-[var(--surface-hover)] text-[var(--text-muted)] hover:text-[var(--text)] transition-colors"
         >
           <ArrowLeft size={18} />

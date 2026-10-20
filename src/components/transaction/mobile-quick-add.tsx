@@ -786,7 +786,7 @@ export function MobileQuickAdd({
                 type="button"
                 onClick={() => {
                   closeQuickAdd();
-                  router.push("/more/categories");
+                  router.push("/more/categories", { transitionTypes: ["nav-forward"] });
                 }}
                 className="flex flex-col items-center justify-center py-3 px-2 rounded-xl border border-dashed border-slate-700 bg-[#161B22] text-slate-400 hover:text-white hover:border-slate-500 active:scale-95 transition-all"
               >

@@ -1268,7 +1268,7 @@ function AccountCard({
     >
       <div className="flex items-center justify-between">
         <Link
-          href={`/accounts/${account.id}`}
+          href={`/accounts/${account.id}`} transitionTypes={["nav-forward"]}
           data-testid="account-detail-link"
           className="space-y-0.5 min-w-0 flex-1 hover:opacity-80 transition-opacity cursor-pointer"
         >
@@ -1374,7 +1374,7 @@ function AccountCard({
             </div>
           </div>
           <Link
-            href={`/accounts/${account.id}?calibrate=true`}
+            href={`/accounts/${account.id}?calibrate=true`} transitionTypes={["nav-forward"]}
             data-testid="calibrate-btn"
             className="px-2.5 py-1 rounded bg-amber-500 text-white font-medium text-[11px] hover:bg-amber-600 transition-colors"
           >
@@ -1437,7 +1437,7 @@ function CreditCardAccountCard({
     >
       <div className="flex items-center justify-between">
         <Link
-          href={`/accounts/${account.id}`}
+          href={`/accounts/${account.id}`} transitionTypes={["nav-forward"]}
           data-testid="account-detail-link"
           className="space-y-0.5 min-w-0 flex-1 hover:opacity-80 transition-opacity cursor-pointer"
         >
@@ -1579,7 +1579,7 @@ function CreditCardAccountCard({
             </div>
           </div>
           <Link
-            href={`/accounts/${account.id}?calibrate=true`}
+            href={`/accounts/${account.id}?calibrate=true`} transitionTypes={["nav-forward"]}
             data-testid="calibrate-btn"
             className="px-2.5 py-1 rounded bg-amber-500 text-white font-medium text-[11px] hover:bg-amber-600 transition-colors"
           >

@@ -29,6 +29,7 @@ export function BottomNav() {
   return (
     <nav
       data-testid="bottom-nav"
+      style={{ viewTransitionName: "bottom-nav" }}
       className="mobile-only fixed bottom-0 left-0 right-0 bottom-nav-safe bg-surface border-t border-hairline z-40 items-center justify-around px-1 select-none"
     >
       {navItems.map((item) => {
@@ -40,6 +41,7 @@ export function BottomNav() {
           <Link
             key={item.id}
             href={item.href}
+            transitionTypes={["nav-tab"]}
             data-testid={`bottom-nav-${item.id}`}
             data-active={isActive ? "true" : "false"}
             aria-current={isActive ? "page" : undefined}

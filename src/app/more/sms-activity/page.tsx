@@ -69,7 +69,7 @@ export default function SmsActivityPage() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <Link
-            href="/more"
+            href="/more" transitionTypes={["nav-back"]}
             className="p-1.5 rounded hover:bg-surface border border-hairline text-[var(--text-muted)] hover:text-[var(--text)] transition-colors"
           >
             <ArrowLeft size={16} />

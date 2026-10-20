@@ -129,7 +129,7 @@ export default function DeveloperPage() {
       <div className="flex items-center justify-between py-1">
         <div className="flex items-center gap-2">
           <Link
-            href="/more"
+            href="/more" transitionTypes={["nav-back"]}
             className="p-1.5 rounded text-[var(--text-muted)] hover:text-[var(--text)] transition-colors"
           >
             <ArrowLeft size={16} />
@@ -360,7 +360,7 @@ export default function DeveloperPage() {
           </div>
         </div>
         <Link
-          href="/more/shortcuts"
+          href="/more/shortcuts" transitionTypes={["nav-forward"]}
           data-testid="shortcuts-guide-link"
           className="px-3 py-1.5 text-xs font-medium rounded border border-hairline hover:bg-surface text-[var(--text)] transition-colors"
         >

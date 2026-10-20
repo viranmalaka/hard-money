@@ -99,6 +99,7 @@ export function Sidebar() {
             <Link
               key={item.id}
               href={item.href}
+              transitionTypes={["nav-tab"]}
               data-testid={`sidebar-nav-${item.id}`}
               data-active={isActive ? "true" : "false"}
               aria-current={isActive ? "page" : undefined}

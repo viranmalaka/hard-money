@@ -160,7 +160,7 @@ function AccountDetailContent() {
     return (
       <main className="max-w-4xl mx-auto px-4 py-6 space-y-4">
         <Link
-          href="/accounts"
+          href="/accounts" transitionTypes={["nav-back"]}
           data-testid="back-button"
           className="inline-flex items-center gap-1.5 text-xs text-[var(--text-muted)] hover:text-[var(--text)] transition-colors"
         >
@@ -181,7 +181,7 @@ function AccountDetailContent() {
       <div className="flex items-center justify-between pb-2 border-b border-hairline">
         <div className="flex items-center gap-3">
           <Link
-            href="/accounts"
+            href="/accounts" transitionTypes={["nav-back"]}
             data-testid="back-button"
             className="p-1 rounded text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--border)] transition-colors"
             title="Back to Accounts"

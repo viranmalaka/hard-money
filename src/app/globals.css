@@ -251,3 +251,73 @@ html.dark select {
 
 
 
+
+/* ===================== Page transitions (React <ViewTransition>) ===================== */
+/* Shell (header, sidebar, bottom nav) stays still; only page content animates. */
+::view-transition-old(root),
+::view-transition-new(root),
+::view-transition-group(bottom-nav) {
+  animation: none;
+}
+
+:root {
+  --vt-ease: cubic-bezier(0.32, 0.72, 0, 1); /* iOS-like */
+  --vt-push: 280ms;
+}
+
+/* Drill-in: new screen slides in from right, old shifts left & dims (iOS push) */
+::view-transition-old(.nav-forward) {
+  animation: var(--vt-push) var(--vt-ease) both vt-to-left;
+}
+::view-transition-new(.nav-forward) {
+  animation: var(--vt-push) var(--vt-ease) both vt-from-right;
+}
+/* Back: reverse */
+::view-transition-old(.nav-back) {
+  animation: var(--vt-push) var(--vt-ease) both vt-to-right;
+}
+::view-transition-new(.nav-back) {
+  animation: var(--vt-push) var(--vt-ease) both vt-from-left;
+}
+/* Tab switch: Material fade-through */
+::view-transition-old(.nav-tab) {
+  animation: 90ms ease-in both vt-fade-out;
+}
+::view-transition-new(.nav-tab) {
+  animation: 210ms ease-out 90ms both vt-fade-scale-in;
+}
+/* Untyped (browser back, redirects) */
+::view-transition-old(.nav-fade) {
+  animation: 120ms ease-in both vt-fade-out;
+}
+::view-transition-new(.nav-fade) {
+  animation: 180ms ease-out both vt-fade-in;
+}
+
+@keyframes vt-from-right { from { translate: 100% 0; } }
+@keyframes vt-to-left    { to   { translate: -30% 0; opacity: 0.6; } }
+@keyframes vt-from-left  { from { translate: -30% 0; opacity: 0.6; } }
+@keyframes vt-to-right   { to   { translate: 100% 0; } }
+@keyframes vt-fade-out   { to   { opacity: 0; } }
+@keyframes vt-fade-in    { from { opacity: 0; } }
+@keyframes vt-fade-scale-in { from { opacity: 0; scale: 0.98; } }
+
+/* Desktop: keep it subtle — slides become short fades */
+@media (min-width: 768px) {
+  ::view-transition-old(.nav-forward),
+  ::view-transition-old(.nav-back) { animation: 120ms ease-in both vt-fade-out; }
+  ::view-transition-new(.nav-forward),
+  ::view-transition-new(.nav-back) { animation: 180ms ease-out both vt-fade-in; }
+}
+
+/* New page paints on top during push; old one underneath during pop */
+::view-transition-new(.nav-forward) { z-index: 2; }
+::view-transition-old(.nav-back) { z-index: 2; }
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
+}
