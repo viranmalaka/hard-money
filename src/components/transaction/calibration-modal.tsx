@@ -205,7 +205,7 @@ function CalibrationModalContent({
     >
       <div
         data-testid="calibration-dialog"
-        className="w-full md:max-w-md bg-[var(--surface)] border border-hairline rounded-t-2xl md:rounded-xl shadow-2xl flex flex-col max-h-[92vh] overflow-hidden"
+        className="w-full md:max-w-md bg-[var(--surface)] border border-hairline rounded-t-2xl md:rounded-xl shadow-2xl flex flex-col max-h-[92dvh] overflow-hidden"
       >
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-hairline bg-[var(--surface)]">
@@ -447,7 +447,7 @@ function CalibrationModalContent({
         </div>
 
         {/* Action Button */}
-        <div className="p-3 border-t border-hairline bg-[var(--surface)]">
+        <div className="p-3 border-t border-hairline bg-[var(--surface)] pb-sheet-safe">
           <button
             type="button"
             data-testid="calibration-save-btn"

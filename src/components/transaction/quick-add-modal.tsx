@@ -233,7 +233,7 @@ function QuickAddModalContent() {
     >
       <div
         data-testid="quick-add-dialog"
-        className="w-full md:max-w-md bg-[var(--surface)] border border-hairline rounded-t-2xl md:rounded-xl shadow-2xl flex flex-col max-h-[95vh] md:max-h-[90vh] overflow-hidden"
+        className="w-full md:max-w-md bg-[var(--surface)] border border-hairline rounded-t-2xl md:rounded-xl shadow-2xl flex flex-col max-h-[95dvh] md:max-h-[90dvh] overflow-hidden"
       >
         {/* Header: Type Tabs & Close */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-hairline bg-[var(--surface)]">
@@ -547,7 +547,7 @@ function QuickAddModalContent() {
         </div>
 
         {/* Action Buttons: Save & Continue */}
-        <div className="p-3 border-t border-hairline bg-[var(--surface)] grid grid-cols-2 gap-2">
+        <div className="p-3 border-t border-hairline bg-[var(--surface)] grid grid-cols-2 gap-2 pb-sheet-safe">
           <button
             type="button"
             data-testid="quick-add-continue"

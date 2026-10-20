@@ -33,7 +33,7 @@ export function Fab({ onClick }: FabProps) {
         data-testid="quick-add-fab"
         onClick={handleClick}
         aria-label="Quick Add Transaction"
-        className="mobile-only fixed right-4 bottom-20 w-13 h-13 rounded-full bg-[var(--accent)] text-white shadow-md items-center justify-center active:scale-95 transition-transform z-30"
+        className="mobile-only fixed right-4 bottom-mobile-offset w-13 h-13 rounded-full bg-[var(--accent)] text-white shadow-md items-center justify-center active:scale-95 transition-transform z-30"
       >
         <Plus size={26} strokeWidth={2.5} />
       </button>

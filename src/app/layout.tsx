@@ -14,6 +14,7 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
+  interactiveWidget: "resizes-content",
   themeColor: [
     { media: "(prefers-color-scheme: light)", color: "#FFFFFF" },
     { media: "(prefers-color-scheme: dark)", color: "#121212" },
@@ -30,7 +31,7 @@ export const metadata: Metadata = {
   },
   appleWebApp: {
     capable: true,
-    statusBarStyle: "black-translucent",
+    statusBarStyle: "default",
     title: "Hard Money",
   },
 };
@@ -42,24 +43,25 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <head />
-      <body className="h-screen w-screen overflow-hidden bg-app text-[var(--text)]">
+      <head>
         <script
           dangerouslySetInnerHTML={{
             __html: `(function(){try{var t=localStorage.getItem("hardmoney-theme");var m=window.matchMedia("(prefers-color-scheme: dark)");var d=t==="dark"||(!t&&m.matches);if(d){document.documentElement.classList.add("dark");document.documentElement.setAttribute("data-theme","dark");}else{document.documentElement.classList.remove("dark");document.documentElement.setAttribute("data-theme","light");}if(localStorage.getItem("hardmoney-color-swap")==="true"){document.documentElement.setAttribute("data-color-swap","true");}}catch(e){}})();`,
           }}
         />
+      </head>
+      <body className="h-screen h-[100dvh] w-full overflow-hidden bg-app text-[var(--text)]">
         <ThemeProvider>
           <Suspense fallback={null}>
             <SyncProvider>
               <QuickAddProvider>
-                <div className="flex h-full w-full overflow-hidden">
+                <div className="flex h-full w-full overflow-hidden pt-shell-safe">
                   {/* Desktop Collapsible Sidebar */}
                   <Sidebar />
 
                   {/* Main Application Area */}
                   <div className="flex-1 flex flex-col h-full min-w-0 overflow-hidden relative">
-                    <div className="flex-1 overflow-y-auto pb-16 md:pb-0">
+                    <div className="flex-1 overflow-y-auto pb-nav-safe">
                       {children}
                     </div>
 

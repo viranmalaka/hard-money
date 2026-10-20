@@ -226,7 +226,7 @@ function TransactionEditContent({
     >
       <div
         data-testid="transaction-edit-modal"
-        className="w-full md:max-w-md bg-[var(--surface)] border border-hairline rounded-t-2xl md:rounded-xl shadow-2xl flex flex-col max-h-[92vh] overflow-hidden"
+        className="w-full md:max-w-md bg-[var(--surface)] border border-hairline rounded-t-2xl md:rounded-xl shadow-2xl flex flex-col max-h-[92dvh] overflow-hidden"
       >
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-hairline bg-[var(--surface)]">
@@ -544,7 +544,7 @@ function TransactionEditContent({
         </div>
 
         {/* Footer Actions */}
-        <div className="p-3 border-t border-hairline bg-[var(--surface)] flex items-center justify-between gap-2">
+        <div className="p-3 border-t border-hairline bg-[var(--surface)] flex items-center justify-between gap-2 pb-sheet-safe">
           {showConfirmDelete ? (
             <div className="flex items-center gap-2 w-full">
               <button

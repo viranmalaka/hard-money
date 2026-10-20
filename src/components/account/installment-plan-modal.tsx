@@ -138,7 +138,7 @@ export function InstallmentPlanModal({
       data-testid="installment-plan-modal"
       className="fixed inset-0 z-50 bg-black/50 flex items-end md:items-center justify-center p-0 md:p-4 backdrop-blur-xs select-none"
     >
-      <div className="w-full md:max-w-md bg-[var(--surface)] border border-hairline rounded-t-xl md:rounded-lg shadow-xl p-5 space-y-4 max-h-[90vh] overflow-y-auto">
+      <div className="w-full md:max-w-md bg-[var(--surface)] border border-hairline rounded-t-xl md:rounded-lg shadow-xl p-5 pb-sheet-safe md:pb-5 space-y-4 max-h-[90dvh] overflow-y-auto">
         <div className="flex items-center justify-between pb-2 border-b border-hairline">
           <h2 className="text-sm font-semibold text-[var(--text)]">Add 0% Installment Plan</h2>
           <button

@@ -141,7 +141,7 @@ export function PwaManager() {
   return (
     <div
       data-testid="pwa-update-banner"
-      className="fixed bottom-20 md:bottom-6 right-4 z-50 bg-[var(--surface)] border border-[var(--accent)] text-[var(--text)] p-3 rounded-xl shadow-xl flex items-center gap-3 animate-in fade-in slide-in-from-bottom-2 duration-200"
+      className="fixed bottom-mobile-offset right-4 z-50 bg-[var(--surface)] border border-[var(--accent)] text-[var(--text)] p-3 rounded-xl shadow-xl flex items-center gap-3 animate-in fade-in slide-in-from-bottom-2 duration-200"
     >
       <div className="flex flex-col">
         <span className="text-xs font-semibold text-[var(--text)]">New version available</span>

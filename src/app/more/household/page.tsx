@@ -556,7 +556,7 @@ export default function HouseholdPage() {
           onClick={() => setSelectedMemberForSheet(null)}
         >
           <div
-            className="w-full max-w-lg bg-[var(--surface)] border-t border-hairline rounded-t-xl p-4 space-y-3 animate-in slide-in-from-bottom"
+            className="w-full max-w-lg bg-[var(--surface)] border-t border-hairline rounded-t-xl p-4 pb-sheet-safe md:pb-4 space-y-3 animate-in slide-in-from-bottom"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between">

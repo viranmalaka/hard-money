@@ -340,7 +340,7 @@ export default function TransactionsPage() {
       {deletedTx && (
         <div
           data-testid="undo-toast"
-          className="fixed bottom-20 md:bottom-6 left-1/2 -translate-x-1/2 z-50 bg-[var(--text)] text-[var(--bg)] px-4 py-2.5 rounded-lg shadow-lg flex items-center gap-3 text-xs font-medium"
+          className="fixed bottom-mobile-offset left-1/2 -translate-x-1/2 z-50 bg-[var(--text)] text-[var(--bg)] px-4 py-2.5 rounded-lg shadow-lg flex items-center gap-3 text-xs font-medium"
         >
           <span>Transaction deleted</span>
           <button

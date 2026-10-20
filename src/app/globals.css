@@ -177,3 +177,46 @@ nextjs-portal {
     font-size: 16px !important;
   }
 }
+
+/* Safe-area utilities for notched mobile displays & PWA standalone mode */
+.pt-shell-safe {
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+}
+
+.bottom-nav-safe {
+  height: calc(4rem + env(safe-area-inset-bottom, 0px));
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.bottom-mobile-offset {
+  bottom: calc(5rem + env(safe-area-inset-bottom, 0px));
+}
+
+@media (min-width: 768px) {
+  .bottom-mobile-offset {
+    bottom: 1.5rem; /* bottom-6 */
+  }
+}
+
+.pb-nav-safe {
+  padding-bottom: calc(4rem + env(safe-area-inset-bottom, 0px));
+}
+
+@media (min-width: 768px) {
+  .pb-nav-safe {
+    padding-bottom: 0px;
+  }
+}
+
+.pb-sheet-safe {
+  padding-bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px));
+}
+
+@media (min-width: 768px) {
+  .pb-sheet-safe {
+    padding-bottom: 0.75rem;
+  }
+}
+

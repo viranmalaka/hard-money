@@ -29,7 +29,7 @@ export function BottomNav() {
   return (
     <nav
       data-testid="bottom-nav"
-      className="mobile-only fixed bottom-0 left-0 right-0 h-16 bg-surface border-t border-hairline z-40 items-center justify-around px-1 select-none"
+      className="mobile-only fixed bottom-0 left-0 right-0 bottom-nav-safe bg-surface border-t border-hairline z-40 items-center justify-around px-1 select-none"
     >
       {navItems.map((item) => {
         const isActive =
