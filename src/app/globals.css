@@ -220,3 +220,14 @@ nextjs-portal {
   }
 }
 
+.modal-sheet-dialog {
+  max-height: calc(100dvh - env(safe-area-inset-top, 0px) - 0.75rem);
+}
+
+@media (min-width: 768px) {
+  .modal-sheet-dialog {
+    max-height: 90dvh;
+  }
+}
+
+

@@ -478,9 +478,9 @@ export default function BudgetPage() {
       {modalOpen && (
         <div
           data-testid="budget-modal"
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs overflow-y-auto"
         >
-          <div className="flat-panel w-full max-w-md p-5 space-y-4 bg-app border border-hairline shadow-lg">
+          <div className="flat-panel w-full max-w-md p-5 space-y-4 bg-app border border-hairline shadow-lg modal-sheet-dialog overflow-y-auto">
             <div className="flex items-center justify-between border-b border-hairline pb-2">
               <h2 className="text-base font-semibold text-[var(--text)]">
                 {editingBudget ? "Edit Category Budget" : "Set Category Budget"}

@@ -222,14 +222,14 @@ function TransactionEditContent({
   return (
     <div
       data-testid="transaction-edit-sheet"
-      className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-end md:items-center justify-center p-0 md:p-4 select-none"
+      className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-end md:items-center justify-center p-0 md:p-4 select-none overflow-y-auto"
     >
       <div
         data-testid="transaction-edit-modal"
-        className="w-full md:max-w-md bg-[var(--surface)] border border-hairline rounded-t-2xl md:rounded-xl shadow-2xl flex flex-col max-h-[92dvh] overflow-hidden"
+        className="w-full md:max-w-md bg-[var(--surface)] border border-hairline rounded-t-2xl md:rounded-xl shadow-2xl flex flex-col modal-sheet-dialog overflow-hidden"
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-hairline bg-[var(--surface)]">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-hairline bg-[var(--surface)] shrink-0">
           <div className="flex items-center gap-2">
             <span className="font-semibold text-sm text-[var(--text)]">Edit Transaction</span>
             <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--border)] text-[var(--text-muted)] font-mono uppercase">
@@ -247,7 +247,7 @@ function TransactionEditContent({
         </div>
 
         {/* Form Body */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-3.5 text-xs">
+        <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-3.5 text-xs">
           {/* Amount input */}
           <div className="space-y-1">
             <label className="text-[11px] font-medium text-[var(--text-muted)]">Amount (LKR)</label>
@@ -544,7 +544,7 @@ function TransactionEditContent({
         </div>
 
         {/* Footer Actions */}
-        <div className="p-3 border-t border-hairline bg-[var(--surface)] flex items-center justify-between gap-2 pb-sheet-safe">
+        <div className="p-3 border-t border-hairline bg-[var(--surface)] flex items-center justify-between gap-2 pb-sheet-safe shrink-0">
           {showConfirmDelete ? (
             <div className="flex items-center gap-2 w-full">
               <button

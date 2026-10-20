@@ -201,14 +201,14 @@ function CalibrationModalContent({
   return (
     <div
       data-testid="calibration-sheet"
-      className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-end md:items-center justify-center p-0 md:p-4 select-none"
+      className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-end md:items-center justify-center p-0 md:p-4 select-none overflow-y-auto"
     >
       <div
         data-testid="calibration-dialog"
-        className="w-full md:max-w-md bg-[var(--surface)] border border-hairline rounded-t-2xl md:rounded-xl shadow-2xl flex flex-col max-h-[92dvh] overflow-hidden"
+        className="w-full md:max-w-md bg-[var(--surface)] border border-hairline rounded-t-2xl md:rounded-xl shadow-2xl flex flex-col modal-sheet-dialog overflow-hidden"
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-hairline bg-[var(--surface)]">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-hairline bg-[var(--surface)] shrink-0">
           <div className="flex items-center gap-2">
             <span className="p-1 rounded bg-[var(--border)] text-[var(--text)]">
               <Scale size={16} />
@@ -229,7 +229,7 @@ function CalibrationModalContent({
         </div>
 
         {/* Content Body */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-3">
+        <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-3">
           {/* Current balance card */}
           <div className="p-3 rounded-lg bg-[var(--bg)] border border-hairline flex items-center justify-between text-xs">
             <span className="text-[var(--text-muted)]">
@@ -447,7 +447,7 @@ function CalibrationModalContent({
         </div>
 
         {/* Action Button */}
-        <div className="p-3 border-t border-hairline bg-[var(--surface)] pb-sheet-safe">
+        <div className="p-3 border-t border-hairline bg-[var(--surface)] pb-sheet-safe shrink-0">
           <button
             type="button"
             data-testid="calibration-save-btn"

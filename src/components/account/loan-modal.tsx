@@ -108,7 +108,7 @@ export function LoanModal({ isOpen, onClose, accounts }: LoanModalProps) {
       data-testid="loan-modal-backdrop"
       className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto"
     >
-      <div className="w-full max-w-md bg-[var(--surface)] border border-hairline rounded-xl shadow-2xl p-5 space-y-4 my-auto">
+      <div className="w-full max-w-md bg-[var(--surface)] border border-hairline rounded-xl shadow-2xl p-5 space-y-4 my-auto modal-sheet-dialog overflow-y-auto">
         <div className="flex items-center justify-between pb-2 border-b border-hairline">
           <h2 className="text-sm font-semibold text-[var(--text)]">Add Loan / Lease</h2>
           <button

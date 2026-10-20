@@ -337,11 +337,11 @@ export function DailyView({
       {activeSmsModal && (
         <div
           data-testid="sms-glyph-modal"
-          className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4 backdrop-blur-xs"
+          className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4 backdrop-blur-xs overflow-y-auto"
           onClick={() => setActiveSmsModal(null)}
         >
           <div
-            className="w-full max-w-md bg-[var(--surface)] border border-hairline rounded-lg shadow-xl p-4 space-y-3"
+            className="w-full max-w-md bg-[var(--surface)] border border-hairline rounded-lg shadow-xl p-4 space-y-3 modal-sheet-dialog overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between pb-2 border-b border-hairline">

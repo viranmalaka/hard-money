@@ -195,9 +195,9 @@ export function LoanDetailModal({ loan, isOpen, onClose, accounts }: LoanDetailM
       data-testid="loan-detail-backdrop"
       className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-2 md:p-4 overflow-y-auto"
     >
-      <div className="w-full max-w-3xl bg-[var(--surface)] border border-hairline rounded-xl shadow-2xl p-4 md:p-6 space-y-4 my-auto max-h-[92vh] flex flex-col">
+      <div className="w-full max-w-3xl bg-[var(--surface)] border border-hairline rounded-xl shadow-2xl p-4 md:p-6 space-y-4 my-auto modal-sheet-dialog flex flex-col overflow-hidden">
         {/* Header */}
-        <div className="flex items-start justify-between pb-3 border-b border-hairline">
+        <div className="flex items-start justify-between pb-3 border-b border-hairline shrink-0">
           <div>
             <div className="flex items-center gap-2">
               <h2 className="text-base font-semibold text-[var(--text)]">{loan.lenderName}</h2>
@@ -322,7 +322,7 @@ export function LoanDetailModal({ loan, isOpen, onClose, accounts }: LoanDetailM
         </div>
 
         {/* Schedule Table (Desktop) / Cards (Mobile) */}
-        <div className="flex-1 overflow-y-auto min-h-[220px] border border-hairline rounded-lg">
+        <div className="flex-1 min-h-0 overflow-y-auto min-h-[220px] border border-hairline rounded-lg">
           {loading ? (
             <div className="p-8 text-center text-xs text-[var(--text-muted)]">Loading schedule...</div>
           ) : (

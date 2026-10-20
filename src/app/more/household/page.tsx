@@ -552,11 +552,11 @@ export default function HouseholdPage() {
       {selectedMemberForSheet && activeHousehold && (
         <div
           data-testid="member-role-sheet"
-          className="fixed inset-0 z-50 flex items-end justify-center bg-black/50"
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 overflow-y-auto"
           onClick={() => setSelectedMemberForSheet(null)}
         >
           <div
-            className="w-full max-w-lg bg-[var(--surface)] border-t border-hairline rounded-t-xl p-4 pb-sheet-safe md:pb-4 space-y-3 animate-in slide-in-from-bottom"
+            className="w-full max-w-lg bg-[var(--surface)] border-t border-hairline rounded-t-xl p-4 pb-sheet-safe md:pb-4 space-y-3 animate-in slide-in-from-bottom modal-sheet-dialog overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between">
