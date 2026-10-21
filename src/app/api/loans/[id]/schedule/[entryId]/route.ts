@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { generateAmortizationSchedule } from "@/lib/finance-core/loans";
 import { getNextServerSeq } from "@/lib/server-seq";
 import { v4 as uuidv4 } from "uuid";
+import { authorizeLoan } from "@/lib/authorization";
 
 export async function PATCH(
   request: NextRequest,
@@ -22,8 +23,9 @@ export async function PATCH(
 
   const { interestComponentMinor, principalComponentMinor } = body;
 
-  const loan = await (prisma as any).loan.findFirst({
-    where: { id, userId: session.userId, deletedAt: null },
+  const authorizedLoan = await authorizeLoan(session, id, "write");
+  const loan = authorizedLoan && await (prisma as any).loan.findFirst({
+    where: { id, deletedAt: null },
     include: {
       scheduleEntries: {
         where: { deletedAt: null },

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { z } from "zod";
 
 export async function POST(
   request: NextRequest,
@@ -18,7 +19,15 @@ export async function POST(
     return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
   }
 
-  const { email, userId, role } = body;
+  const parsed = z.object({
+    email: z.string().email().max(254).optional(),
+    userId: z.string().min(1).optional(),
+    role: z.enum(["CO_OWNER", "CONTRIBUTOR_ADD_ONLY", "VIEWER"]).default("VIEWER"),
+  }).safeParse(body);
+  if (!parsed.success || (!parsed.data.email && !parsed.data.userId) || (parsed.data.email && parsed.data.userId)) {
+    return NextResponse.json({ error: "Valid email or userId and role are required" }, { status: 400 });
+  }
+  const { email, userId, role } = parsed.data;
   const targetRole = role || "VIEWER";
   const validRoles = ["CO_OWNER", "CONTRIBUTOR_ADD_ONLY", "VIEWER"];
 
@@ -44,6 +53,9 @@ export async function POST(
       { error: "Forbidden: Only OWNER or CO_OWNER can add members" },
       { status: 403 }
     );
+  }
+  if (targetRole === "CO_OWNER" && callerMembership.role !== "OWNER") {
+    return NextResponse.json({ error: "Only the OWNER can add CO_OWNER members" }, { status: 403 });
   }
 
   // Find target user

@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { reamortizeRemainingSchedule } from "@/lib/finance-core/loans";
 import { getNextServerSeq } from "@/lib/server-seq";
 import { v4 as uuidv4 } from "uuid";
+import { authorizeLoan, assertCanWriteAccount } from "@/lib/authorization";
 
 export async function POST(
   request: NextRequest,
@@ -32,8 +33,12 @@ export async function POST(
     return NextResponse.json({ error: "Account and valid amount required" }, { status: 400 });
   }
 
-  const loan = await (prisma as any).loan.findFirst({
-    where: { id, userId: session.userId, deletedAt: null },
+  const authorizedLoan = await authorizeLoan(session, id, "write");
+  if (!authorizedLoan) return NextResponse.json({ error: "Loan not found" }, { status: 404 });
+  const account = await assertCanWriteAccount(session, accountId);
+  if (!account) return NextResponse.json({ error: "Forbidden account" }, { status: 403 });
+  const loanWithDetails = await (prisma as any).loan.findFirst({
+    where: { id, deletedAt: null },
     include: {
       scheduleEntries: {
         where: { deletedAt: null },
@@ -43,9 +48,7 @@ export async function POST(
     },
   });
 
-  if (!loan) {
-    return NextResponse.json({ error: "Loan not found" }, { status: 404 });
-  }
+  const loan = loanWithDetails;
 
   const now = new Date();
   const txId = uuidv4();

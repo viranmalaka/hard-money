@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getNextServerSeq } from "@/lib/server-seq";
+import { assertCanWriteAccount } from "@/lib/authorization";
 import { shouldFailMutation } from "@/lib/test-sync-hook";
 
 export interface SyncMutation {
@@ -111,9 +112,20 @@ export async function POST(request: NextRequest) {
 
       const entityLower = mutation.entity.toLowerCase();
       const nextSeq = await getNextServerSeq();
+      const payload = mutation.payload || {};
+      if (entityLower !== "account") {
+        let invalidAccountReference = false;
+        for (const field of ["accountId", "toAccountId", "fundingAccountId", "linkedPayoutAccountId", "linkedDisbursementAccountId", "linkedSettlementAccountId"]) {
+          if (payload[field] && !(await assertCanWriteAccount(user, payload[field]))) {
+            results.push({ mutationId: mutation.mutationId, status: "rejected", reason: `Forbidden account reference: ${field}` });
+            invalidAccountReference = true;
+            break;
+          }
+        }
+        if (invalidAccountReference) continue;
+      }
 
       if (entityLower === "account") {
-        const payload = mutation.payload || {};
         if (mutation.op === "CREATE") {
           if (payload.householdId) {
             const role = userHouseholdRoleMap.get(payload.householdId);
@@ -170,7 +182,7 @@ export async function POST(request: NextRequest) {
           });
         } else if (mutation.op === "UPDATE") {
           const acc = await prisma.account.findUnique({ where: { id: mutation.id } });
-          if (acc?.householdId) {
+          if (acc?.householdId && acc.accessScope === "SHARED_HOUSEHOLD") {
             const role = userHouseholdRoleMap.get(acc.householdId);
             if (role !== "OWNER" && role !== "CO_OWNER") {
               results.push({
@@ -208,6 +220,9 @@ export async function POST(request: NextRequest) {
               }),
               ...(payload.accessScope !== undefined && {
                 accessScope: payload.accessScope,
+              }),
+              ...(payload.householdId !== undefined && {
+                householdId: payload.accessScope === "SHARED_HOUSEHOLD" ? payload.householdId : null,
               }),
               ...(payload.feeRules !== undefined && { feeRules: payload.feeRules }),
               ...(payload.creditLimitMinor !== undefined && {
@@ -255,8 +270,16 @@ export async function POST(request: NextRequest) {
           });
         }
       } else if (entityLower === "category") {
-        const payload = mutation.payload || {};
+        const existingCategory = await prisma.category.findUnique({ where: { id: mutation.id } });
+        if (existingCategory && existingCategory.userId !== user.id) {
+          results.push({ mutationId: mutation.mutationId, status: "rejected", reason: "Cannot modify system or another user's category" });
+          continue;
+        }
         if (mutation.op === "CREATE") {
+          if (payload.householdId && !["OWNER", "CO_OWNER"].includes(userHouseholdRoleMap.get(payload.householdId) || "")) {
+            results.push({ mutationId: mutation.mutationId, status: "rejected", reason: "Forbidden household category" });
+            continue;
+          }
           await prisma.category.upsert({
             where: { id: mutation.id },
             create: {
@@ -325,7 +348,7 @@ export async function POST(request: NextRequest) {
                 });
                 continue;
               }
-              txHouseholdId = acc.householdId;
+              txHouseholdId = acc.accessScope === "SHARED_HOUSEHOLD" ? acc.householdId : null;
             }
           }
 

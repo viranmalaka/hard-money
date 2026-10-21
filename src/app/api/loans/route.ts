@@ -3,6 +3,8 @@ import { getSessionUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { generateAmortizationSchedule } from "@/lib/finance-core/loans";
 import { v4 as uuidv4 } from "uuid";
+import { assertCanWriteAccount } from "@/lib/authorization";
+import { getNextServerSeq } from "@/lib/server-seq";
 
 
 export async function GET() {
@@ -104,9 +106,13 @@ export async function POST(request: NextRequest) {
   const monthlyEmiAmountMinor = scheduleRows[0]?.emiAmountMinor || 0;
   const loanId = uuidv4();
   const startDateTime = startDate ? new Date(startDate) : new Date();
+  if (linkedDisbursementAccountId && !(await assertCanWriteAccount(session, linkedDisbursementAccountId))) {
+    return NextResponse.json({ error: "Forbidden disbursement account" }, { status: 403 });
+  }
 
   // Create loan and schedule in a transaction
   const createdLoan = await prisma.$transaction(async (tx) => {
+    const loanSeq = await getNextServerSeq();
     const loan = await tx.loan.create({
       data: {
         id: loanId,
@@ -122,10 +128,12 @@ export async function POST(request: NextRequest) {
         calculationType,
         linkedDisbursementAccountId: linkedDisbursementAccountId || null,
         status: "ACTIVE",
+        serverSeq: loanSeq,
       },
     });
 
     for (const row of scheduleRows) {
+      const scheduleSeq = await getNextServerSeq();
       const dueDate = new Date(startDateTime);
       dueDate.setMonth(dueDate.getMonth() + row.installmentNumber);
 
@@ -140,11 +148,13 @@ export async function POST(request: NextRequest) {
           openingBalanceMinor: row.openingBalanceMinor,
           closingBalanceMinor: row.closingBalanceMinor,
           status: "SCHEDULED",
+          serverSeq: scheduleSeq,
         },
       });
     }
 
     if (linkedDisbursementAccountId && originalPrincipalMinor > 0) {
+      const transactionSeq = await getNextServerSeq();
       await tx.transaction.create({
         data: {
           id: `${loan.id}-disbursement`,
@@ -161,6 +171,7 @@ export async function POST(request: NextRequest) {
           excludeFromBudget: true,
           excludeFromStats: true,
           excludeFromBalance: false,
+          serverSeq: transactionSeq,
         },
       });
     }

@@ -23,6 +23,7 @@ model User {
   smsAutoPostMode              String            @default("AUTO_VALIDATED")
   createdAt                    DateTime          @default(now())
   updatedAt                    DateTime          @updatedAt
+  sessionVersion               Int               @default(0)
 
   ownedHouseholds              Household[]       @relation("HouseholdOwner")
   householdMembers             HouseholdMember[]
@@ -492,4 +493,3 @@ model LoanPayment {
   @@index([paymentDate])
   @@index([serverSeq])
 }
-

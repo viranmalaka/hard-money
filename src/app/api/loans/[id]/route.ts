@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { authorizeLoan } from "@/lib/authorization";
 
 export async function GET(
   _request: NextRequest,
@@ -13,8 +14,9 @@ export async function GET(
 
   const { id } = await params;
 
-  const loan = await (prisma as any).loan.findFirst({
-    where: { id, userId: session.userId, deletedAt: null },
+  const loan = await authorizeLoan(session, id, "read");
+  const loanWithDetails = loan && await (prisma as any).loan.findFirst({
+    where: { id, deletedAt: null },
     include: {
       scheduleEntries: {
         where: { deletedAt: null },
@@ -26,15 +28,15 @@ export async function GET(
     },
   });
 
-  if (!loan) {
+  if (!loanWithDetails) {
     return NextResponse.json({ error: "Loan not found" }, { status: 404 });
   }
 
-  const totalPrincipalPaid = loan.payments.reduce(
+  const totalPrincipalPaid = loanWithDetails.payments.reduce(
     (sum: number, p: any) => sum + p.principalComponentMinor,
     0
   );
-  const totalInterestPaid = loan.payments.reduce(
+  const totalInterestPaid = loanWithDetails.payments.reduce(
     (sum: number, p: any) => sum + p.interestComponentMinor,
     0
   );
@@ -45,13 +47,13 @@ export async function GET(
 
   return NextResponse.json({
     loan: {
-      ...loan,
-      serverSeq: Number(loan.serverSeq),
-      scheduleEntries: loan.scheduleEntries.map((se: any) => ({
+      ...loanWithDetails,
+      serverSeq: Number(loanWithDetails.serverSeq),
+      scheduleEntries: loanWithDetails.scheduleEntries.map((se: any) => ({
         ...se,
         serverSeq: Number(se.serverSeq),
       })),
-      payments: loan.payments.map((p: any) => ({
+      payments: loanWithDetails.payments.map((p: any) => ({
         ...p,
         serverSeq: Number(p.serverSeq),
       })),

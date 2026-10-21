@@ -3,8 +3,12 @@ import { SignJWT, jwtVerify } from "jose";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 
-const AUTH_SECRET = process.env.AUTH_SECRET || "insecure-dev-auth-secret-minimum-32-characters-long";
-const SECRET_KEY = new TextEncoder().encode(AUTH_SECRET.padEnd(32, "0"));
+const DEV_AUTH_SECRET = "insecure-dev-auth-secret-minimum-32-characters-long";
+const AUTH_SECRET = process.env.AUTH_SECRET || (process.env.NODE_ENV === "production" ? "" : DEV_AUTH_SECRET);
+if (process.env.NODE_ENV === "production" && (Buffer.byteLength(AUTH_SECRET) < 32 || AUTH_SECRET === DEV_AUTH_SECRET)) {
+  throw new Error("AUTH_SECRET must be configured with at least 32 bytes in production");
+}
+const SECRET_KEY = new TextEncoder().encode(AUTH_SECRET);
 export const SESSION_COOKIE_NAME = "hardmoney_session";
 
 export interface SessionPayload {
@@ -12,6 +16,7 @@ export interface SessionPayload {
   id: string;
   email: string;
   name: string;
+  sessionVersion?: number;
 }
 
 export async function hashPassword(password: string): Promise<string> {
@@ -33,10 +38,11 @@ export async function verifyPassword(hashStr: string, password: string): Promise
 
 export async function createSessionToken(payload: Omit<SessionPayload, "id"> & { id?: string }): Promise<string> {
   const userId = payload.userId || payload.id!;
-  return new SignJWT({ ...payload, userId, id: userId })
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { sessionVersion: true } });
+  return new SignJWT({ ...payload, userId, id: userId, sessionVersion: user?.sessionVersion ?? 0 })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
-    .setExpirationTime("30d")
+    .setExpirationTime("7d")
     .sign(SECRET_KEY);
 }
 
@@ -44,11 +50,15 @@ export async function verifySessionToken(token: string): Promise<SessionPayload 
   try {
     const { payload } = await jwtVerify(token, SECRET_KEY);
     const userId = (payload.userId || payload.id) as string;
+    if (!userId) return null;
+    const user = await prisma.user.findUnique({ where: { id: userId }, select: { sessionVersion: true } });
+    if (!user || (payload.sessionVersion ?? 0) !== user.sessionVersion) return null;
     return {
       userId,
       id: userId,
       email: payload.email as string,
       name: payload.name as string,
+      sessionVersion: user.sessionVersion,
     };
   } catch {
     return null;

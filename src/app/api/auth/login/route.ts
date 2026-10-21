@@ -6,6 +6,7 @@ import {
   createSessionToken,
   SESSION_COOKIE_NAME,
 } from "@/lib/auth";
+import { rateLimit } from "@/lib/rate-limit";
 
 const LoginSchema = z.object({
   email: z.string().email("Valid email is required"),
@@ -24,6 +25,16 @@ export async function POST(request: NextRequest) {
 
   const { email, password } = parsed.data;
   const normalizedEmail = email.toLowerCase().trim();
+  const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+  const ipLimit = rateLimit(`login:ip:${ip}`, 10, 15 * 60_000);
+  const emailLimit = rateLimit(`login:email:${normalizedEmail}`, 10, 15 * 60_000);
+  const retryAfter = Math.max(ipLimit.retryAfter, emailLimit.retryAfter);
+  if (!ipLimit.allowed || !emailLimit.allowed) {
+    return NextResponse.json(
+      { error: "Too many attempts" },
+      { status: 429, headers: { "Retry-After": String(retryAfter) } },
+    );
+  }
 
   const user = await prisma.user.findUnique({
     where: { email: normalizedEmail },
@@ -31,6 +42,7 @@ export async function POST(request: NextRequest) {
 
   // Generic error to prevent email enumeration
   if (!user || !user.passwordHash) {
+    await verifyPassword("$argon2id$v=19$m=19456,t=2,p=1$AAAAAAAAAAAAAAAAAAAAAA$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", password);
     return NextResponse.json(
       { error: "Invalid email or password" },
       { status: 401 }
@@ -68,7 +80,7 @@ export async function POST(request: NextRequest) {
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
     path: "/",
-    maxAge: 30 * 24 * 60 * 60,
+    maxAge: 7 * 24 * 60 * 60,
   });
 
   return response;

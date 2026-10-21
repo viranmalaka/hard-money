@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/auth";
 import { getNextServerSeq } from "@/lib/server-seq";
 import { prisma } from "@/lib/prisma";
+import { authorizeLoan } from "@/lib/authorization";
 
 export async function POST(
   _request: NextRequest,
@@ -14,9 +15,7 @@ export async function POST(
 
   const { id } = await params;
 
-  const loan = await (prisma as any).loan.findFirst({
-    where: { id, userId: session.userId, deletedAt: null },
-  });
+  const loan = await authorizeLoan(session, id, "write");
 
   if (!loan) {
     return NextResponse.json({ error: "Loan not found" }, { status: 404 });

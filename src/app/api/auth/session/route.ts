@@ -21,17 +21,7 @@ export async function GET() {
     },
   });
 
-  if (!user) {
-    return NextResponse.json({
-      user: {
-        id: session.userId,
-        name: session.name,
-        email: session.email,
-        timezone: "Asia/Colombo",
-        defaultCurrency: "LKR",
-      },
-    });
-  }
+  if (!user) return NextResponse.json({ user: null }, { status: 401 });
 
   return NextResponse.json({ user });
 }

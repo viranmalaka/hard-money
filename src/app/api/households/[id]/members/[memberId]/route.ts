@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { z } from "zod";
 
 export async function PATCH(
   request: NextRequest,
@@ -13,7 +14,9 @@ export async function PATCH(
 
   const { id: householdId, memberId } = await params;
   const body = await request.json().catch(() => null);
-  const { role } = body || {};
+  const parsed = z.object({ role: z.enum(["CO_OWNER", "CONTRIBUTOR_ADD_ONLY", "VIEWER"]) }).safeParse(body);
+  if (!parsed.success) return NextResponse.json({ error: "Invalid role" }, { status: 400 });
+  const { role } = parsed.data;
 
   const validRoles = ["CO_OWNER", "CONTRIBUTOR_ADD_ONLY", "VIEWER"];
   if (!validRoles.includes(role)) {
@@ -54,6 +57,9 @@ export async function PATCH(
       { error: "Cannot change the role of the household OWNER. Use ownership transfer." },
       { status: 400 }
     );
+  }
+  if (targetMember.role === "CO_OWNER" && caller.role !== "OWNER") {
+    return NextResponse.json({ error: "Only the OWNER can modify CO_OWNER members" }, { status: 403 });
   }
 
   const updated = await prisma.householdMember.update({

@@ -11,6 +11,12 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ slug: string[] }> }
 ) {
+  if (process.env.NODE_ENV === "production" ||
+      process.env.E2E_MODE !== "1" ||
+      !process.env.E2E_SECRET ||
+      request.headers.get("x-e2e-secret") !== process.env.E2E_SECRET) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
   if (process.env.E2E_MODE !== "1" || request.headers.get("x-disable-e2e-mode") === "1") {
     return new NextResponse("Not Found", { status: 404 });
   }

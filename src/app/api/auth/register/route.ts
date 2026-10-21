@@ -7,11 +7,12 @@ import {
   seedDefaultCategoriesForUser,
   SESSION_COOKIE_NAME,
 } from "@/lib/auth";
+import { rateLimit } from "@/lib/rate-limit";
 
 const RegisterSchema = z.object({
-  name: z.string().min(1, "Name is required"),
-  email: z.string().email("Valid email is required"),
-  password: z.string().min(6, "Password must be at least 6 characters"),
+  name: z.string().min(1, "Name is required").max(100),
+  email: z.string().email("Valid email is required").max(254),
+  password: z.string().min(10, "Password must be at least 10 characters").max(128),
 });
 
 export async function POST(request: NextRequest) {
@@ -28,6 +29,7 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json().catch(() => null);
+  const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
   const parsed = RegisterSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json(
@@ -38,6 +40,15 @@ export async function POST(request: NextRequest) {
 
   const { name, email, password } = parsed.data;
   const normalizedEmail = email.toLowerCase().trim();
+  const ipLimit = rateLimit(`register:ip:${ip}`, 5, 60 * 60_000);
+  const emailLimit = rateLimit(`register:email:${normalizedEmail}`, 5, 60 * 60_000);
+  const retryAfter = Math.max(ipLimit.retryAfter, emailLimit.retryAfter);
+  if (!ipLimit.allowed || !emailLimit.allowed) {
+    return NextResponse.json(
+      { error: "Too many attempts" },
+      { status: 429, headers: { "Retry-After": String(retryAfter) } },
+    );
+  }
 
   const existing = await prisma.user.findUnique({
     where: { email: normalizedEmail },
@@ -108,7 +119,7 @@ export async function POST(request: NextRequest) {
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
     path: "/",
-    maxAge: 30 * 24 * 60 * 60, // 30 days
+    maxAge: 7 * 24 * 60 * 60,
   });
 
   return response;

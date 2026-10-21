@@ -4,7 +4,9 @@ import { prisma } from "@/lib/prisma";
 import { getServerNow } from "@/lib/server-clock";
 import { getNextServerSeq } from "@/lib/server-seq";
 import { calculateCompoundMaturity } from "@/lib/finance-core/investments";
+import type { CompoundingFrequency } from "@/lib/finance-core/investments";
 import { v4 as uuidv4 } from "uuid";
+import { authorizeFixedDeposit, assertCanWriteAccount } from "@/lib/authorization";
 
 export async function POST(
   request: NextRequest,
@@ -16,9 +18,7 @@ export async function POST(
   }
 
   const { id } = await params;
-  const fd = await (prisma as any).fixedDeposit.findUnique({
-    where: { id, userId: user.id },
-  });
+  const fd = await authorizeFixedDeposit(user, id, "write");
 
   if (!fd) {
     return NextResponse.json({ error: "Fixed deposit not found" }, { status: 404 });
@@ -33,6 +33,9 @@ export async function POST(
 
   if (!targetAccountId) {
     return NextResponse.json({ error: "No target account specified for proceeds" }, { status: 400 });
+  }
+  if (!(await assertCanWriteAccount(user, targetAccountId))) {
+    return NextResponse.json({ error: "Forbidden target account" }, { status: 403 });
   }
 
   const now = getServerNow();
@@ -66,7 +69,7 @@ export async function POST(
       fd.principalAmountMinor,
       fd.annualInterestRateBps,
       fd.tenureMonths,
-      fd.compoundingFrequency,
+      fd.compoundingFrequency as CompoundingFrequency,
       fd.withholdingTaxRateBps
     );
 
