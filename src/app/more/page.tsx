@@ -15,6 +15,7 @@ import {
   Smartphone,
   User,
   Users,
+  ShoppingBasket,
 } from "lucide-react";
 import { EmptyState } from "@/components/ui/empty-state";
 
@@ -28,6 +29,7 @@ export default function MorePage() {
   const router = useRouter();
   const [user, setUser] = useState<UserProfile | null>(null);
   const [inboxCount, setInboxCount] = useState(0);
+  const [shoppingListCount, setShoppingListCount] = useState(0);
 
   useEffect(() => {
     fetch("/api/user/settings", { cache: "no-store" })
@@ -45,6 +47,13 @@ export default function MorePage() {
         if (data) {
           setInboxCount(data.count ?? (data.items?.length || 0));
         }
+      })
+      .catch(() => {});
+
+    fetch("/api/shopping-list/count", { cache: "no-store" })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data) setShoppingListCount(data.count ?? 0);
       })
       .catch(() => {});
   }, []);
@@ -139,6 +148,15 @@ export default function MorePage() {
           href: "/more/household",
           testId: "more-household-link",
           badge: null,
+        },
+        {
+          label: "Shopping List",
+          description: "Shared household items to buy",
+          icon: ShoppingBasket,
+          href: "/more/shopping-list",
+          testId: "more-shopping-list-link",
+          badge: shoppingListCount > 0 ? String(shoppingListCount) : null,
+          badgeTestId: "shopping-list-badge",
         },
       ],
     },

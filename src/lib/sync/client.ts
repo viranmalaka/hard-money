@@ -12,6 +12,7 @@ import {
   LocalLoan,
   LocalLoanScheduleEntry,
   LocalLoanPayment,
+  LocalShoppingListItem,
   LocalTemplate,
   LocalTransaction,
   OutboxMutation,
@@ -92,6 +93,7 @@ export async function syncNow(
       loans?: LocalLoan[];
       loanScheduleEntries?: LocalLoanScheduleEntry[];
       loanPayments?: LocalLoanPayment[];
+      shoppingListItems?: LocalShoppingListItem[];
     } = await res.json();
 
     await db.transaction(
@@ -110,6 +112,7 @@ export async function syncNow(
         db.loans,
         db.loanScheduleEntries,
         db.loanPayments,
+        db.shoppingListItems,
         db.syncMeta,
       ],
       async () => {
@@ -201,6 +204,14 @@ export async function syncNow(
         for (const lp of data.loanPayments || []) {
           await db.loanPayments.put(lp);
         }
+        // Shopping list items
+        for (const item of data.shoppingListItems || []) {
+          if (item.deletedAt) {
+            await db.shoppingListItems.delete(item.id);
+          } else {
+            await db.shoppingListItems.put(item);
+          }
+        }
 
         // Purge locally cached shared data for households the user is no longer a member of
         if (Array.isArray(data.activeHouseholdIds)) {
@@ -231,6 +242,13 @@ export async function syncNow(
           for (const l of localLoans) {
             if (l.householdId && !activeSet.has(l.householdId)) {
               await db.loans.delete(l.id);
+            }
+
+            const localShoppingItems = await db.shoppingListItems.toArray();
+            for (const item of localShoppingItems) {
+              if (!activeSet.has(item.householdId)) {
+                await db.shoppingListItems.delete(item.id);
+              }
             }
           }
         }
@@ -1154,5 +1172,74 @@ export async function localUpdateLoanScheduleEntry(
   });
 }
 
+export async function localCreateShoppingListItem(
+  db: HardMoneyDB,
+  item: Omit<LocalShoppingListItem, "id" | "serverSeq" | "createdAt" | "updatedAt"> & { id?: string }
+): Promise<LocalShoppingListItem> {
+  const now = new Date().toISOString();
+  const id = item.id || uuidv4();
+  const fullItem: LocalShoppingListItem = {
+    ...item,
+    id,
+    serverSeq: 0,
+    createdAt: now,
+    updatedAt: now,
+  };
+  const mutation: OutboxMutation = {
+    mutationId: uuidv4(),
+    entity: "shoppingListItem",
+    op: "CREATE",
+    id,
+    payload: fullItem,
+    createdAt: now,
+    status: "pending",
+  };
+  await db.transaction("rw", [db.shoppingListItems, db.outbox], async () => {
+    await db.shoppingListItems.put(fullItem);
+    await db.outbox.add(mutation);
+  });
+  return fullItem;
+}
 
+export async function localUpdateShoppingListItem(
+  db: HardMoneyDB,
+  id: string,
+  patch: Partial<LocalShoppingListItem>
+): Promise<void> {
+  const existing = await db.shoppingListItems.get(id);
+  if (!existing) return;
+  const now = new Date().toISOString();
+  const updated = { ...existing, ...patch, updatedAt: now };
+  const mutation: OutboxMutation = {
+    mutationId: uuidv4(),
+    entity: "shoppingListItem",
+    op: "UPDATE",
+    id,
+    payload: { householdId: existing.householdId, ...patch },
+    createdAt: now,
+    status: "pending",
+  };
+  await db.transaction("rw", [db.shoppingListItems, db.outbox], async () => {
+    await db.shoppingListItems.put(updated);
+    await db.outbox.add(mutation);
+  });
+}
 
+export async function localDeleteShoppingListItem(db: HardMoneyDB, id: string): Promise<void> {
+  const existing = await db.shoppingListItems.get(id);
+  if (!existing) return;
+  const now = new Date().toISOString();
+  const mutation: OutboxMutation = {
+    mutationId: uuidv4(),
+    entity: "shoppingListItem",
+    op: "DELETE",
+    id,
+    payload: { householdId: existing.householdId },
+    createdAt: now,
+    status: "pending",
+  };
+  await db.transaction("rw", [db.shoppingListItems, db.outbox], async () => {
+    await db.shoppingListItems.delete(id);
+    await db.outbox.add(mutation);
+  });
+}

@@ -59,6 +59,7 @@ model Household {
   ownerId   String
   owner     User              @relation("HouseholdOwner", fields: [ownerId], references: [id], onDelete: Cascade)
   members   HouseholdMember[]
+  shoppingListItems ShoppingListItem[]
   createdAt DateTime          @default(now())
 }
 
@@ -72,6 +73,26 @@ model HouseholdMember {
   createdAt   DateTime  @default(now())
 
   @@unique([householdId, userId])
+}
+
+model ShoppingListItem {
+  id          String    @id @default(uuid())
+  householdId String
+  name        String
+  quantity    String?
+  isCompleted Boolean   @default(false)
+  position    Int       @default(0)
+  completedAt DateTime?
+  serverSeq   BigInt    @default(0)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  household Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+
+  @@index([householdId])
+  @@index([serverSeq])
+  @@index([householdId, isCompleted, position])
 }
 
 model Category {

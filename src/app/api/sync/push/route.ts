@@ -31,7 +31,9 @@ export interface SyncMutation {
     | "loanScheduleEntry"
     | "loanpayment"
     | "LoanPayment"
-    | "loanPayment";
+    | "loanPayment"
+    | "shoppingListItem"
+    | "ShoppingListItem";
   op: "CREATE" | "UPDATE" | "DELETE";
   id: string;
   payload?: any;
@@ -67,6 +69,7 @@ export async function POST(request: NextRequest) {
     loanscheduleentry: 9,
     fixeddepositpayout: 10,
     loanpayment: 11,
+    shoppinglistitem: 13,
     transaction: 12,
   };
 
@@ -125,7 +128,87 @@ export async function POST(request: NextRequest) {
         if (invalidAccountReference) continue;
       }
 
-      if (entityLower === "account") {
+        if (entityLower === "shoppinglistitem") {
+          const householdId = payload.householdId;
+          if (!householdId || !userHouseholdRoleMap.has(householdId)) {
+            results.push({
+              mutationId: mutation.mutationId,
+              status: "rejected",
+              reason: "Forbidden: User is not a member of this household",
+            });
+            continue;
+          }
+
+          if (mutation.op === "CREATE") {
+            const name = typeof payload.name === "string" ? payload.name.trim() : "";
+            if (!name || name.length > 200) {
+              results.push({
+                mutationId: mutation.mutationId,
+                status: "rejected",
+                reason: "Validation failed: item name is required and must be 200 characters or fewer",
+              });
+              continue;
+            }
+            await prisma.shoppingListItem.upsert({
+              where: { id: mutation.id },
+              create: {
+                id: mutation.id,
+                householdId,
+                name,
+                quantity: typeof payload.quantity === "string" ? payload.quantity.trim() || null : null,
+                isCompleted: payload.isCompleted ?? false,
+                position: Number.isFinite(payload.position) ? payload.position : 0,
+                completedAt: payload.completedAt ? new Date(payload.completedAt) : null,
+                serverSeq: nextSeq,
+                deletedAt: null,
+              },
+              update: {
+                householdId,
+                name,
+                quantity: typeof payload.quantity === "string" ? payload.quantity.trim() || null : null,
+                isCompleted: payload.isCompleted ?? false,
+                position: Number.isFinite(payload.position) ? payload.position : 0,
+                completedAt: payload.completedAt ? new Date(payload.completedAt) : null,
+                serverSeq: nextSeq,
+                deletedAt: null,
+              },
+            });
+          } else if (mutation.op === "UPDATE") {
+            const existingItem = await prisma.shoppingListItem.findUnique({ where: { id: mutation.id } });
+            if (!existingItem || existingItem.householdId !== householdId) {
+              results.push({ mutationId: mutation.mutationId, status: "rejected", reason: "Shopping-list item not found" });
+              continue;
+            }
+            const name = payload.name === undefined ? undefined : String(payload.name).trim();
+            if (name !== undefined && (!name || name.length > 200)) {
+              results.push({ mutationId: mutation.mutationId, status: "rejected", reason: "Validation failed: invalid item name" });
+              continue;
+            }
+            await prisma.shoppingListItem.update({
+              where: { id: mutation.id },
+              data: {
+                ...(name !== undefined ? { name } : {}),
+                ...(payload.quantity !== undefined
+                  ? { quantity: typeof payload.quantity === "string" ? payload.quantity.trim() || null : null }
+                  : {}),
+                ...(payload.isCompleted !== undefined ? { isCompleted: Boolean(payload.isCompleted) } : {}),
+                ...(payload.position !== undefined && Number.isFinite(payload.position)
+                  ? { position: payload.position }
+                  : {}),
+                ...(payload.completedAt !== undefined
+                  ? { completedAt: payload.completedAt ? new Date(payload.completedAt) : null }
+                  : {}),
+                serverSeq: nextSeq,
+                deletedAt: null,
+              },
+            });
+          } else {
+            await prisma.shoppingListItem.updateMany({
+              where: { id: mutation.id, householdId },
+              data: { serverSeq: nextSeq, deletedAt: new Date() },
+            });
+          }
+        } else if (entityLower === "account") {
         if (mutation.op === "CREATE") {
           if (payload.householdId) {
             const role = userHouseholdRoleMap.get(payload.householdId);

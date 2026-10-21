@@ -42,6 +42,7 @@ export async function GET(request: NextRequest) {
     loans,
     loanScheduleEntries,
     loanPayments,
+    shoppingListItems,
   ] = await Promise.all([
     prisma.account.findMany({
       where: {
@@ -169,6 +170,13 @@ export async function GET(request: NextRequest) {
       },
       orderBy: { serverSeq: "asc" },
     }),
+    prisma.shoppingListItem.findMany({
+      where: {
+        householdId: { in: allHouseholdIds },
+        serverSeq: { gt: cursor },
+      },
+      orderBy: { serverSeq: "asc" },
+    }),
   ]);
 
   let maxSeq = cursor;
@@ -210,6 +218,9 @@ export async function GET(request: NextRequest) {
   }
   for (const lp of loanPayments) {
     if (lp.serverSeq > maxSeq) maxSeq = lp.serverSeq;
+  }
+  for (const item of shoppingListItems) {
+    if (item.serverSeq > maxSeq) maxSeq = item.serverSeq;
   }
 
   const serializedAccounts = accounts.map((a: any) => {
@@ -329,6 +340,15 @@ export async function GET(request: NextRequest) {
     createdAt: lp.createdAt.toISOString(),
   }));
 
+  const serializedShoppingListItems = shoppingListItems.map((item) => ({
+    ...item,
+    serverSeq: Number(item.serverSeq),
+    completedAt: item.completedAt ? item.completedAt.toISOString() : null,
+    createdAt: item.createdAt.toISOString(),
+    updatedAt: item.updatedAt.toISOString(),
+    deletedAt: item.deletedAt ? item.deletedAt.toISOString() : null,
+  }));
+
   return NextResponse.json({
     cursor: Number(maxSeq),
     activeHouseholdIds: allHouseholdIds,
@@ -346,5 +366,6 @@ export async function GET(request: NextRequest) {
     loans: serializedLoans,
     loanScheduleEntries: serializedLoanScheduleEntries,
     loanPayments: serializedLoanPayments,
+    shoppingListItems: serializedShoppingListItems,
   });
 }

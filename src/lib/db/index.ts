@@ -256,6 +256,20 @@ export interface LocalLoanPayment {
   createdAt: string;
 }
 
+export interface LocalShoppingListItem {
+  id: string;
+  householdId: string;
+  name: string;
+  quantity?: string | null;
+  isCompleted: boolean;
+  position: number;
+  completedAt?: string | null;
+  serverSeq: number;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt?: string | null;
+}
+
 export interface OutboxMutation {
   mutationId: string;
   entity:
@@ -269,7 +283,8 @@ export interface OutboxMutation {
     | "fixedDeposit"
     | "loan"
     | "loanScheduleEntry"
-    | "loanPayment";
+    | "loanPayment"
+    | "shoppingListItem";
   op: "CREATE" | "UPDATE" | "DELETE";
   id: string;
   payload?: unknown;
@@ -297,6 +312,7 @@ export class HardMoneyDB extends Dexie {
   loans!: Table<LocalLoan, string>;
   loanScheduleEntries!: Table<LocalLoanScheduleEntry, string>;
   loanPayments!: Table<LocalLoanPayment, string>;
+  shoppingListItems!: Table<LocalShoppingListItem, string>;
   outbox!: Table<OutboxMutation, string>;
   syncMeta!: Table<SyncMeta, string>;
 
@@ -363,6 +379,26 @@ export class HardMoneyDB extends Dexie {
       loans: "id, userId, kind, status, serverSeq, deletedAt",
       loanScheduleEntries: "id, loanId, installmentNumber, status, dueDate, serverSeq, deletedAt",
       loanPayments: "id, loanId, transactionId, scheduleEntryId, paymentDate, serverSeq",
+      outbox: "mutationId, entity, op, id, status, createdAt",
+      syncMeta: "key",
+    });
+
+    // Version 6: shared household shopping list
+    this.version(6).stores({
+      accounts: "id, userId, householdId, name, type, serverSeq, deletedAt, isArchived",
+      categories: "id, userId, householdId, name, serverSeq, deletedAt",
+      transactions: "id, userId, accountId, toAccountId, categoryId, transactionDate, serverSeq, deletedAt",
+      templates: "id, userId, name, serverSeq, deletedAt",
+      budgets: "id, userId, categoryId, serverSeq, deletedAt",
+      budgetSnapshots: "id, userId, categoryId, month, serverSeq",
+      creditCardStatements: "id, userId, accountId, cycleCutoffDate, serverSeq",
+      installmentPlans: "id, userId, accountId, status, serverSeq, deletedAt",
+      fixedDeposits: "id, userId, bankName, status, maturityDate, serverSeq, deletedAt",
+      fixedDepositPayouts: "id, fixedDepositId, periodEnd, serverSeq",
+      loans: "id, userId, kind, status, serverSeq, deletedAt",
+      loanScheduleEntries: "id, loanId, installmentNumber, status, dueDate, serverSeq, deletedAt",
+      loanPayments: "id, loanId, transactionId, scheduleEntryId, paymentDate, serverSeq",
+      shoppingListItems: "id, householdId, isCompleted, position, serverSeq, deletedAt",
       outbox: "mutationId, entity, op, id, status, createdAt",
       syncMeta: "key",
     });

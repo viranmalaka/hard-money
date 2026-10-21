@@ -77,6 +77,7 @@ async function warmLiveCache(db: HardMoneyDB) {
     ["useLoans", () => db.loans.filter(notDeleted).toArray()],
     ["useLoanScheduleEntries", () => db.loanScheduleEntries.toArray()],
     ["useLoanPayments", () => db.loanPayments.toArray()],
+    ["useShoppingListItems", () => db.shoppingListItems.filter(notDeleted).toArray()],
   ];
   await Promise.all(
     entries.map(async ([key, q]) => {
