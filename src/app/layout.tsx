@@ -51,7 +51,7 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body className="h-screen h-[100dvh] w-full overflow-hidden bg-app text-[var(--text)]">
+      <body className="fixed inset-0 h-screen h-[100dvh] w-full overflow-hidden overscroll-none bg-app text-[var(--text)]">
         <ThemeProvider>
           <Suspense fallback={null}>
             <SyncProvider>

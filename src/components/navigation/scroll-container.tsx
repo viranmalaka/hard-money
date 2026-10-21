@@ -28,6 +28,10 @@ export function ScrollContainer({ className, children }: { className?: string; c
     <div
       ref={ref}
       className={className}
+      style={{
+        overscrollBehavior: "contain",
+        WebkitOverflowScrolling: "touch",
+      }}
       onScroll={(e) => {
         positions.set(currentPath.current, e.currentTarget.scrollTop);
       }}
