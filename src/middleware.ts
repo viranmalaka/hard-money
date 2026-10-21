@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { jwtVerify } from "jose";
 
-const AUTH_SECRET = process.env.AUTH_SECRET || "insecure-dev-auth-secret-minimum-32-characters-long";
+const AUTH_SECRET =
+  process.env.AUTH_SECRET ||
+  "insecure-dev-auth-secret-minimum-32-characters-long";
 const SECRET_KEY = new TextEncoder().encode(AUTH_SECRET.padEnd(32, "0"));
 const SESSION_COOKIE_NAME = "hardmoney_session";
 
@@ -13,6 +15,7 @@ const PUBLIC_PATHS = [
   "/api/health",
   "/api/test",
   "/api/v1/cron",
+  "/api/v1/webhooks",
 ];
 
 export async function middleware(request: NextRequest) {
@@ -41,7 +44,7 @@ export async function middleware(request: NextRequest) {
   }
 
   const isPublicPath = PUBLIC_PATHS.some(
-    (p) => pathname === p || pathname.startsWith(p + "/")
+    (p) => pathname === p || pathname.startsWith(p + "/"),
   );
 
   // Unauthenticated user trying to access protected route
@@ -59,7 +62,8 @@ export async function middleware(request: NextRequest) {
   // Authenticated user trying to access login/register
   if (isAuthenticated && (pathname === "/login" || pathname === "/register")) {
     const callbackUrl = request.nextUrl.searchParams.get("callbackUrl");
-    const redirectUrl = callbackUrl && callbackUrl.startsWith("/") ? callbackUrl : "/";
+    const redirectUrl =
+      callbackUrl && callbackUrl.startsWith("/") ? callbackUrl : "/";
     return NextResponse.redirect(new URL(redirectUrl, request.url));
   }
 

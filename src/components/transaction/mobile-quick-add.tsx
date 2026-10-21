@@ -19,6 +19,7 @@ import { useRouter } from "next/navigation";
 import { LocalAccount, LocalCategory, LocalTemplate } from "@/lib/db";
 import { TransactionType } from "./quick-add-context";
 import { CategoryIcon } from "@/components/ui/category-icon";
+import { groupCategoriesByType } from "@/lib/categories-data";
 
 export type MobileActiveField =
   | "amount"
@@ -179,63 +180,74 @@ export function MobileQuickAdd({
     [activeAccounts]
   );
 
-  // Step transitions
+  // Expense/Income categories for the picker (the current type's group is shown first)
+  const categoryGroups = useMemo(() => groupCategoriesByType(categories), [categories]);
+
+  /**
+   * Returns the first required field that is still empty, in entry order.
+   * `overrides` lets callers account for a value they've just set (state isn't updated yet).
+   */
+  const firstMissingField = (
+    overrides: { categoryId?: string; accountId?: string; toAccountId?: string } = {}
+  ): MobileActiveField | null => {
+    const cat = overrides.categoryId ?? categoryId;
+    const acc = overrides.accountId ?? accountId;
+    const toAcc = overrides.toAccountId ?? toAccountId;
+    if (!evalResult.isValid || !evalResult.value || evalResult.value <= 0) return "amount";
+    if (type !== "TRANSFER" && !cat) return "category";
+    if (!acc) return "account";
+    if (type === "TRANSFER" && (!toAcc || toAcc === acc)) return "toAccount";
+    return null;
+  };
+
+  /** Move to the next empty required field; when everything is filled, open the note panel. */
+  const advance = (overrides?: Parameters<typeof firstMissingField>[0]) => {
+    setActiveField(firstMissingField(overrides) ?? "note");
+  };
+
+  /** Save if complete, otherwise jump to the first missing required field. */
+  const submitOrFocusMissing = () => {
+    const missing = firstMissingField();
+    if (missing) {
+      setActiveField(missing);
+      if (missing === "amount") setErrorMsg("Please enter a valid amount");
+      return;
+    }
+    validateAndSubmit();
+  };
+
+  // Keypad OK: amount must be valid, then go to the next required field
   const handleKeypadOk = () => {
-    // If division by zero or negative, error is handled
     if (!evalResult.isValid || !evalResult.value || evalResult.value <= 0) {
       setErrorMsg("Please enter a valid amount");
       return;
     }
-
-    if (type === "TRANSFER") {
-      if (!accountId) {
-        setActiveField("account");
-      } else if (!toAccountId) {
-        setActiveField("toAccount");
-      } else {
-        validateAndSubmit();
-      }
-    } else {
-      if (!categoryId) {
-        setActiveField("category");
-      } else if (!accountId) {
-        setActiveField("account");
-      } else {
-        validateAndSubmit();
-      }
-    }
+    setErrorMsg("");
+    advance();
   };
 
   const handleSelectCategory = (catId: string) => {
+    // Picking a category from the other group switches Expense <-> Income
+    const cat = categories.find((c) => c.id === catId);
+    if (cat) {
+      const catType = categoryGroups.income.includes(cat) ? "INCOME" : "EXPENSE";
+      if (catType !== type) setType(catType);
+    }
     setCategoryId(catId);
     setErrorMsg("");
-    // Auto-advance to Account
-    setActiveField("account");
+    advance({ categoryId: catId });
   };
 
   const handleSelectAccount = (accId: string) => {
     setAccountId(accId);
     setErrorMsg("");
-    if (type === "TRANSFER") {
-      setActiveField("toAccount");
-    } else {
-      // If amount and category are filled, can stay or advance to note
-      if (!evalResult.value || evalResult.value <= 0) {
-        setActiveField("amount");
-      } else {
-        setActiveField("note");
-      }
-    }
+    advance({ accountId: accId });
   };
 
   const handleSelectToAccount = (accId: string) => {
     setToAccountId(accId);
     setErrorMsg("");
-    if (!evalResult.value || evalResult.value <= 0) {
-      setActiveField("amount");
-    } else {
-      setActiveField("note");
-    }
+    advance({ toAccountId: accId });
   };
 
   const handleSwapTransferAccounts = (e: React.MouseEvent) => {
@@ -293,8 +305,8 @@ export function MobileQuickAdd({
           <button
             type="button"
             data-testid="quick-add-mobile-save"
-            disabled={isDivisionByZero || !evalResult.value || evalResult.value <= 0}
-            onClick={() => validateAndSubmit(false)}
+            disabled={isDivisionByZero}
+            onClick={submitOrFocusMissing}
             className="px-3.5 py-1.5 rounded-md text-xs font-semibold bg-white text-black hover:bg-slate-200 active:scale-95 disabled:opacity-40 disabled:pointer-events-none transition-all shadow-xs"
           >
             Save
@@ -755,31 +767,45 @@ export function MobileQuickAdd({
               className="p-3 grid grid-cols-3 gap-2"
               style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 16px)" }}
             >
-              {categories.map((cat) => {
-                const isSelected = categoryId === cat.id;
-                return (
-                  <button
-                    key={cat.id}
-                    type="button"
-                    onClick={() => handleSelectCategory(cat.id)}
-                    className={`flex flex-col items-center justify-center py-3 px-2 rounded-xl border text-center transition-all ${
-                      isSelected
-                        ? "bg-[#202734] border-[#3B82F6] text-white ring-1 ring-[#3B82F6] shadow-sm"
-                        : "bg-[#1B2028] border-slate-800 text-slate-300 hover:bg-[#222933] active:scale-95"
-                    }`}
-                  >
-                    <span
-                      className="w-9 h-9 rounded-full flex items-center justify-center mb-1.5 shrink-0 text-white shadow-sm"
-                      style={{ backgroundColor: cat.color || "#64748B" }}
+              {(type === "INCOME"
+                ? [{ label: "Income", items: categoryGroups.income }, { label: "Expense", items: categoryGroups.expense }]
+                : [{ label: "Expense", items: categoryGroups.expense }, { label: "Income", items: categoryGroups.income }]
+              )
+                .filter((g) => g.items.length > 0)
+                .map((group, gi) => (
+                  <React.Fragment key={group.label}>
+                    <div
+                      className={`col-span-3 text-[11px] font-semibold text-slate-400 uppercase tracking-wider ${
+                        gi > 0 ? "pt-2" : ""
+                      }`}
                     >
-                      <CategoryIcon name={cat.icon} size={18} className="text-white" />
-                    </span>
-                    <span className="text-xs font-medium truncate max-w-full leading-tight">
-                      {cat.name}
-                    </span>
-                  </button>
-                );
-              })}
+                      {group.label}
+                    </div>
+                    {group.items.map((cat) => {
+                      const isSelected = categoryId === cat.id;
+                      return (
+                        <button
+                          key={cat.id}
+                          type="button"
+                          onClick={() => handleSelectCategory(cat.id)}
+                          className={`flex flex-col items-center justify-center py-3 px-2 rounded-xl border text-center transition-all ${
+                            isSelected
+                              ? "bg-[#202734] border-[#3B82F6] text-white ring-1 ring-[#3B82F6] shadow-sm"
+                              : "bg-[#1B2028] border-slate-800 text-slate-300 hover:bg-[#222933] active:scale-95"
+                          }`}
+                        >
+                          <span
+                            className="w-9 h-9 rounded-full flex items-center justify-center mb-1.5 shrink-0 text-white shadow-sm"
+                            style={{ backgroundColor: cat.color || "#64748B" }}
+                          >
+                            <CategoryIcon name={cat.icon} size={18} className="text-white" />
+                          </span>
+                          <span className="text-xs font-medium truncate max-w-full leading-tight">{cat.name}</span>
+                        </button>
+                      );
+                    })}
+                  </React.Fragment>
+                ))}
 
               {/* Add Category Tile */}
               <button
@@ -952,7 +978,7 @@ export function MobileQuickAdd({
                   type="button"
                   onClick={() => {
                     setDate(todayStr);
-                    setActiveField("amount");
+                    advance();
                   }}
                   className={`py-3 px-2 rounded-xl border text-center transition-all ${
                     date === todayStr
@@ -970,7 +996,7 @@ export function MobileQuickAdd({
                   type="button"
                   onClick={() => {
                     setDate(yesterdayStr);
-                    setActiveField("amount");
+                    advance();
                   }}
                   className={`py-3 px-2 rounded-xl border text-center transition-all ${
                     date === yesterdayStr
@@ -988,7 +1014,7 @@ export function MobileQuickAdd({
                   type="button"
                   onClick={() => {
                     setDate(twoDaysAgoStr);
-                    setActiveField("amount");
+                    advance();
                   }}
                   className={`py-3 px-2 rounded-xl border text-center transition-all ${
                     date === twoDaysAgoStr
@@ -1032,7 +1058,6 @@ export function MobileQuickAdd({
                   placeholder="e.g. Lunch with team, monthly salary, Uber ride"
                   rows={3}
                   className="w-full px-3 py-2 rounded-xl border border-slate-700 bg-[#1B2028] text-white text-sm focus:outline-none focus:ring-1 focus:ring-[#3B82F6]"
-                  autoFocus
                 />
               </div>
 
@@ -1088,13 +1113,15 @@ export function MobileQuickAdd({
                 </button>
               </div>
 
-              {/* Done button */}
+              {/* Primary action: save (or jump to the first missing required field) */}
               <button
                 type="button"
-                onClick={() => setActiveField("amount")}
-                className="w-full py-2.5 rounded-xl bg-slate-700 hover:bg-slate-600 text-white font-semibold text-xs active:scale-98 transition-all"
+                data-testid="quick-add-mobile-note-save"
+                disabled={isDivisionByZero}
+                onClick={submitOrFocusMissing}
+                className={`w-full py-3 rounded-xl font-bold text-sm shadow-md active:scale-98 transition-all disabled:opacity-40 ${themeStyles.okBtnBg}`}
               >
-                Done
+                Save Transaction
               </button>
             </div>
           )}

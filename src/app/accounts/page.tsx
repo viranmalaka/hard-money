@@ -29,6 +29,7 @@ export default function AccountsPage() {
   const loans = useLoans();
   const loanPayments = useLoanPayments();
   const [showArchived, setShowArchived] = useState(false);
+  const [activeTab, setActiveTab] = useState<"cash_bank" | "liabilities" | "investments">("cash_bank");
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingAccount, setEditingAccount] = useState<LocalAccount | null>(null);
   const [settlingCard, setSettlingCard] = useState<LocalAccount | null>(null);
@@ -452,15 +453,60 @@ export default function AccountsPage() {
         </div>
       </div>
 
+      {/* Account Category Tabs */}
+      <div
+        data-testid="accounts-tab-bar"
+        className="flex items-center gap-1 p-1 bg-[var(--border)] rounded-lg text-xs font-semibold select-none"
+      >
+        <button
+          type="button"
+          data-testid="tab-cash-bank"
+          onClick={() => setActiveTab("cash_bank")}
+          className={`flex-1 py-1.5 rounded-md text-center transition-all ${
+            activeTab === "cash_bank"
+              ? "bg-[var(--surface)] text-[var(--text)] shadow-xs"
+              : "text-[var(--text-muted)] hover:text-[var(--text)]"
+          }`}
+        >
+          Cash & Bank
+        </button>
+        <button
+          type="button"
+          data-testid="tab-liabilities"
+          onClick={() => setActiveTab("liabilities")}
+          className={`flex-1 py-1.5 rounded-md text-center transition-all ${
+            activeTab === "liabilities"
+              ? "bg-[var(--surface)] text-[var(--text)] shadow-xs"
+              : "text-[var(--text-muted)] hover:text-[var(--text)]"
+          }`}
+        >
+          Liabilities
+        </button>
+        <button
+          type="button"
+          data-testid="tab-investments"
+          onClick={() => setActiveTab("investments")}
+          className={`flex-1 py-1.5 rounded-md text-center transition-all ${
+            activeTab === "investments"
+              ? "bg-[var(--surface)] text-[var(--text)] shadow-xs"
+              : "text-[var(--text-muted)] hover:text-[var(--text)]"
+          }`}
+        >
+          Investments
+        </button>
+      </div>
+
       {/* Account Groups */}
       <div className="space-y-4">
-        {visibleAccounts.length === 0 && (
-          <EmptyState
-            title="No accounts created"
-            description="Add cash, bank accounts, or credit cards to begin tracking balances and net worth."
-            icon={<Wallet size={24} />}
-          />
-        )}
+        {/* Tab 1: Cash & Bank Accounts */}
+        <div className={`space-y-4 ${activeTab === "cash_bank" ? "block" : "hidden"}`}>
+          {cashAccounts.length === 0 && bankAccounts.length === 0 && (
+            <EmptyState
+              title="No cash or bank accounts"
+              description="Add cash or bank accounts to track your liquid money and transactions."
+              icon={<Wallet size={24} />}
+            />
+          )}
           {/* Cash Group */}
           {cashAccounts.length > 0 && (
             <section data-testid="group-cash" className="space-y-2">
@@ -517,6 +563,17 @@ export default function AccountsPage() {
             </section>
           )}
 
+        </div>
+
+        {/* Tab 2: Liabilities (Credit Cards, Installments & Loans) */}
+        <div className={`space-y-4 ${activeTab === "liabilities" ? "block" : "hidden"}`}>
+          {creditAccounts.length === 0 && installmentPlans.length === 0 && loans.length === 0 && (
+            <EmptyState
+              title="No liabilities"
+              description="Add credit cards, installment plans, or loans to track your debts and repayments."
+              icon={<CreditCard size={24} />}
+            />
+          )}
           {/* Credit Cards Group */}
           {creditAccounts.length > 0 && (
             <section data-testid="group-credit" className="space-y-2">
@@ -678,6 +735,123 @@ export default function AccountsPage() {
             )}
           </section>
 
+
+          {/* Loans & Leases Group */}
+          <section data-testid="group-loans" className="space-y-2">
+            <div className="flex items-center justify-between text-xs font-medium text-[var(--text-muted)] px-1">
+              <span className="flex items-center gap-1.5">
+                <Landmark size={14} />
+                <span>Loans & Leases</span>
+              </span>
+              <div className="flex items-center gap-3">
+                <span data-testid="subtotal-loans" className="tabular-nums font-semibold text-[var(--text)]">
+                  {formatMoney(loansSubtotal)}
+                </span>
+                <button
+                  type="button"
+                  data-testid="add-loan-btn"
+                  onClick={() => setIsLoanModalOpen(true)}
+                  className="flex items-center gap-1 text-[11px] font-medium text-[var(--text)] px-2 py-0.5 rounded border border-hairline hover:bg-[var(--border)] transition-colors"
+                >
+                  <Plus size={12} />
+                  <span>Add Loan / Lease</span>
+                </button>
+              </div>
+            </div>
+
+            {loans.length === 0 ? (
+              <div className="p-4 rounded border border-hairline flat-card text-center text-xs text-[var(--text-muted)]">
+                No loans or leases active.
+              </div>
+            ) : (
+              <div className="grid gap-2">
+                {loans.map((loan) => {
+                  const remPrincipal = loanRemainingMap.get(loan.id) ?? loan.originalPrincipalMinor;
+                  return (
+                    <div
+                      key={loan.id}
+                      data-testid={`loan-item-${loan.id}`}
+                      className="p-3 rounded border border-hairline flat-card space-y-2"
+                    >
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span data-testid="loan-lender-name" className="text-xs font-semibold text-[var(--text)]">
+                              {loan.lenderName}
+                            </span>
+                            <span
+                              className={`px-1.5 py-0.2 rounded font-semibold text-[10px] ${
+                                loan.kind === "LEASE"
+                                  ? "bg-purple-500/10 text-purple-600 dark:text-purple-400"
+                                  : "bg-blue-500/10 text-blue-600 dark:text-blue-400"
+                              }`}
+                            >
+                              {loan.kind}
+                            </span>
+                            <span
+                              className={`px-1.5 py-0.2 rounded font-semibold text-[10px] ${
+                                loan.status === "ACTIVE"
+                                  ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                                  : "bg-gray-500/10 text-gray-500"
+                              }`}
+                            >
+                              {loan.status}
+                            </span>
+                            <span className="px-1.5 py-0.2 rounded font-semibold text-[10px] bg-slate-500/10 text-slate-600 dark:text-slate-400">
+                              {loan.calculationType === "FLAT_RATE" ? "FLAT RATE" : "REDUCING BAL"}
+                            </span>
+                          </div>
+                          <div className="text-[11px] text-[var(--text-muted)] flex items-center gap-3 mt-1">
+                            <span>Principal: {formatMoney(loan.originalPrincipalMinor)}</span>
+                            <span>APR: {(loan.annualInterestRateBps / 100).toFixed(2)}%</span>
+                            <span>Tenure: {loan.tenureMonths} mo</span>
+                            {loan.residualValueMinor ? (
+                              <span>Residual: {formatMoney(loan.residualValueMinor)}</span>
+                            ) : null}
+                          </div>
+                        </div>
+
+                        <div className="text-right">
+                          <span className="text-[10px] text-[var(--text-muted)] block">Monthly EMI</span>
+                          <span
+                            data-testid="loan-monthly-emi"
+                            className="text-xs font-semibold tabular-nums text-[var(--text)]"
+                          >
+                            {formatMoney(loan.monthlyEmiAmountMinor)}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between pt-1 border-t border-hairline/50 text-[11px]">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[var(--text-muted)]">Remaining Principal:</span>
+                          <span
+                            data-testid="loan-remaining-principal"
+                            className="font-mono font-semibold tabular-nums text-[var(--text)]"
+                          >
+                            {formatMoney(remPrincipal)}
+                          </span>
+                        </div>
+
+                        <button
+                          type="button"
+                          data-testid="loan-details-btn"
+                          onClick={() => setSelectedLoan(loan)}
+                          className="px-2 py-0.5 rounded border border-hairline text-xs font-medium text-[var(--text)] hover:bg-[var(--border)] transition-colors"
+                        >
+                          Details & Schedule
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+        </div>
+
+        {/* Tab 3: Investments (Fixed Deposits) */}
+        <div className={`space-y-4 ${activeTab === "investments" ? "block" : "hidden"}`}>
           {/* Fixed Deposits Group */}
           <section data-testid="group-fixed-deposits" className="space-y-2">
             <div className="flex items-center justify-between text-xs font-medium text-[var(--text-muted)] px-1">
@@ -823,119 +997,8 @@ export default function AccountsPage() {
             )}
           </section>
 
-          {/* Loans & Leases Group */}
-          <section data-testid="group-loans" className="space-y-2">
-            <div className="flex items-center justify-between text-xs font-medium text-[var(--text-muted)] px-1">
-              <span className="flex items-center gap-1.5">
-                <Landmark size={14} />
-                <span>Loans & Leases</span>
-              </span>
-              <div className="flex items-center gap-3">
-                <span data-testid="subtotal-loans" className="tabular-nums font-semibold text-[var(--text)]">
-                  {formatMoney(loansSubtotal)}
-                </span>
-                <button
-                  type="button"
-                  data-testid="add-loan-btn"
-                  onClick={() => setIsLoanModalOpen(true)}
-                  className="flex items-center gap-1 text-[11px] font-medium text-[var(--text)] px-2 py-0.5 rounded border border-hairline hover:bg-[var(--border)] transition-colors"
-                >
-                  <Plus size={12} />
-                  <span>Add Loan / Lease</span>
-                </button>
-              </div>
-            </div>
-
-            {loans.length === 0 ? (
-              <div className="p-4 rounded border border-hairline flat-card text-center text-xs text-[var(--text-muted)]">
-                No loans or leases active.
-              </div>
-            ) : (
-              <div className="grid gap-2">
-                {loans.map((loan) => {
-                  const remPrincipal = loanRemainingMap.get(loan.id) ?? loan.originalPrincipalMinor;
-                  return (
-                    <div
-                      key={loan.id}
-                      data-testid={`loan-item-${loan.id}`}
-                      className="p-3 rounded border border-hairline flat-card space-y-2"
-                    >
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span data-testid="loan-lender-name" className="text-xs font-semibold text-[var(--text)]">
-                              {loan.lenderName}
-                            </span>
-                            <span
-                              className={`px-1.5 py-0.2 rounded font-semibold text-[10px] ${
-                                loan.kind === "LEASE"
-                                  ? "bg-purple-500/10 text-purple-600 dark:text-purple-400"
-                                  : "bg-blue-500/10 text-blue-600 dark:text-blue-400"
-                              }`}
-                            >
-                              {loan.kind}
-                            </span>
-                            <span
-                              className={`px-1.5 py-0.2 rounded font-semibold text-[10px] ${
-                                loan.status === "ACTIVE"
-                                  ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-                                  : "bg-gray-500/10 text-gray-500"
-                              }`}
-                            >
-                              {loan.status}
-                            </span>
-                            <span className="px-1.5 py-0.2 rounded font-semibold text-[10px] bg-slate-500/10 text-slate-600 dark:text-slate-400">
-                              {loan.calculationType === "FLAT_RATE" ? "FLAT RATE" : "REDUCING BAL"}
-                            </span>
-                          </div>
-                          <div className="text-[11px] text-[var(--text-muted)] flex items-center gap-3 mt-1">
-                            <span>Principal: {formatMoney(loan.originalPrincipalMinor)}</span>
-                            <span>APR: {(loan.annualInterestRateBps / 100).toFixed(2)}%</span>
-                            <span>Tenure: {loan.tenureMonths} mo</span>
-                            {loan.residualValueMinor ? (
-                              <span>Residual: {formatMoney(loan.residualValueMinor)}</span>
-                            ) : null}
-                          </div>
-                        </div>
-
-                        <div className="text-right">
-                          <span className="text-[10px] text-[var(--text-muted)] block">Monthly EMI</span>
-                          <span
-                            data-testid="loan-monthly-emi"
-                            className="text-xs font-semibold tabular-nums text-[var(--text)]"
-                          >
-                            {formatMoney(loan.monthlyEmiAmountMinor)}
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center justify-between pt-1 border-t border-hairline/50 text-[11px]">
-                        <div className="flex items-center gap-2">
-                          <span className="text-[var(--text-muted)]">Remaining Principal:</span>
-                          <span
-                            data-testid="loan-remaining-principal"
-                            className="font-mono font-semibold tabular-nums text-[var(--text)]"
-                          >
-                            {formatMoney(remPrincipal)}
-                          </span>
-                        </div>
-
-                        <button
-                          type="button"
-                          data-testid="loan-details-btn"
-                          onClick={() => setSelectedLoan(loan)}
-                          className="px-2 py-0.5 rounded border border-hairline text-xs font-medium text-[var(--text)] hover:bg-[var(--border)] transition-colors"
-                        >
-                          Details & Schedule
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </section>
         </div>
+      </div>
 
       {/* Account Creation & Edit Modal / Drawer */}
       {isFormOpen && (

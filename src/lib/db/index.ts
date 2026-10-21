@@ -34,6 +34,7 @@ export interface LocalCategory {
   name: string;
   icon: string;
   color: string;
+  type?: "EXPENSE" | "INCOME";
   serverSeq: number;
   createdAt: string;
   updatedAt: string;

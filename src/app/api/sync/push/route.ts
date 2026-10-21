@@ -266,6 +266,7 @@ export async function POST(request: NextRequest) {
               name: payload.name || "Untitled Category",
               icon: payload.icon || "Tag",
               color: payload.color || "#6B7075",
+              type: payload.type === "INCOME" ? "INCOME" : "EXPENSE",
               serverSeq: nextSeq,
               deletedAt: null,
             },
@@ -273,6 +274,7 @@ export async function POST(request: NextRequest) {
               name: payload.name,
               icon: payload.icon,
               color: payload.color,
+              ...(payload.type !== undefined && { type: payload.type === "INCOME" ? "INCOME" : "EXPENSE" }),
               serverSeq: nextSeq,
               deletedAt: null,
             },
@@ -284,6 +286,7 @@ export async function POST(request: NextRequest) {
               ...(payload.name !== undefined && { name: payload.name }),
               ...(payload.icon !== undefined && { icon: payload.icon }),
               ...(payload.color !== undefined && { color: payload.color }),
+              ...(payload.type !== undefined && { type: payload.type === "INCOME" ? "INCOME" : "EXPENSE" }),
               serverSeq: nextSeq,
             },
           });

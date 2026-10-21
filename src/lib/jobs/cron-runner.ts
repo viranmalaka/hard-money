@@ -423,7 +423,7 @@ export async function runCronTick(options?: { now?: Date }): Promise<{
           investmentCategory = await prisma.category.create({
             data: {
               userId: fd.userId,
-              name: "Investment Yield",
+              name: "Investment Yield", type: "INCOME",
               icon: "📈",
               color: "#10b981",
               serverSeq: nextSeq,

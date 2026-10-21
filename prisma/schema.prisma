@@ -80,6 +80,7 @@ model Category {
   name        String
   icon        String    @default("Tag")
   color       String    @default("#6B7075")
+  type        String    @default("EXPENSE") // EXPENSE | INCOME
   serverSeq   BigInt    @default(0)
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt

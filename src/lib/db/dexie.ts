@@ -26,6 +26,7 @@ export interface ClientCategory {
   name: string;
   icon: string;
   color: string;
+  type?: "EXPENSE" | "INCOME";
   deletedAt?: string | null;
 }
 

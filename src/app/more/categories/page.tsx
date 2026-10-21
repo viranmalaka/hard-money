@@ -2,10 +2,11 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Plus, Trash2, Lock, Edit2 } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, Edit2, TrendingDown, TrendingUp } from "lucide-react";
 import { useCategories, useSync } from "@/components/sync-provider";
 import { localCreateCategory, localDeleteCategory, localUpdateCategory } from "@/lib/sync/client";
-import { DEFAULT_SYSTEM_CATEGORIES } from "@/lib/categories-data";
+import { CategoryType, getCategoryType, groupCategoriesByType } from "@/lib/categories-data";
+import type { LocalCategory } from "@/lib/db";
 import { CategoryIcon } from "@/components/ui/category-icon";
 import { IconPicker } from "@/components/ui/icon-picker";
 
@@ -22,8 +23,6 @@ const COLOR_PALETTE = [
   "#F03E3E",
 ];
 
-const SYSTEM_NAMES = new Set(DEFAULT_SYSTEM_CATEGORIES.map((c) => c.name));
-
 export default function CategoriesPage() {
   const categories = useCategories();
   const { db } = useSync();
@@ -33,27 +32,31 @@ export default function CategoriesPage() {
   const [name, setName] = useState("");
   const [icon, setIcon] = useState("Tag");
   const [color, setColor] = useState("#1971C2");
+  const [catType, setCatType] = useState<CategoryType>("EXPENSE");
   const [error, setError] = useState("");
 
   const resetForm = () => {
     setName("");
     setIcon("Tag");
     setColor("#1971C2");
+    setCatType("EXPENSE");
     setError("");
     setEditingId(null);
     setIsFormOpen(false);
   };
 
-  const handleOpenCreate = () => {
+  const handleOpenCreate = (t: CategoryType = "EXPENSE") => {
     resetForm();
+    setCatType(t);
     setIsFormOpen(true);
   };
 
-  const handleOpenEdit = (cat: { id: string; name: string; icon: string; color: string }) => {
+  const handleOpenEdit = (cat: LocalCategory) => {
     setEditingId(cat.id);
     setName(cat.name);
     setIcon(cat.icon || "Tag");
     setColor(cat.color || "#1971C2");
+    setCatType(getCategoryType(cat));
     setError("");
     setIsFormOpen(true);
   };
@@ -70,6 +73,7 @@ export default function CategoriesPage() {
         name: name.trim(),
         icon,
         color,
+        type: catType,
       });
     } else {
       await localCreateCategory(db, {
@@ -77,15 +81,18 @@ export default function CategoriesPage() {
         name: name.trim(),
         icon,
         color,
+        type: catType,
       });
     }
 
     resetForm();
   };
 
-  const handleDelete = async (id: string) => {
-    await localDeleteCategory(db, id);
+  const handleDelete = async (cat: LocalCategory) => {
+    await localDeleteCategory(db, cat.id);
   };
+
+  const groups = groupCategoriesByType(categories);
 
   return (
     <main className="flex-1 max-w-4xl mx-auto w-full px-4 py-3 space-y-4">
@@ -111,7 +118,7 @@ export default function CategoriesPage() {
         <button
           type="button"
           data-testid="add-category-btn"
-          onClick={handleOpenCreate}
+          onClick={() => handleOpenCreate()}
           className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded bg-[var(--text)] text-[var(--bg)] hover:opacity-90 active:scale-95 transition-all shadow-xs"
         >
           <Plus size={14} />
@@ -132,6 +139,27 @@ export default function CategoriesPage() {
             <span className="text-[11px] text-[var(--text-muted)]">
               Choose an icon and color
             </span>
+          </div>
+
+          <div className="space-y-1">
+            <label className="font-medium text-[var(--text-muted)] block">Type</label>
+            <div className="grid grid-cols-2 gap-1 p-0.5 bg-[var(--border)] rounded-md font-semibold">
+              {(["EXPENSE", "INCOME"] as const).map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  data-testid={`category-type-${t.toLowerCase()}`}
+                  onClick={() => setCatType(t)}
+                  className={`py-1.5 rounded transition-all ${
+                    catType === t
+                      ? "bg-[var(--surface)] text-[var(--text)] shadow-xs"
+                      : "text-[var(--text-muted)] hover:text-[var(--text)]"
+                  }`}
+                >
+                  {t === "EXPENSE" ? "Expense" : "Income"}
+                </button>
+              ))}
+            </div>
           </div>
 
           <div className="space-y-1">
@@ -212,18 +240,31 @@ export default function CategoriesPage() {
         </form>
       )}
 
-      {/* Category List */}
-      <div className="space-y-1">
-        <div className="flex items-center justify-between px-1">
-          <span className="text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">
-            All Categories ({categories.length})
-          </span>
-        </div>
+      {/* Category Lists: Expense & Income */}
+      {([
+        { key: "EXPENSE" as const, label: "Expense", items: groups.expense, Icon: TrendingDown, tone: "text-rose-500" },
+        { key: "INCOME" as const, label: "Income", items: groups.income, Icon: TrendingUp, tone: "text-emerald-500" },
+      ]).map(({ key, label, items, Icon, tone }) => (
+        <section key={key} data-testid={`category-section-${key.toLowerCase()}`} className="space-y-1">
+          <div className="flex items-center justify-between px-1">
+            <span className="flex items-center gap-1.5 text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">
+              <Icon size={13} className={tone} />
+              {label} ({items.length})
+            </span>
+            <button
+              type="button"
+              onClick={() => handleOpenCreate(key)}
+              className="flex items-center gap-1 text-[11px] font-medium text-[var(--text-muted)] hover:text-[var(--text)]"
+            >
+              <Plus size={12} /> Add
+            </button>
+          </div>
 
-        <div className="flat-card divide-y divide-hairline">
-          {categories.map((cat) => {
-            const isSystem = cat.userId === null || SYSTEM_NAMES.has(cat.name);
-            return (
+          <div className="flat-card divide-y divide-hairline">
+            {items.length === 0 && (
+              <p className="p-3 text-xs text-[var(--text-muted)]">No {label.toLowerCase()} categories yet.</p>
+            )}
+            {items.map((cat) => (
               <div
                 key={cat.id}
                 data-testid="category-row"
@@ -236,53 +277,38 @@ export default function CategoriesPage() {
                   >
                     <CategoryIcon name={cat.icon} size={15} className="text-white" />
                   </span>
-                  <div>
-                    <span
-                      data-testid="category-item-name"
-                      className="text-xs font-semibold text-[var(--text)] block"
-                    >
-                      {cat.name}
-                    </span>
-                    <span className="text-[10px] text-[var(--text-muted)] font-mono">
-                      {cat.icon || "Tag"}
-                    </span>
-                  </div>
-                  {isSystem && (
-                    <span className="flex items-center gap-1 text-[10px] text-[var(--text-muted)] bg-[var(--surface)] px-1.5 py-0.5 rounded border border-hairline ml-1">
-                      <Lock size={10} />
-                      <span>Default</span>
-                    </span>
-                  )}
+                  <span
+                    data-testid="category-item-name"
+                    className="text-xs font-semibold text-[var(--text)]"
+                  >
+                    {cat.name}
+                  </span>
                 </div>
 
                 <div className="flex items-center gap-1">
-                  {!isSystem && (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => handleOpenEdit(cat)}
-                        title="Edit category"
-                        className="p-1.5 rounded text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--surface)] transition-colors"
-                      >
-                        <Edit2 size={13} />
-                      </button>
-                      <button
-                        type="button"
-                        data-testid="category-delete-btn"
-                        onClick={() => handleDelete(cat.id)}
-                        title="Delete category"
-                        className="p-1.5 rounded text-[var(--text-muted)] hover:text-red-500 hover:bg-[var(--surface)] transition-colors"
-                      >
-                        <Trash2 size={13} />
-                      </button>
-                    </>
-                  )}
+                  <button
+                    type="button"
+                    onClick={() => handleOpenEdit(cat)}
+                    title="Edit category"
+                    className="p-1.5 rounded text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--surface)] transition-colors"
+                  >
+                    <Edit2 size={13} />
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="category-delete-btn"
+                    onClick={() => handleDelete(cat)}
+                    title="Delete category"
+                    className="p-1.5 rounded text-[var(--text-muted)] hover:text-red-500 hover:bg-[var(--surface)] transition-colors"
+                  >
+                    <Trash2 size={13} />
+                  </button>
                 </div>
               </div>
-            );
-          })}
-        </div>
-      </div>
+            ))}
+          </div>
+        </section>
+      ))}
     </main>
   );
 }

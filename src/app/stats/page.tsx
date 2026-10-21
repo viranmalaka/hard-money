@@ -295,39 +295,128 @@ export default function StatsPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
           {/* Flat SVG Donut Chart Card */}
           <div className="p-4 bg-[var(--surface)] border border-hairline rounded-xl flex flex-col items-center justify-center space-y-4">
-            <div className="relative w-48 h-48">
-              <svg viewBox="0 0 100 100" data-testid="donut-chart" className="w-full h-full -rotate-90">
-                {/* Background Ring */}
-                <circle cx="50" cy="50" r="38" fill="none" stroke="var(--border)" strokeWidth="12" />
-
-                {/* Slices */}
+            <div className="relative w-full max-w-[380px] aspect-[4/3]">
+              <svg viewBox="0 0 320 240" data-testid="donut-chart" className="w-full h-full overflow-visible">
                 {(() => {
-                  let accumulatedPercent = 0;
-                  const circumference = 2 * Math.PI * 38; // ~238.76
+                  const cx = 160;
+                  const cy = 120;
+                  const r = 58;
+                  const stroke = 20;
+                  const circumference = 2 * Math.PI * r;
+                  const MIN_LABEL_PCT = 3; // tiny slices are left to the list below
+                  const LABEL_GAP = 22;
 
-                  return categoryStats.list.map((item) => {
-                    const strokeDasharray = `${(item.percent / 100) * circumference} ${circumference}`;
-                    const strokeDashoffset = -((accumulatedPercent / 100) * circumference);
-                    accumulatedPercent += item.percent;
-
-                    return (
-                      <circle
-                        key={item.id}
-                        data-testid={`donut-slice-${item.id}`}
-                        aria-label={`${item.name}: ${item.percent}%`}
-                        cx="50"
-                        cy="50"
-                        r="38"
-                        fill="none"
-                        stroke={item.color}
-                        strokeWidth="12"
-                        strokeDasharray={strokeDasharray}
-                        strokeDashoffset={strokeDashoffset}
-                        className="transition-all duration-300 hover:opacity-85 cursor-pointer"
-                        onClick={() => setSelectedCategoryId(selectedCategoryId === item.id ? null : item.id)}
-                      />
-                    );
+                  // Slice geometry
+                  let acc = 0;
+                  const slices = categoryStats.list.map((item) => {
+                    const start = acc;
+                    acc += item.percent;
+                    const mid = ((start + item.percent / 2) / 100) * 2 * Math.PI - Math.PI / 2;
+                    return { item, start, mid };
                   });
+
+                  // Callout label layout: anchor on ring edge -> elbow -> horizontal run to label
+                  type Label = { id: string; color: string; name: string; pct: number; ax: number; ay: number; ex: number; ey: number; right: boolean; y: number };
+                  const labels: Label[] = slices
+                    .filter((sl) => sl.item.percent >= MIN_LABEL_PCT)
+                    .map((sl) => {
+                      const cos = Math.cos(sl.mid);
+                      const sin = Math.sin(sl.mid);
+                      const outer = r + stroke / 2;
+                      return {
+                        id: sl.item.id,
+                        color: sl.item.color,
+                        name: sl.item.name.length > 14 ? sl.item.name.slice(0, 13) + "…" : sl.item.name,
+                        pct: sl.item.percent,
+                        ax: cx + (outer + 2) * cos,
+                        ay: cy + (outer + 2) * sin,
+                        ex: cx + (outer + 14) * cos,
+                        ey: cy + (outer + 14) * sin,
+                        right: cos >= 0,
+                        y: cy + (outer + 14) * sin,
+                      };
+                    });
+                  // De-overlap per side (top -> bottom), then clamp into the viewBox
+                  for (const side of [true, false]) {
+                    const group = labels.filter((l) => l.right === side).sort((a, b) => a.y - b.y);
+                    for (let i = 1; i < group.length; i++) {
+                      group[i].y = Math.max(group[i].y, group[i - 1].y + LABEL_GAP);
+                    }
+                    const overflow = (group.at(-1)?.y ?? 0) - (240 - 14);
+                    if (overflow > 0) group.forEach((l) => (l.y -= overflow));
+                    for (let i = 0; i < group.length; i++) {
+                      group[i].y = Math.max(group[i].y, 14 + i * LABEL_GAP);
+                    }
+                  }
+
+                  return (
+                    <>
+                      {/* Background ring */}
+                      <circle cx={cx} cy={cy} r={r} fill="none" stroke="var(--border)" strokeWidth={stroke} />
+
+                      {/* Slices (rotated so 0% starts at 12 o'clock) */}
+                      <g transform={`rotate(-90 ${cx} ${cy})`}>
+                        {slices.map(({ item, start }) => (
+                          <circle
+                            key={item.id}
+                            data-testid={`donut-slice-${item.id}`}
+                            aria-label={`${item.name}: ${item.percent}%`}
+                            cx={cx}
+                            cy={cy}
+                            r={r}
+                            fill="none"
+                            stroke={item.color}
+                            strokeWidth={selectedCategoryId === item.id ? stroke + 4 : stroke}
+                            strokeDasharray={`${(item.percent / 100) * circumference} ${circumference}`}
+                            strokeDashoffset={-((start / 100) * circumference)}
+                            className="transition-all duration-300 hover:opacity-85 cursor-pointer"
+                            onClick={() => setSelectedCategoryId(selectedCategoryId === item.id ? null : item.id)}
+                          />
+                        ))}
+                      </g>
+
+                      {/* Callouts */}
+                      {labels.map((l) => {
+                        const endX = l.right ? 304 : 16;
+                        const textX = l.right ? endX - 2 : endX + 2;
+                        return (
+                          <g
+                            key={`label-${l.id}`}
+                            data-testid={`donut-label-${l.id}`}
+                            className="cursor-pointer"
+                            onClick={() => setSelectedCategoryId(selectedCategoryId === l.id ? null : l.id)}
+                          >
+                            <polyline
+                              points={`${l.ax},${l.ay} ${l.ex},${l.y} ${endX},${l.y}`}
+                              fill="none"
+                              stroke={l.color}
+                              strokeWidth={1}
+                              strokeLinejoin="round"
+                            />
+                            <circle cx={l.ax} cy={l.ay} r={1.8} fill={l.color} />
+                            <text
+                              x={textX}
+                              y={l.y - 3.5}
+                              textAnchor={l.right ? "end" : "start"}
+                              className="fill-[var(--text)]"
+                              style={{ fontSize: 9.5, fontWeight: 600 }}
+                            >
+                              {l.name}
+                            </text>
+                            <text
+                              x={textX}
+                              y={l.y + 9}
+                              textAnchor={l.right ? "end" : "start"}
+                              className="fill-[var(--text-muted)]"
+                              style={{ fontSize: 8.5, fontFamily: "var(--font-mono, monospace)" }}
+                            >
+                              {l.pct}%
+                            </text>
+                          </g>
+                        );
+                      })}
+                    </>
+                  );
                 })()}
               </svg>
 

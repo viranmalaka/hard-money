@@ -79,7 +79,7 @@ export async function POST(
         invCat = await prisma.category.create({
           data: {
             userId: user.id,
-            name: "Investment Yield",
+            name: "Investment Yield", type: "INCOME",
             icon: "📈",
             color: "#10b981",
             serverSeq: nextSeq2,

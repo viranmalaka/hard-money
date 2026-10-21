@@ -1,5 +1,6 @@
 "use client";
 
+import { groupCategoriesByType } from "@/lib/categories-data";
 import React, { useState, useEffect, useMemo } from "react";
 import { X, Trash2, Split, Plus, AlertCircle, Ban } from "lucide-react";
 import { useAccounts, useCategories, useTransactions, useSync } from "@/components/sync-provider";
@@ -43,6 +44,7 @@ function TransactionEditContent({
   const { db } = useSync();
   const accounts = useAccounts();
   const categories = useCategories();
+  const categoryGroups = useMemo(() => groupCategoriesByType(categories), [categories]);
   const transactions = useTransactions();
 
   const [amountStr, setAmountStr] = useState(
@@ -333,11 +335,17 @@ function TransactionEditContent({
                 onChange={(e) => setCategoryId(e.target.value)}
                 className="w-full px-3 py-2 rounded border border-hairline bg-[var(--bg)] text-[var(--text)] focus:outline-none focus:ring-1 focus:ring-[var(--text)]"
               >
-                {categories.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
+                {(["EXPENSE", "INCOME"] as const).map((g) => {
+                  const items = g === "EXPENSE" ? categoryGroups.expense : categoryGroups.income;
+                  if (items.length === 0) return null;
+                  return (
+                    <optgroup key={g} label={g === "EXPENSE" ? "Expense" : "Income"}>
+                      {items.map((c) => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                      ))}
+                    </optgroup>
+                  );
+                })}
               </select>
             </div>
           )}
@@ -392,11 +400,17 @@ function TransactionEditContent({
                         onChange={(e) => handleUpdateSplitItem(idx, { categoryId: e.target.value })}
                         className="col-span-6 px-2 py-1.5 rounded border border-hairline bg-[var(--surface)] text-[var(--text)] text-[11px]"
                       >
-                        {categories.map((c) => (
-                          <option key={c.id} value={c.id}>
-                            {c.name}
-                          </option>
-                        ))}
+                        {(["EXPENSE", "INCOME"] as const).map((g) => {
+                          const items = g === "EXPENSE" ? categoryGroups.expense : categoryGroups.income;
+                          if (items.length === 0) return null;
+                          return (
+                            <optgroup key={g} label={g === "EXPENSE" ? "Expense" : "Income"}>
+                              {items.map((c) => (
+                                <option key={c.id} value={c.id}>{c.name}</option>
+                              ))}
+                            </optgroup>
+                          );
+                        })}
                       </select>
 
                       <input

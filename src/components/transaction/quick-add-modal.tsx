@@ -14,6 +14,7 @@ import { useQuickAdd, TransactionType } from "./quick-add-context";
 import { CategoryIcon } from "@/components/ui/category-icon";
 import { NumberKeypadPopup } from "@/components/ui/number-keypad-popup";
 import { MobileQuickAdd } from "./mobile-quick-add";
+import { getCategoryType, groupCategoriesByType } from "@/lib/categories-data";
 
 /**
  * Returns today's date in YYYY-MM-DD formatted for Asia/Colombo or local timezone
@@ -62,7 +63,8 @@ function QuickAddModalContent() {
   const [note, setNote] = useState<string>("");
   const [excludeFromBudget, setExcludeFromBudget] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string>("");
-  const [isKeypadOpen, setIsKeypadOpen] = useState(true);
+  // Desktop has a physical keyboard: on-screen keypad is opt-in via the calculator toggle
+  const [isKeypadOpen, setIsKeypadOpen] = useState(false);
 
   const handleApplyTemplate = (tmpl: LocalTemplate) => {
     if (tmpl.type === "EXPENSE" || tmpl.type === "INCOME" || tmpl.type === "TRANSFER") {
@@ -103,12 +105,28 @@ function QuickAddModalContent() {
     return dest?.id || "";
   }, [rawToAccountId, activeAccounts, accountId]);
 
+  const categoryGroups = useMemo(() => groupCategoriesByType(categories), [categories]);
+
+  // Categories valid for the current transaction type
+  const typeCategories = type === "INCOME" ? categoryGroups.income : categoryGroups.expense;
+
+  // Mobile: no auto-populated selections — the user picks each field (guided by OK/next flow)
+  const mobileCategoryId =
+    rawCategoryId && typeCategories.some((c) => c.id === rawCategoryId) ? rawCategoryId : "";
+  const mobileAccountId =
+    rawAccountId && activeAccounts.some((a) => a.id === rawAccountId) ? rawAccountId : "";
+  const mobileToAccountId =
+    rawToAccountId && rawToAccountId !== mobileAccountId && activeAccounts.some((a) => a.id === rawToAccountId)
+      ? rawToAccountId
+      : "";
+
+  // Desktop: sensible fallbacks (first account / first category of the current type)
   const categoryId = useMemo(() => {
-    if (rawCategoryId && categories.some((c) => c.id === rawCategoryId)) {
+    if (rawCategoryId && typeCategories.some((c) => c.id === rawCategoryId)) {
       return rawCategoryId;
     }
-    return categories[0]?.id || "";
-  }, [rawCategoryId, categories]);
+    return typeCategories[0]?.id || "";
+  }, [rawCategoryId, typeCategories]);
 
   // Live expression evaluation
   const evalResult = useMemo(() => {
@@ -245,11 +263,11 @@ function QuickAddModalContent() {
         expression={expression}
         evalResult={evalResult}
         onKeypadClick={onKeypadClick}
-        accountId={accountId}
+        accountId={mobileAccountId}
         setAccountId={setAccountId}
-        toAccountId={toAccountId}
+        toAccountId={mobileToAccountId}
         setToAccountId={setToAccountId}
-        categoryId={categoryId}
+        categoryId={mobileCategoryId}
         setCategoryId={setCategoryId}
         note={note}
         setNote={setNote}
@@ -433,10 +451,7 @@ function QuickAddModalContent() {
               </span>
             </div>
 
-            <div
-              onClick={() => setIsKeypadOpen(true)}
-              className="flex items-center justify-between cursor-pointer"
-            >
+            <div className="flex items-center justify-between">
               <input
                 ref={amountInputRef}
                 type="text"
@@ -444,10 +459,10 @@ function QuickAddModalContent() {
                 inputMode="none"
                 value={expression || "0"}
                 onKeyDown={handleKeyDown}
-                onClick={() => setIsKeypadOpen(true)}
-                onFocus={() => setIsKeypadOpen(true)}
                 readOnly
-                className="w-full text-2xl font-bold font-mono tracking-tight bg-transparent text-[var(--text)] focus:outline-none text-right tabular-nums cursor-pointer"
+                autoFocus
+                aria-label="Amount (type digits and + - * /)"
+                className="w-full text-2xl font-bold font-mono tracking-tight bg-transparent text-[var(--text)] focus:outline-none text-right tabular-nums cursor-text"
               />
               <button
                 type="button"
@@ -480,33 +495,50 @@ function QuickAddModalContent() {
           {type !== "TRANSFER" && (
             <div className="space-y-1.5">
               <label className="text-[11px] font-medium text-[var(--text-muted)]">Category</label>
-              <div className="grid grid-cols-4 gap-1.5 max-h-36 overflow-y-auto p-1.5 rounded border border-hairline bg-[var(--bg)]">
-                {categories.map((cat) => {
-                  const isSelected = categoryId === cat.id;
-                  return (
-                    <button
-                      key={cat.id}
-                      type="button"
-                      data-testid={`category-select-${cat.id}`}
-                      onClick={() => setCategoryId(cat.id)}
-                      className={`flex flex-col items-center justify-center p-2 rounded text-center transition-all ${
-                        isSelected
-                          ? "bg-[var(--text)] text-[var(--bg)] font-semibold shadow-xs"
-                          : "hover:bg-[var(--border)] text-[var(--text)]"
-                      }`}
-                    >
-                      <span
-                        className="w-6 h-6 rounded-full flex items-center justify-center mb-1 shrink-0 text-white shadow-xs"
-                        style={{ backgroundColor: cat.color || "#888" }}
-                      >
-                        <CategoryIcon name={cat.icon} size={13} className="text-white" />
-                      </span>
-                      <span className="text-[10px] truncate max-w-full leading-tight">
-                        {cat.name}
-                      </span>
-                    </button>
-                  );
-                })}
+              <div className="max-h-44 overflow-y-auto p-1.5 rounded border border-hairline bg-[var(--bg)] space-y-2">
+                {(type === "INCOME"
+                  ? [{ label: "Income", items: categoryGroups.income }, { label: "Expense", items: categoryGroups.expense }]
+                  : [{ label: "Expense", items: categoryGroups.expense }, { label: "Income", items: categoryGroups.income }]
+                )
+                  .filter((g) => g.items.length > 0)
+                  .map((group) => (
+                    <div key={group.label}>
+                      <div className="px-1 pb-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+                        {group.label}
+                      </div>
+                      <div className="grid grid-cols-4 gap-1.5">
+                        {group.items.map((cat) => {
+                          const isSelected = categoryId === cat.id;
+                          return (
+                            <button
+                              key={cat.id}
+                              type="button"
+                              data-testid={`category-select-${cat.id}`}
+                              onClick={() => {
+                                setCategoryId(cat.id);
+                                // Picking a category of the other group switches the transaction type
+                                const t = getCategoryType(cat);
+                                if (t !== type) setType(t);
+                              }}
+                              className={`flex flex-col items-center justify-center p-2 rounded text-center transition-all ${
+                                isSelected
+                                  ? "bg-[var(--text)] text-[var(--bg)] font-semibold shadow-xs"
+                                  : "hover:bg-[var(--border)] text-[var(--text)]"
+                              }`}
+                            >
+                              <span
+                                className="w-6 h-6 rounded-full flex items-center justify-center mb-1 shrink-0 text-white shadow-xs"
+                                style={{ backgroundColor: cat.color || "#888" }}
+                              >
+                                <CategoryIcon name={cat.icon} size={13} className="text-white" />
+                              </span>
+                              <span className="text-[10px] truncate max-w-full leading-tight">{cat.name}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
               </div>
             </div>
           )}
