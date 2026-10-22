@@ -27,7 +27,7 @@ function buildShortcut(apiKey: string, webhookUrl: string): string {
 <plist version="1.0"><dict>
 <key>WFWorkflowActions</key><array>
   <dict>
-    <key>WFWorkflowActionIdentifier</key>${plistString("is.workflow.actions.downloadurl")}
+    <key>WFWorkflowActionIdentifier</key>${plistString("is.workflow.actions.getcontents-ofurl")}
     <key>WFWorkflowActionParameters</key><dict>
       ${plistKeyValue("WFURL", webhookUrl)}
       ${plistKeyValue("WFHTTPMethod", "POST")}
@@ -99,8 +99,8 @@ export async function GET(request: NextRequest) {
   return new NextResponse(buildShortcut(apiKey, webhookUrl), {
     status: 200,
     headers: {
-      "Content-Type": "application/x-apple-shortcut",
-      "Content-Disposition": 'attachment; filename="HardMoney_SMS_Ingress.shortcut"',
+      "Content-Type": "application/octet-stream",
+      "Content-Disposition": 'attachment; filename="HardMoney_SMS_Ingress.shortcut"; filename*=UTF-8\'\'HardMoney_SMS_Ingress.shortcut',
       "Cache-Control": "no-store",
     },
   });

@@ -2,16 +2,9 @@
 
 import React from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { AlertTriangle, ArrowLeft, Download, ShieldCheck, Zap } from "lucide-react";
 
 export default function ShortcutsGuidePage() {
-  const router = useRouter();
-
-  const handleDownload = () => {
-    router.push("/api/shortcuts/download");
-  };
-
   return (
     <main className="flex-1 max-w-3xl mx-auto w-full px-4 py-4 space-y-5">
       <div className="flex items-center gap-3">
@@ -42,15 +35,15 @@ export default function ShortcutsGuidePage() {
             Download our ready-to-use iOS Shortcut configured for Sri Lankan banks.
           </p>
         </div>
-        <button
-          type="button"
+        <a
+          href="/api/shortcuts/download"
+          download="HardMoney_SMS_Ingress.shortcut"
           data-testid="download-shortcut-btn"
-          onClick={handleDownload}
           className="flex items-center justify-center gap-2 px-4 py-2 rounded bg-[var(--accent)] text-white text-xs font-semibold hover:opacity-90 active:scale-95 transition-all"
         >
           <Download size={14} />
           <span>Download Shortcut</span>
-        </button>
+        </a>
       </div>
 
       <div className="flat-card p-4 flex items-start gap-3 bg-[var(--expense)]/5 border border-[var(--expense)]/30">
