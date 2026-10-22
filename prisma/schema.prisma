@@ -18,6 +18,7 @@ model User {
   defaultWithholdingTaxRateBps Int               @default(0)
   apiKeyHash                   String?
   apiKeyPrefix                 String?
+  apiKeyEncrypted              String?
   geminiApiKeyEncrypted        String?
   geminiModel                  String?
   smsAutoPostMode              String            @default("AUTO_VALIDATED")

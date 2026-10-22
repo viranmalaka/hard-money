@@ -2,11 +2,14 @@
 
 import React from "react";
 import Link from "next/link";
-import { ArrowLeft, Download, Smartphone, ShieldCheck, Zap } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { AlertTriangle, ArrowLeft, Download, ShieldCheck, Zap } from "lucide-react";
 
 export default function ShortcutsGuidePage() {
+  const router = useRouter();
+
   const handleDownload = () => {
-    window.location.href = "/api/shortcuts/download";
+    router.push("/api/shortcuts/download");
   };
 
   return (
@@ -48,6 +51,16 @@ export default function ShortcutsGuidePage() {
           <Download size={14} />
           <span>Download Shortcut</span>
         </button>
+      </div>
+
+      <div className="flat-card p-4 flex items-start gap-3 bg-[var(--expense)]/5 border border-[var(--expense)]/30">
+        <AlertTriangle size={20} className="text-[var(--expense)] flex-shrink-0 mt-0.5" />
+        <div className="text-xs space-y-1">
+          <span className="font-semibold text-[var(--text)] block">API key warning</span>
+          <p className="text-[var(--text-muted)]">
+            The downloaded Shortcut contains your current webhook API key. If you regenerate or rotate the key, older Shortcuts will stop working and must be downloaded again.
+          </p>
+        </div>
       </div>
 
       {/* Step-by-step instructions */}

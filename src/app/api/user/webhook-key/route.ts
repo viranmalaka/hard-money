@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import crypto from "crypto";
 import { getSessionUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { encryptAesGcm } from "@/lib/encryption";
 
 export async function GET() {
   const session = await getSessionUser();
@@ -39,6 +40,7 @@ export async function POST() {
     data: {
       apiKeyHash: hash,
       apiKeyPrefix: prefix,
+      apiKeyEncrypted: encryptAesGcm(rawApiKey),
     },
   });
 
