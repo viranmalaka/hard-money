@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
-import { ArrowLeft, Check, GripVertical, Plus, Trash2, X } from "lucide-react";
+import { ArrowLeft, Check, GripVertical, Pencil, Plus, Trash2, X } from "lucide-react";
 import Link from "next/link";
 import { useSync } from "@/components/sync-provider";
 import {
@@ -37,6 +37,7 @@ export default function ShoppingListPage() {
   const [editName, setEditName] = useState("");
   const [editQuantity, setEditQuantity] = useState("");
   const [draggedId, setDraggedId] = useState<string | null>(null);
+  const [dropTargetId, setDropTargetId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const liveItems = useLiveQuery<LocalShoppingListItem[]>(
@@ -131,7 +132,16 @@ export default function ShoppingListPage() {
       reordered.map((item, index) => localUpdateShoppingListItem(db, item.id, { position: index }))
     );
     setDraggedId(null);
+    setDropTargetId(null);
     await sync();
+  };
+
+  const trackPointerTarget = (event: React.PointerEvent<HTMLButtonElement>) => {
+    if (!draggedId) return;
+    const element = document.elementFromPoint(event.clientX, event.clientY);
+    const row = element?.closest<HTMLElement>("[data-shopping-item-id]");
+    const targetId = row?.dataset.shoppingItemId || null;
+    setDropTargetId(targetId && openItems.some((item) => item.id === targetId) ? targetId : null);
   };
 
   const beginEdit = (item: LocalShoppingListItem) => {
@@ -198,21 +208,45 @@ export default function ShoppingListPage() {
 
       {error && <p className="text-xs text-[var(--expense)]">{error}</p>}
 
-      <section className="flat-card divide-y divide-hairline" aria-label="Shopping items">
+      <section
+        className="flat-card divide-y divide-hairline"
+        aria-label="Shopping items"
+        onPointerMove={trackPointerTarget}
+      >
         {sortedItems.length === 0 && (
           <p className="p-6 text-center text-xs text-[var(--text-muted)]">Your shopping list is empty.</p>
         )}
         {sortedItems.map((item) => (
           <div
             key={item.id}
-            draggable={!item.isCompleted}
+            data-shopping-item-id={item.id}
+            draggable={false}
             onDragStart={() => setDraggedId(item.id)}
             onDragOver={(event) => event.preventDefault()}
             onDrop={() => void dropItem(item.id)}
-            className={`p-3 flex items-center gap-2 ${!item.isCompleted ? "cursor-grab" : ""}`}
+            className={`p-3 flex items-center gap-2 ${dropTargetId === item.id ? "bg-[var(--surface-hover)]" : ""}`}
             data-testid={`shopping-list-item-${item.id}`}
           >
-            {!item.isCompleted && <GripVertical size={16} className="text-[var(--text-muted)] shrink-0" aria-label="Drag to reorder" />}
+            {!item.isCompleted && (
+              <button
+                type="button"
+                draggable
+                aria-label={`Drag to reorder ${item.name}`}
+                className="touch-none cursor-grab text-[var(--text-muted)] shrink-0 p-1 -m-1"
+                onPointerDown={(event) => {
+                  event.preventDefault();
+                  event.currentTarget.setPointerCapture(event.pointerId);
+                  setDraggedId(item.id);
+                }}
+                onPointerMove={trackPointerTarget}
+                onPointerUp={(event) => {
+                  if (dropTargetId) void dropItem(dropTargetId);
+                  event.currentTarget.releasePointerCapture(event.pointerId);
+                }}
+              >
+                <GripVertical size={18} />
+              </button>
+            )}
             <button
               type="button"
               onClick={() => void toggleItem(item)}
@@ -222,21 +256,24 @@ export default function ShoppingListPage() {
               {item.isCompleted && <Check size={13} />}
             </button>
             {editingId === item.id ? (
-              <form className="flex-1 flex gap-2" onSubmit={(event) => { event.preventDefault(); void saveEdit(item); }}>
-                <input value={editName} onChange={(event) => setEditName(event.target.value)} autoFocus className="min-w-0 flex-1 h-8 px-2 rounded border border-hairline bg-[var(--bg)] text-sm text-[var(--text)]" />
-                <input value={editQuantity} onChange={(event) => setEditQuantity(event.target.value)} className="w-20 h-8 px-2 rounded border border-hairline bg-[var(--bg)] text-sm text-[var(--text)]" />
-                <button type="submit" aria-label="Save item" className="text-[var(--income)]"><Check size={16} /></button>
-                <button type="button" aria-label="Cancel editing" onClick={() => setEditingId(null)} className="text-[var(--text-muted)]"><X size={16} /></button>
+              <form className="min-w-0 flex-1 flex flex-wrap items-center gap-2" onSubmit={(event) => { event.preventDefault(); void saveEdit(item); }}>
+                <input value={editName} onChange={(event) => setEditName(event.target.value)} autoFocus className="min-w-[9rem] flex-1 h-8 px-2 rounded border border-hairline bg-[var(--bg)] text-sm text-[var(--text)]" />
+                <input value={editQuantity} onChange={(event) => setEditQuantity(event.target.value)} className="w-14 h-8 px-2 rounded border border-hairline bg-[var(--bg)] text-sm text-[var(--text)]" />
+                <div className="flex items-center gap-2 basis-full sm:basis-auto sm:ml-auto">
+                  <button type="submit" aria-label="Save item" className="text-[var(--income)] p-1"><Check size={18} /></button>
+                  <button type="button" aria-label="Cancel editing" onClick={() => setEditingId(null)} className="text-[var(--text-muted)] p-1"><X size={18} /></button>
+                  <button type="button" aria-label={`Delete ${item.name}`} onClick={() => void deleteItem(item.id)} className="text-[var(--expense)] p-1"><Trash2 size={17} /></button>
+                </div>
               </form>
             ) : (
-              <button type="button" onClick={() => beginEdit(item)} className={`min-w-0 flex-1 text-left text-sm ${item.isCompleted ? "line-through text-[var(--text-muted)]" : "text-[var(--text)]"}`}>
+              <div className={`min-w-0 flex-1 text-sm ${item.isCompleted ? "line-through text-[var(--text-muted)]" : "text-[var(--text)]"}`}>
                 {item.name}
                 {item.quantity && <span className="ml-2 text-xs text-[var(--text-muted)]">({item.quantity})</span>}
-              </button>
+              </div>
             )}
             {editingId !== item.id && (
-              <button type="button" onClick={() => void deleteItem(item.id)} aria-label={`Delete ${item.name}`} className="text-[var(--text-muted)] hover:text-[var(--expense)]">
-                <Trash2 size={15} />
+              <button type="button" onClick={() => beginEdit(item)} aria-label={`Edit ${item.name}`} className="text-[var(--text-muted)] hover:text-[var(--text)] p-1">
+                <Pencil size={15} />
               </button>
             )}
           </div>

@@ -10,6 +10,7 @@ import {
   FileText,
   Inbox,
   LogOut,
+  LoaderCircle,
   Paintbrush,
   Sliders,
   Smartphone,
@@ -30,6 +31,7 @@ export default function MorePage() {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [inboxCount, setInboxCount] = useState(0);
   const [shoppingListCount, setShoppingListCount] = useState(0);
+  const [userLoading, setUserLoading] = useState(true);
 
   useEffect(() => {
     fetch("/api/user/settings", { cache: "no-store" })
@@ -39,7 +41,8 @@ export default function MorePage() {
           setUser(data.user);
         }
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setUserLoading(false));
 
     fetch("/api/sms/inbox", { cache: "no-store" })
       .then((res) => (res.ok ? res.json() : null))
@@ -71,6 +74,28 @@ export default function MorePage() {
   };
 
   const sections = [
+    {
+      title: "Household & Collaboration",
+      items: [
+        {
+          label: "Household Collaboration",
+          description: "Joint treasury, partner ledger sync & permissions",
+          icon: Users,
+          href: "/more/household",
+          testId: "more-household-link",
+          badge: null,
+        },
+        {
+          label: "Shopping List",
+          description: "Shared household items to buy",
+          icon: ShoppingBasket,
+          href: "/more/shopping-list",
+          testId: "more-shopping-list-link",
+          badge: shoppingListCount > 0 ? String(shoppingListCount) : null,
+          badgeTestId: "shopping-list-badge",
+        },
+      ],
+    },
     {
       title: "General & Customization",
       items: [
@@ -138,28 +163,6 @@ export default function MorePage() {
         },
       ],
     },
-    {
-      title: "Household & Collaboration",
-      items: [
-        {
-          label: "Household Collaboration",
-          description: "Joint treasury, partner ledger sync & permissions",
-          icon: Users,
-          href: "/more/household",
-          testId: "more-household-link",
-          badge: null,
-        },
-        {
-          label: "Shopping List",
-          description: "Shared household items to buy",
-          icon: ShoppingBasket,
-          href: "/more/shopping-list",
-          testId: "more-shopping-list-link",
-          badge: shoppingListCount > 0 ? String(shoppingListCount) : null,
-          badgeTestId: "shopping-list-badge",
-        },
-      ],
-    },
   ];
 
   return (
@@ -180,7 +183,7 @@ export default function MorePage() {
       <div className="flat-card p-4 flex items-center justify-between shadow-xs">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-full bg-[var(--surface)] border border-hairline flex items-center justify-center text-[var(--accent)] font-semibold text-sm">
-            {user?.name ? user.name.charAt(0).toUpperCase() : <User size={18} />}
+            {userLoading ? <LoaderCircle size={18} className="animate-spin" /> : user?.name ? user.name.charAt(0).toUpperCase() : <User size={18} />}
           </div>
           <div>
             <div className="flex items-center gap-2">
@@ -188,11 +191,11 @@ export default function MorePage() {
                 data-testid="user-display-name"
                 className="text-sm font-semibold text-[var(--text)]"
               >
-                {user?.name || "User"}
+                {userLoading ? "Loading profile…" : user?.name || "User"}
               </span>
             </div>
             <p className="text-xs text-[var(--text-muted)]">
-              {user?.email || "treasury-admin@local"}
+              {userLoading ? "Loading account details…" : user?.email || "treasury-admin@local"}
             </p>
           </div>
         </div>
