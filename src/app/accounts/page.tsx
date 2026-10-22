@@ -1,16 +1,16 @@
 "use client";
 
-import React, { memo, useState, useMemo, useEffect } from "react";
+import React, { memo, useMemo, useState } from "react";
 import Link from "next/link";
 import { Wallet, Plus, CreditCard, Building2, Banknote, Edit2, Archive, Trash2, X, AlertTriangle, PiggyBank, Landmark } from "lucide-react";
 import { EmptyState } from "@/components/ui/empty-state";
-import { useAccounts, useTransactions, useInstallmentPlans, useFixedDeposits, useLoans, useLoanPayments, useSync, SyncIndicator } from "@/components/sync-provider";
+import { SyncIndicator } from "@/components/sync-provider";
 import { localCreateAccount, localUpdateAccount, localDeleteAccount, localUpdateTransaction, localDeleteInstallmentPlan, localUpdateFixedDeposit } from "@/lib/sync/client";
 import { LocalAccount, LocalInstallmentPlan, LocalFixedDeposit, LocalLoan } from "@/lib/db";
 import { formatMoney, parseMoneyToMinor } from "@/lib/finance-core/money";
-import { calculateLedgerBalance, LedgerTransaction } from "@/lib/finance-core/ledger";
-import { calculateStatementCycle, calculateInstallmentProgress } from "@/lib/finance-core/credit-card";
-import { calculateAccruedFdValue, calculateMonthlyPayout, calculateCompoundMaturity } from "@/lib/finance-core/investments";
+import { LedgerTransaction } from "@/lib/finance-core/ledger";
+import { calculateStatementCycle } from "@/lib/finance-core/credit-card";
+import { calculateMonthlyPayout, calculateCompoundMaturity } from "@/lib/finance-core/investments";
 import { SettleModal } from "@/components/account/settle-modal";
 import { InstallmentPlanModal } from "@/components/account/installment-plan-modal";
 import { EarlyPayoffModal } from "@/components/account/early-payoff-modal";
@@ -18,16 +18,9 @@ import { FixedDepositModal } from "@/components/account/fixed-deposit-modal";
 import { FdCloseModal } from "@/components/account/fd-close-modal";
 import { LoanModal } from "@/components/account/loan-modal";
 import { LoanDetailModal } from "@/components/account/loan-detail-modal";
+import { useAccountPortfolio } from "@/hooks/use-account-portfolio";
 
 export default function AccountsPage() {
-  const accounts = useAccounts();
-  const transactions = useTransactions();
-  const { db } = useSync();
-
-  const installmentPlans = useInstallmentPlans();
-  const fixedDeposits = useFixedDeposits();
-  const loans = useLoans();
-  const loanPayments = useLoanPayments();
   const [showArchived, setShowArchived] = useState(false);
   const [activeTab, setActiveTab] = useState<"cash_bank" | "liabilities" | "investments">("cash_bank");
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -44,6 +37,35 @@ export default function AccountsPage() {
   // Loans modal states
   const [isLoanModalOpen, setIsLoanModalOpen] = useState(false);
   const [selectedLoan, setSelectedLoan] = useState<LocalLoan | null>(null);
+  const portfolio = useAccountPortfolio(showArchived, settlingCard);
+  const {
+    accounts,
+    installmentPlans,
+    fixedDeposits,
+    loans,
+    db,
+    ledgerTxList,
+    planProgressMap,
+    accountBlockedPrincipalMap,
+    totalBlockedPrincipal,
+    accountBalances,
+    visibleAccounts,
+    cashAccounts,
+    bankAccounts,
+    creditAccounts,
+    cashSubtotal,
+    bankSubtotal,
+    creditSubtotal,
+    fixedDepositsSubtotal,
+    loanRemainingMap,
+    loansSubtotal,
+    assetsTotal,
+    liabilitiesTotal,
+    netWorthTotal,
+    settlingCardCycle,
+    householdRoleMap,
+    activeHouseholdId,
+  } = portfolio;
 
   // Form State
   const [name, setName] = useState("");
@@ -56,200 +78,8 @@ export default function AccountsPage() {
   const [dueDay, setDueDay] = useState("");
   const [settlementAccountId, setSettlementAccountId] = useState("");
   const [accessScope, setAccessScope] = useState<"PRIVATE" | "SHARED_HOUSEHOLD">("PRIVATE");
-  const [householdRoleMap, setHouseholdRoleMap] = useState<Map<string, string>>(new Map());
-  const [activeHouseholdId, setActiveHouseholdId] = useState<string | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  useEffect(() => {
-    fetch("/api/households", { cache: "no-store" })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (data?.households) {
-          const map = new Map<string, string>();
-          for (const h of data.households) {
-            map.set(h.id, h.myRole);
-          }
-          setHouseholdRoleMap(map);
-          if (data.households.length > 0) {
-            setActiveHouseholdId(data.households[0].id);
-          }
-        }
-      })
-      .catch(() => {});
-  }, []);
-
-  const ledgerTxList: LedgerTransaction[] = useMemo(() => {
-    return transactions.map((t) => ({
-      id: t.id,
-      accountId: t.accountId,
-      toAccountId: t.toAccountId,
-      amountMinor: t.amountMinor,
-      type: t.type,
-      direction: t.direction,
-      transactionDate: t.transactionDate,
-      excludeFromBalance: t.excludeFromBalance,
-      deletedAt: t.deletedAt,
-    }));
-  }, [transactions]);
-
-  // Derived progress and remaining principal for each installment plan
-  const planProgressMap = useMemo(() => {
-    const map = new Map<string, { paidInstallments: number; remainingInstallments: number; remainingPrincipalMinor: number }>();
-    for (const plan of installmentPlans) {
-      const planTxBilled = transactions
-        .filter((t) => !t.deletedAt && t.installmentPlanId === plan.id && t.type === "EXPENSE" && t.subType === "CC_INSTALLMENT")
-        .map((t) => t.amountMinor);
-
-      const prog = calculateInstallmentProgress(
-        plan.totalAmountMinor,
-        plan.tenureMonths,
-        plan.initialPaidInstallments || 0,
-        planTxBilled
-      );
-      map.set(plan.id, prog);
-    }
-    return map;
-  }, [installmentPlans, transactions]);
-
-  // Blocked principal per account from ACTIVE plans
-  const accountBlockedPrincipalMap = useMemo(() => {
-    const map: Record<string, number> = {};
-    for (const plan of installmentPlans) {
-      if (plan.status !== "ACTIVE") continue;
-      const prog = planProgressMap.get(plan.id);
-      const rem = prog ? prog.remainingPrincipalMinor : plan.totalAmountMinor;
-      map[plan.accountId] = (map[plan.accountId] || 0) + rem;
-    }
-    return map;
-  }, [installmentPlans, planProgressMap]);
-
-  // Total blocked principal across all cards
-  const totalBlockedPrincipal = useMemo(() => {
-    let sum = 0;
-    for (const plan of installmentPlans) {
-      if (plan.status !== "ACTIVE") continue;
-      const prog = planProgressMap.get(plan.id);
-      sum += prog ? prog.remainingPrincipalMinor : plan.totalAmountMinor;
-    }
-    return sum;
-  }, [installmentPlans, planProgressMap]);
-
-  // Ledger-derived balances for each account
-  const accountBalances = useMemo(() => {
-    const balances: Record<string, number> = {};
-
-    for (const acc of accounts) {
-      balances[acc.id] = calculateLedgerBalance(
-        {
-          id: acc.id,
-          type: acc.type,
-          openingBalanceMinor: acc.openingBalanceMinor,
-        },
-        ledgerTxList
-      );
-    }
-    return balances;
-  }, [accounts, ledgerTxList]);
-
-  // Filtered accounts
-  const visibleAccounts = useMemo(() => {
-    return accounts.filter((a) => (showArchived ? true : !a.isArchived));
-  }, [accounts, showArchived]);
-
-  const settlingCardCycle = useMemo(() => {
-    if (!settlingCard) return null;
-    return calculateStatementCycle({
-      account: {
-        id: settlingCard.id,
-        type: settlingCard.type,
-        openingBalanceMinor: settlingCard.openingBalanceMinor,
-      },
-      transactions: ledgerTxList,
-      creditLimitMinor: settlingCard.creditLimitMinor || 0,
-      statementCutoffDay: settlingCard.statementCutoffDay || 20,
-      paymentDueDay: settlingCard.paymentDueDay || 10,
-      blockedPrincipalMinor: accountBlockedPrincipalMap[settlingCard.id] || 0,
-    });
-  }, [settlingCard, ledgerTxList, accountBlockedPrincipalMap]);
-
-  // Grouped accounts
-  const cashAccounts = useMemo(() => visibleAccounts.filter((a) => a.type === "CASH"), [visibleAccounts]);
-  const bankAccounts = useMemo(() => visibleAccounts.filter((a) => a.type === "BANK_SAVINGS"), [visibleAccounts]);
-  const creditAccounts = useMemo(() => visibleAccounts.filter((a) => a.type === "CREDIT_CARD"), [visibleAccounts]);
-
-  // Group Subtotals
-  const cashSubtotal = useMemo(
-    () => cashAccounts.reduce((sum, a) => sum + (accountBalances[a.id] ?? a.openingBalanceMinor), 0),
-    [cashAccounts, accountBalances]
-  );
-  const bankSubtotal = useMemo(
-    () => bankAccounts.reduce((sum, a) => sum + (accountBalances[a.id] ?? a.openingBalanceMinor), 0),
-    [bankAccounts, accountBalances]
-  );
-  const creditSubtotal = useMemo(
-    () => creditAccounts.reduce((sum, a) => sum + (accountBalances[a.id] ?? a.openingBalanceMinor), 0),
-    [creditAccounts, accountBalances]
-  );
-
-  const fixedDepositsSubtotal = useMemo(() => {
-    return fixedDeposits
-      .filter((fd) => fd.status !== "CLOSED")
-      .reduce((sum, fd) => sum + calculateAccruedFdValue(fd, new Date()), 0);
-  }, [fixedDeposits]);
-
-  const loanRemainingMap = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const loan of loans) {
-      const paidPrincipal = loanPayments
-        .filter((p) => p.loanId === loan.id)
-        .reduce((sum, p) => sum + p.principalComponentMinor, 0);
-      const remaining = Math.max(0, loan.originalPrincipalMinor - paidPrincipal);
-      map.set(loan.id, remaining);
-    }
-    return map;
-  }, [loans, loanPayments]);
-
-  const loansSubtotal = useMemo(() => {
-    return loans
-      .filter((l) => l.status === "ACTIVE")
-      .reduce((sum, l) => sum + (loanRemainingMap.get(l.id) ?? l.originalPrincipalMinor), 0);
-  }, [loans, loanRemainingMap]);
-
-  // Net Worth Totals
-  const { assetsTotal, liabilitiesTotal, netWorthTotal } = useMemo(() => {
-    let assets = 0;
-    let liabilities = 0;
-
-    for (const acc of visibleAccounts) {
-      const bal = accountBalances[acc.id] ?? acc.openingBalanceMinor;
-      if (acc.type === "CREDIT_CARD") {
-        const blocked = accountBlockedPrincipalMap[acc.id] || 0;
-        const debt = bal < 0 ? Math.abs(bal) : 0;
-        liabilities += debt + blocked;
-        if (bal > 0) {
-          assets += bal;
-        }
-      } else {
-        if (bal >= 0) {
-          assets += bal;
-        } else {
-          liabilities += Math.abs(bal);
-        }
-      }
-    }
-
-    // Include active fixed deposits in assets
-    assets += fixedDepositsSubtotal;
-
-    // Include active loans in liabilities
-    liabilities += loansSubtotal;
-
-    return {
-      assetsTotal: assets,
-      liabilitiesTotal: liabilities,
-      netWorthTotal: assets - liabilities,
-    };
-  }, [visibleAccounts, accountBalances, accountBlockedPrincipalMap, fixedDepositsSubtotal, loansSubtotal]);
 
   const handleDepositProceeds = async (fd: LocalFixedDeposit) => {
     const targetAccountId =
@@ -258,19 +88,21 @@ export default function AccountsPage() {
       visibleAccounts.find((a) => a.type === "BANK_SAVINGS" || a.type === "CASH")?.id;
 
     try {
-      await fetch(`/api/fixed-deposits/${fd.id}/deposit-proceeds`, {
+      const response = await fetch(`/api/fixed-deposits/${fd.id}/deposit-proceeds`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ targetAccountId }),
       });
-    } catch {
-      // offline fallback
+      if (!response.ok) {
+        throw new Error("Failed to deposit fixed-deposit proceeds");
+      }
+      await localUpdateFixedDeposit(db, fd.id, {
+        status: "CLOSED",
+        closedAt: new Date().toISOString(),
+      });
+    } catch (error) {
+      console.error("Failed to deposit fixed-deposit proceeds:", error);
     }
-
-    await localUpdateFixedDeposit(db, fd.id, {
-      status: "CLOSED",
-      closedAt: new Date().toISOString(),
-    });
   };
 
   const openCreateForm = () => {

@@ -3,8 +3,10 @@ import { getSessionUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getServerNow } from "@/lib/server-clock";
 import { getNextServerSeq } from "@/lib/server-seq";
-import { v4 as uuidv4 } from "uuid";
+import { v5 as uuidv5 } from "uuid";
 import { authorizeFixedDeposit, assertCanWriteAccount } from "@/lib/authorization";
+
+const FD_NAMESPACE = "6ba7b810-9dad-11d1-80b4-00c04fd430c8";
 
 export async function POST(
   request: NextRequest,
@@ -44,11 +46,13 @@ export async function POST(
 
   const principalToReturn = Math.min(fd.principalAmountMinor, actualProceedsMinor);
   const interestToReturn = Math.max(0, actualProceedsMinor - fd.principalAmountMinor);
+  const principalTxId = uuidv5(`${fd.id}:PREMATURE_CLOSE:PRINCIPAL`, FD_NAMESPACE);
+  const interestTxId = uuidv5(`${fd.id}:PREMATURE_CLOSE:INTEREST`, FD_NAMESPACE);
 
   // 1. Post principal proceeds (FD_MATURITY, excluded from stats & budget)
   await (prisma as any).transaction.create({
     data: {
-      id: uuidv4(),
+      id: principalTxId,
       userId: user.id,
       accountId: targetAccountId,
       amountMinor: principalToReturn,
@@ -86,7 +90,7 @@ export async function POST(
 
     await (prisma as any).transaction.create({
       data: {
-        id: uuidv4(),
+        id: interestTxId,
         userId: user.id,
         accountId: targetAccountId,
         categoryId: invCat.id,

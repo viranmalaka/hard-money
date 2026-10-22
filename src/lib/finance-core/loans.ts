@@ -33,7 +33,7 @@ export function calculateReducingBalanceEmi(
 ): number {
   if (tenureMonths <= 0) return principalAmountMinor;
   if (annualInterestRateBps <= 0) {
-    return Math.ceil((principalAmountMinor - residualValueMinor) / tenureMonths);
+    return Math.floor((principalAmountMinor - residualValueMinor) / tenureMonths);
   }
 
   const r = annualInterestRateBps / (10000 * 12);
@@ -197,8 +197,17 @@ export function reamortizeRemainingSchedule(
     // Keep target EMI, payoff completes sooner
     let inst = startInstallment;
     while (balance > residualValueMinor && inst < startInstallment + 240) {
-      const interestComponent = roundHalfUp(balance * r);
+      const interestComponent =
+        calculationType === "FLAT_RATE"
+          ? roundHalfUp(
+              (balance * (annualInterestRateBps / 10000)) /
+                12
+            )
+          : roundHalfUp(balance * r);
       let principalComponent = targetEmiMinor - interestComponent;
+      if (principalComponent <= 0) {
+        throw new Error("Target EMI does not amortize the remaining balance");
+      }
       const closing = balance - principalComponent;
 
       if (closing <= residualValueMinor || principalComponent >= balance - residualValueMinor) {

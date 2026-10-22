@@ -12,6 +12,9 @@ import {
   calculateSafeToSpendDaily,
   calculateRolloverCarriedIn,
   calculatePercentagesLargestRemainder,
+  addMonthsClamped,
+  generateAmortizationSchedule,
+  reamortizeRemainingSchedule,
   type LedgerTransaction,
   type LedgerAccount,
 } from "../../src/lib/finance-core";
@@ -29,6 +32,30 @@ describe("finance-core money utilities", () => {
     expect(parseMoneyToMinor("LKR 500.50")).toBe(50050);
     expect(parseMoneyToMinor("-25.00")).toBe(-2500);
     expect(parseMoneyToMinor("")).toBe(0);
+    expect(parseMoneyToMinor("1e5")).toBe(0);
+    expect(parseMoneyToMinor("12-3")).toBe(0);
+    expect(parseMoneyToMinor("1.005")).toBe(0);
+  });
+
+  describe("finance-core calendar and loan invariants", () => {
+    it("clamps month-end dates instead of overflowing into the next month", () => {
+      const january31 = new Date("2026-01-31T00:00:00.000Z");
+      expect(addMonthsClamped(january31, 1).toISOString()).toBe("2026-02-28T00:00:00.000Z");
+      expect(addMonthsClamped(january31, 2).toISOString()).toBe("2026-03-31T00:00:00.000Z");
+    });
+
+    it("does not generate an unpayable zero-amount final installment", () => {
+      const schedule = generateAmortizationSchedule(10, 0, 6, "REDUCING_BALANCE");
+      expect(schedule.map((row) => row.emiAmountMinor)).toEqual([1, 1, 1, 1, 1, 5]);
+      expect(schedule.every((row) => row.emiAmountMinor > 0)).toBe(true);
+    });
+
+    it("uses flat-rate math when shortening a flat-rate schedule", () => {
+      const rows = reamortizeRemainingSchedule(900, 3, 4, 1200, "FLAT_RATE", 0, "SHORTER_TENURE", 250);
+      expect(rows.length).toBeGreaterThan(0);
+      expect(rows.at(-1)?.closingBalanceMinor).toBe(0);
+      expect(rows.reduce((sum, row) => sum + row.principalComponentMinor, 0)).toBe(900);
+    });
   });
 
   it("rounds half-up to nearest integer accurately", () => {
@@ -320,5 +347,4 @@ describe("finance-core loans and leases calculations (golden vectors)", () => {
     expect(shorterTenureRows[shorterTenureRows.length - 1].closingBalanceMinor).toBe(0);
   });
 });
-
 

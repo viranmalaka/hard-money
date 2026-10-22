@@ -6,6 +6,7 @@ import { LocalAccount } from "@/lib/db";
 import { useSync } from "@/components/sync-provider";
 import { localCreateFixedDeposit } from "@/lib/sync/client";
 import { parseMoneyToMinor } from "@/lib/finance-core/money";
+import { addMonthsClamped } from "@/lib/finance-core/dates";
 
 interface FixedDepositModalProps {
   isOpen: boolean;
@@ -100,8 +101,7 @@ export function FixedDepositModal({ isOpen, onClose, accounts }: FixedDepositMod
     try {
       const now = new Date();
       const startDate = now.toISOString();
-      const maturity = new Date(now);
-      maturity.setMonth(maturity.getMonth() + tenureNum);
+      const maturity = addMonthsClamped(now, tenureNum);
       const maturityDate = maturity.toISOString();
 
       await localCreateFixedDeposit(db, {

@@ -5,8 +5,10 @@ import { getServerNow } from "@/lib/server-clock";
 import { getNextServerSeq } from "@/lib/server-seq";
 import { calculateCompoundMaturity } from "@/lib/finance-core/investments";
 import type { CompoundingFrequency } from "@/lib/finance-core/investments";
-import { v4 as uuidv4 } from "uuid";
+import { v5 as uuidv5 } from "uuid";
 import { authorizeFixedDeposit, assertCanWriteAccount } from "@/lib/authorization";
+
+const FD_NAMESPACE = "6ba7b810-9dad-11d1-80b4-00c04fd430c8";
 
 export async function POST(
   request: NextRequest,
@@ -39,10 +41,13 @@ export async function POST(
   }
 
   const now = getServerNow();
+  if (fd.status !== "MATURED" && now.getTime() < new Date(fd.maturityDate).getTime()) {
+    return NextResponse.json({ error: "Fixed deposit has not matured" }, { status: 409 });
+  }
   const nextSeq1 = await getNextServerSeq();
 
   // 1. Post principal proceeds (FD_MATURITY, excluded from stats & budget)
-  const principalTxId = uuidv4();
+  const principalTxId = uuidv5(`${fd.id}:MATURITY:PRINCIPAL`, FD_NAMESPACE);
   await (prisma as any).transaction.create({
     data: {
       id: principalTxId,
@@ -92,7 +97,7 @@ export async function POST(
 
       await (prisma as any).transaction.create({
         data: {
-          id: uuidv4(),
+          id: uuidv5(`${fd.id}:MATURITY:INTEREST`, FD_NAMESPACE),
           userId: user.id,
           accountId: targetAccountId,
           categoryId: invCat.id,

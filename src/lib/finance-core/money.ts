@@ -43,12 +43,15 @@ export function formatMoney(amountMinor: number, currency = "LKR", showSign = fa
 export const formatMinorUnits = formatMoney;
 
 export function parseMoneyToMinor(input: string): number {
-  // Strip currency symbols, commas, spaces
-  const cleaned = input.replace(/[^0-9.-]/g, "").trim();
-  if (!cleaned) return 0;
-  const parsed = parseFloat(cleaned);
-  if (isNaN(parsed)) return 0;
-  return roundHalfUp(parsed * 100);
+  const cleaned = input.replace(/(?:LKR|USD|EUR|GBP|JPY|INR|Rs\.?|[₨$€£¥]|[\s,])/gi, "").trim();
+  const match = cleaned.match(/^([+-]?)(\d+)(?:\.(\d{1,2}))?$/);
+  if (!match) return 0;
+
+  const sign = match[1] === "-" ? -1 : 1;
+  const whole = Number(match[2]);
+  const fraction = Number((match[3] || "").padEnd(2, "0"));
+  const minor = whole * 100 + fraction;
+  return sign * minor;
 }
 
 /**

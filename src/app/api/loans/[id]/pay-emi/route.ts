@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { reamortizeRemainingSchedule } from "@/lib/finance-core/loans";
+import { addMonthsClamped } from "@/lib/finance-core/dates";
 import { getNextServerSeq } from "@/lib/server-seq";
 import { v4 as uuidv4 } from "uuid";
 import { authorizeLoan, assertCanWriteAccount } from "@/lib/authorization";
@@ -29,7 +30,11 @@ export async function POST(
     mode = "LOWER_EMI",
   } = body;
 
-  if (!accountId || !amountMinor || amountMinor <= 0) {
+  if (
+    !accountId ||
+    !Number.isSafeInteger(amountMinor) ||
+    amountMinor <= 0
+  ) {
     return NextResponse.json({ error: "Account and valid amount required" }, { status: 400 });
   }
 
@@ -49,6 +54,12 @@ export async function POST(
   });
 
   const loan = loanWithDetails;
+  if (!loan) {
+    return NextResponse.json({ error: "Loan not found" }, { status: 404 });
+  }
+  if (loan.status !== "ACTIVE") {
+    return NextResponse.json({ error: "Loan is not active" }, { status: 409 });
+  }
 
   const now = new Date();
   const txId = uuidv4();
@@ -60,6 +71,9 @@ export async function POST(
   let targetEntry = null;
   if (scheduleEntryId) {
     targetEntry = loan.scheduleEntries.find((e: any) => e.id === scheduleEntryId);
+    if (!targetEntry || targetEntry.status === "PAID") {
+      return NextResponse.json({ error: "Schedule entry is not payable" }, { status: 409 });
+    }
   } else if (!isExtraPrincipal) {
     targetEntry = loan.scheduleEntries.find((e: any) => e.status !== "PAID");
   }
@@ -72,18 +86,27 @@ export async function POST(
   } else if (targetEntry) {
     principalComponent = targetEntry.principalComponentMinor;
     interestComponent = targetEntry.interestComponentMinor;
-    // In case amount paid differs slightly from scheduled EMI
     const scheduledEmi = targetEntry.principalComponentMinor + targetEntry.interestComponentMinor;
     if (amountMinor !== scheduledEmi) {
-      if (amountMinor <= interestComponent) {
-        interestComponent = amountMinor;
-        principalComponent = 0;
-      } else {
-        principalComponent = amountMinor - interestComponent;
-      }
+      return NextResponse.json(
+        { error: "Payment must equal the scheduled EMI; use extra principal for overpayments" },
+        { status: 400 }
+      );
     }
   } else {
     principalComponent = amountMinor;
+  }
+
+  if (isExtraPrincipal) {
+    const paidPrincipal = loan.payments.reduce(
+      (sum: number, payment: any) => sum + payment.principalComponentMinor,
+      0
+    );
+    const remainingBeforeExtra = loan.originalPrincipalMinor - paidPrincipal;
+    const residualValueMinor = loan.residualValueMinor || 0;
+    if (amountMinor > Math.max(0, remainingBeforeExtra - residualValueMinor)) {
+      return NextResponse.json({ error: "Extra principal exceeds the outstanding balance" }, { status: 400 });
+    }
   }
 
   await (prisma as any).$transaction(async (tx: any) => {
@@ -144,9 +167,12 @@ export async function POST(
         0
       );
       const remainingPrincipal = Math.max(0, loan.originalPrincipalMinor - totalPaidPrincipal);
+      const residualValueMinor = loan.residualValueMinor || 0;
 
-      const remainingScheduled = loan.scheduleEntries.filter((e: any) => e.status !== "PAID");
-      if (remainingScheduled.length > 0 && remainingPrincipal > (loan.residualValueMinor || 0)) {
+      const remainingScheduled = loan.scheduleEntries.filter(
+        (e: any) => e.status !== "PAID" && e.deletedAt === null
+      );
+      if (remainingPrincipal > residualValueMinor && remainingScheduled.length > 0) {
         const startInstallment = remainingScheduled[0].installmentNumber;
         const remainingTenure = remainingScheduled.length;
 
@@ -165,7 +191,8 @@ export async function POST(
         await tx.loanScheduleEntry.updateMany({
           where: {
             loanId: loan.id,
-            status: "SCHEDULED",
+            status: { not: "PAID" },
+            deletedAt: null,
           },
           data: {
             deletedAt: now,
@@ -176,8 +203,7 @@ export async function POST(
         // Insert new regenerated entries
         const baseDate = new Date(loan.startDate);
         for (const row of newRows) {
-          const dueDate = new Date(baseDate);
-          dueDate.setMonth(dueDate.getMonth() + row.installmentNumber);
+          const dueDate = addMonthsClamped(baseDate, row.installmentNumber);
 
           await tx.loanScheduleEntry.create({
             data: {
@@ -194,8 +220,17 @@ export async function POST(
             },
           });
         }
+      } else {
+          await tx.loanScheduleEntry.updateMany({
+            where: {
+              loanId: loan.id,
+              status: { not: "PAID" },
+              deletedAt: null,
+            },
+            data: { deletedAt: now, serverSeq: nextSeq },
+          });
+        }
       }
-    }
 
     // 5. Check if loan is now fully cleared / paid
     const remainingUnpaid = await tx.loanScheduleEntry.count({
@@ -206,7 +241,7 @@ export async function POST(
       },
     });
 
-    if (remainingUnpaid === 0) {
+    if (remainingUnpaid === 0 && (loan.residualValueMinor || 0) === 0) {
       await tx.loan.update({
         where: { id: loan.id },
         data: {

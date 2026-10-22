@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { generateAmortizationSchedule } from "@/lib/finance-core/loans";
+import { addMonthsClamped } from "@/lib/finance-core/dates";
 import { v4 as uuidv4 } from "uuid";
 import { assertCanWriteAccount } from "@/lib/authorization";
 import { getNextServerSeq } from "@/lib/server-seq";
@@ -134,8 +135,7 @@ export async function POST(request: NextRequest) {
 
     for (const row of scheduleRows) {
       const scheduleSeq = await getNextServerSeq();
-      const dueDate = new Date(startDateTime);
-      dueDate.setMonth(dueDate.getMonth() + row.installmentNumber);
+      const dueDate = addMonthsClamped(new Date(startDateTime), row.installmentNumber);
 
       await tx.loanScheduleEntry.create({
         data: {

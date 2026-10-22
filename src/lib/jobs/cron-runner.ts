@@ -4,6 +4,7 @@ import { getNextServerSeq } from "@/lib/server-seq";
 import { calculateStatementCycle, getEffectiveDayOfMonth } from "@/lib/finance-core/credit-card";
 import { calculateAccountBalance, calculateOutstandingDebt } from "@/lib/finance-core/ledger";
 import { calculateMonthlyPayout, calculateCompoundMaturity } from "@/lib/finance-core/investments";
+import { addMonthsClamped } from "@/lib/finance-core/dates";
 import { v5 as uuidv5 } from "uuid";
 
 const FD_NAMESPACE = "6ba7b810-9dad-11d1-80b4-00c04fd430c8";
@@ -387,8 +388,7 @@ export async function runCronTick(options?: { now?: Date }): Promise<{
       const maturityDate = new Date(fd.maturityDate);
 
       for (let monthIdx = 1; monthIdx <= fd.tenureMonths; monthIdx++) {
-        const payoutDate = new Date(startDate);
-        payoutDate.setMonth(payoutDate.getMonth() + monthIdx);
+        const payoutDate = addMonthsClamped(startDate, monthIdx);
 
         if (payoutDate.getTime() > now.getTime()) {
           break;
@@ -475,8 +475,7 @@ export async function runCronTick(options?: { now?: Date }): Promise<{
       const nextSeq = await getNextServerSeq();
       if (fd.autoRenew) {
         const newStartDate = new Date(maturityDate);
-        const newMaturityDate = new Date(maturityDate);
-        newMaturityDate.setMonth(newMaturityDate.getMonth() + fd.tenureMonths);
+        const newMaturityDate = addMonthsClamped(maturityDate, fd.tenureMonths);
 
         let newPrincipalMinor = fd.principalAmountMinor;
         if (fd.payoutMode === "REINVEST_COMPOUND") {

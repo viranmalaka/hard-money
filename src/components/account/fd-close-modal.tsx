@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import { X, AlertTriangle } from "lucide-react";
 import { LocalFixedDeposit, LocalAccount } from "@/lib/db";
 import { useSync } from "@/components/sync-provider";
-import { localUpdateFixedDeposit, localCreateTransaction } from "@/lib/sync/client";
+import { localUpdateFixedDeposit } from "@/lib/sync/client";
 import { formatMoney, parseMoneyToMinor } from "@/lib/finance-core/money";
 import { useMutation } from "@tanstack/react-query";
 import { closeFixedDeposit } from "@/services/fixed-deposit-service";
@@ -17,7 +17,7 @@ interface FdCloseModalProps {
 }
 
 export function FdCloseModal({ fd, isOpen, onClose, accounts }: FdCloseModalProps) {
-  const { db, userId } = useSync();
+  const { db } = useSync();
 
   const [proceedsStr, setProceedsStr] = useState("");
   const [targetAccountId, setTargetAccountId] = useState("");
@@ -58,47 +58,8 @@ export function FdCloseModal({ fd, isOpen, onClose, accounts }: FdCloseModalProp
     try {
       await closeMutation.mutateAsync({ id: fd.id, actualProceedsMinor, targetAccountId });
 
-      // 2. Also register local transactions and local update in Dexie for offline consistency
+      // The server is authoritative for the proceeds transactions.
       const now = new Date().toISOString();
-      const principalToReturn = Math.min(fd.principalAmountMinor, actualProceedsMinor);
-      const interestToReturn = Math.max(0, actualProceedsMinor - fd.principalAmountMinor);
-
-      await localCreateTransaction(db, {
-        userId: userId || fd.userId || "",
-        accountId: targetAccountId,
-        amountMinor: principalToReturn,
-        type: "INCOME",
-        subType: "FD_MATURITY",
-        source: "SYSTEM",
-        isSplit: false,
-        createdByUserId: userId || fd.userId || "",
-        updatedByUserId: userId || fd.userId || "",
-        transactionDate: now,
-        note: `Fixed Deposit Premature Closure Principal: ${fd.bankName}`,
-        excludeFromBudget: true,
-        excludeFromStats: true,
-        excludeFromBalance: false,
-      });
-
-      if (interestToReturn > 0) {
-        await localCreateTransaction(db, {
-          userId: userId || fd.userId || "",
-          accountId: targetAccountId,
-          amountMinor: interestToReturn,
-          type: "INCOME",
-          subType: "FD_INTEREST",
-          source: "SYSTEM",
-          isSplit: false,
-          createdByUserId: userId || fd.userId || "",
-          updatedByUserId: userId || fd.userId || "",
-          transactionDate: now,
-          note: `Fixed Deposit Premature Closure Interest: ${fd.bankName}`,
-          excludeFromBudget: false,
-          excludeFromStats: false,
-          excludeFromBalance: false,
-        });
-      }
-
       await localUpdateFixedDeposit(db, fd.id, {
         status: "CLOSED",
         closedAt: now,
