@@ -3,6 +3,9 @@
 import React, { useState, Suspense } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { login } from "@/services/auth-service";
+import { queryKeys } from "@/lib/api/query-keys";
 
 function LoginForm() {
   const router = useRouter();
@@ -12,7 +15,16 @@ function LoginForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const queryClient = useQueryClient();
+  const loginMutation = useMutation({
+    mutationFn: login,
+    onSuccess: (data) => {
+      if (data?.user?.id) localStorage.setItem("hardmoney_active_user", data.user.id);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.session() });
+      router.push(callbackUrl);
+      router.refresh();
+    },
+  });
 
   const handleFocus = (e: React.FocusEvent<HTMLInputElement>) => {
     // Ensure input is comfortably visible above mobile keyboard
@@ -22,32 +34,10 @@ function LoginForm() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    setLoading(true);
-
     try {
-      const res = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
-      });
-
-      const data = await res.json().catch(() => ({}));
-
-      if (!res.ok) {
-        setError(data.error || "Invalid email or password");
-        setLoading(false);
-        return;
-      }
-
-      if (data?.user?.id) {
-        localStorage.setItem("hardmoney_active_user", data.user.id);
-      }
-
-      router.push(callbackUrl);
-      router.refresh();
-    } catch {
-      setError("An unexpected network error occurred");
-      setLoading(false);
+      await loginMutation.mutateAsync({ email, password });
+    } catch (mutationError) {
+      setError(mutationError instanceof Error ? mutationError.message : "Invalid email or password");
     }
   };
 
@@ -130,10 +120,10 @@ function LoginForm() {
           type="submit"
           data-testid="login-submit"
           tabIndex={3}
-          disabled={loading}
+          disabled={loginMutation.isPending}
           className="w-full py-2.5 px-4 rounded text-sm font-semibold bg-[var(--accent)] text-white hover:opacity-95 active:scale-[0.98] transition-all disabled:opacity-50 cursor-pointer"
         >
-          {loading ? "Signing in…" : "Sign In"}
+          {loginMutation.isPending ? "Signing in…" : "Sign In"}
         </button>
       </form>
 

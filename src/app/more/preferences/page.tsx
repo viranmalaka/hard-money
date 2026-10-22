@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -11,6 +12,9 @@ import {
 } from "lucide-react";
 import { useTheme } from "@/components/theme-provider";
 import { useMounted } from "@/lib/use-mounted";
+import { queryKeys } from "@/lib/api/query-keys";
+import { getSettings, updateSettings } from "@/services/user-service";
+import { getPushSettings, savePushSettings, subscribePush, unsubscribePush } from "@/services/push-service";
 
 export default function PreferencesPage() {
   const { resolvedTheme, toggleTheme, colorSwap, toggleColorSwap } = useTheme();
@@ -34,6 +38,23 @@ export default function PreferencesPage() {
   const [reminderStatusNotice, setReminderStatusNotice] = useState("");
   const [isIosDevice, setIsIosDevice] = useState(false);
   const isPushDirtyRef = useRef(false);
+  const queryClient = useQueryClient();
+  const settingsQuery = useQuery({ queryKey: queryKeys.settings.user(), queryFn: getSettings });
+  const pushQuery = useQuery({ queryKey: queryKeys.settings.push(), queryFn: getPushSettings });
+  const saveSettingsMutation = useMutation({
+    mutationFn: updateSettings,
+    onSuccess: (data) => {
+      queryClient.setQueryData(queryKeys.settings.user(), data);
+    },
+  });
+  const savePushMutation = useMutation({
+    mutationFn: async (input: { enabled: boolean; reminderTime: string; subscription?: Record<string, unknown> }) => {
+      if (input.enabled && input.subscription) await subscribePush(input.subscription);
+      if (!input.enabled) await unsubscribePush();
+      return savePushSettings({ enabled: input.enabled, reminderTime: input.reminderTime });
+    },
+    onSuccess: (data) => queryClient.setQueryData(queryKeys.settings.push(), data),
+  });
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -49,43 +70,22 @@ export default function PreferencesPage() {
   }, []);
 
   useEffect(() => {
-    let cancelled = false;
-    fetch("/api/user/settings", { cache: "no-store" })
-      .then((res) => {
-        if (!res.ok) return null;
-        return res.json();
-      })
-      .then((data) => {
-        if (cancelled) return;
-        if (data?.user) {
-          if (!isNameDirtyRef.current) setName(data.user.name || "");
-          if (!isTimezoneDirtyRef.current) setTimezone(data.user.timezone || "Asia/Colombo");
-          if (!isCurrencyDirtyRef.current) setCurrency(data.user.defaultCurrency || "LKR");
-          if (!isWhtDirtyRef.current && data.user.defaultWithholdingTaxRateBps !== undefined) {
-            setWhtRate(((data.user.defaultWithholdingTaxRateBps || 0) / 100).toFixed(1));
-          }
+    const user = settingsQuery.data?.user;
+    queueMicrotask(() => {
+      if (user) {
+        if (!isNameDirtyRef.current) setName(user.name || "");
+        if (!isTimezoneDirtyRef.current) setTimezone(user.timezone || "Asia/Colombo");
+        if (!isCurrencyDirtyRef.current) setCurrency(user.defaultCurrency || "LKR");
+        if (!isWhtDirtyRef.current && user.defaultWithholdingTaxRateBps !== undefined) {
+          setWhtRate(((user.defaultWithholdingTaxRateBps || 0) / 100).toFixed(1));
         }
-      })
-      .catch(() => {});
-
-    fetch("/api/push/settings", { cache: "no-store" })
-      .then((res) => {
-        if (!res.ok) return null;
-        return res.json();
-      })
-      .then((data) => {
-        if (cancelled || !data) return;
-        if (!isPushDirtyRef.current) {
-          setRemindersEnabled(!!data.enabled);
-          if (data.reminderTime) setReminderTime(data.reminderTime);
-        }
-      })
-      .catch(() => {});
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+      }
+      if (pushQuery.data && !isPushDirtyRef.current) {
+        setRemindersEnabled(!!pushQuery.data.enabled);
+        if (pushQuery.data.reminderTime) setReminderTime(pushQuery.data.reminderTime);
+      }
+    });
+  }, [pushQuery.data, settingsQuery.data]);
 
   const handleSaveSettings = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -93,33 +93,26 @@ export default function PreferencesPage() {
     setSavedNotice(false);
 
     try {
-      const res = await fetch("/api/user/settings", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      const data = await saveSettingsMutation.mutateAsync({
           name: name.trim(),
           timezone: timezone.trim(),
           defaultCurrency: currency.trim().toUpperCase(),
           defaultWithholdingTaxRateBps: Math.round(parseFloat(whtRate || "0") * 100),
-        }),
       });
 
-      if (res.ok) {
-        isNameDirtyRef.current = false;
-        isTimezoneDirtyRef.current = false;
-        isCurrencyDirtyRef.current = false;
-        isWhtDirtyRef.current = false;
-        const data = await res.json();
-        if (data?.user) {
-          setName(data.user.name);
-          setTimezone(data.user.timezone);
-          setCurrency(data.user.defaultCurrency);
-          if (data.user.defaultWithholdingTaxRateBps !== undefined) {
-            setWhtRate(((data.user.defaultWithholdingTaxRateBps || 0) / 100).toFixed(1));
-          }
+      isNameDirtyRef.current = false;
+      isTimezoneDirtyRef.current = false;
+      isCurrencyDirtyRef.current = false;
+      isWhtDirtyRef.current = false;
+      if (data?.user) {
+        setName(data.user.name);
+        setTimezone(data.user.timezone);
+        setCurrency(data.user.defaultCurrency);
+        if (data.user.defaultWithholdingTaxRateBps !== undefined) {
+          setWhtRate(((data.user.defaultWithholdingTaxRateBps || 0) / 100).toFixed(1));
         }
-        setSavedNotice(true);
       }
+      setSavedNotice(true);
     } catch {
       // ignore
     } finally {
@@ -133,6 +126,7 @@ export default function PreferencesPage() {
     setReminderStatusNotice("");
 
     try {
+      let subscription: Record<string, unknown> | undefined;
       if (remindersEnabled) {
         if (typeof window !== "undefined" && "Notification" in window) {
           const perm = await Notification.requestPermission();
@@ -143,7 +137,7 @@ export default function PreferencesPage() {
           }
         }
 
-        const subData = {
+        subscription = {
           endpoint: `https://fcm.googleapis.com/fcm/send/test-${Math.random().toString(36).slice(2, 9)}`,
           keys: {
             p256dh: "BMo9aW7-test-p256dh-key-mock",
@@ -151,27 +145,10 @@ export default function PreferencesPage() {
           },
         };
 
-        await fetch("/api/push/subscribe", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(subData),
-        });
-      } else {
-        await fetch("/api/push/unsubscribe", { method: "POST" });
       }
 
-      const res = await fetch("/api/push/settings", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          enabled: remindersEnabled,
-          reminderTime,
-        }),
-      });
-
-      if (res.ok) {
-        setReminderStatusNotice(remindersEnabled ? "Reminders active" : "Reminders disabled");
-      }
+      await savePushMutation.mutateAsync({ enabled: remindersEnabled, reminderTime, subscription });
+      setReminderStatusNotice(remindersEnabled ? "Reminders active" : "Reminders disabled");
     } catch {
       setReminderStatusNotice("Failed to save push settings");
     } finally {

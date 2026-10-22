@@ -10,6 +10,7 @@ import { BottomNav } from "@/components/navigation/bottom-nav";
 import { Fab } from "@/components/ui/fab";
 import { PwaManager } from "@/components/pwa-manager";
 import { ScrollContainer } from "@/components/navigation/scroll-container";
+import { QueryProvider } from "@/components/query-provider";
 
 export const viewport: Viewport = {
   width: "device-width",
@@ -54,9 +55,10 @@ export default function RootLayout({
       <body className="fixed inset-0 h-screen h-[100dvh] w-full overflow-hidden overscroll-none bg-app text-[var(--text)]">
         <ThemeProvider>
           <Suspense fallback={null}>
-            <SyncProvider>
-              <QuickAddProvider>
-                <div className="flex h-full w-full overflow-hidden pt-shell-safe">
+            <QueryProvider>
+              <SyncProvider>
+                <QuickAddProvider>
+                  <div className="flex h-full w-full overflow-hidden pt-shell-safe">
                   {/* Desktop Collapsible Sidebar */}
                   <Sidebar />
 
@@ -78,9 +80,10 @@ export default function RootLayout({
 
                   {/* PWA Service Worker & Update Handler */}
                   <PwaManager />
-                </div>
-              </QuickAddProvider>
-            </SyncProvider>
+                  </div>
+                </QuickAddProvider>
+              </SyncProvider>
+            </QueryProvider>
           </Suspense>
         </ThemeProvider>
       </body>

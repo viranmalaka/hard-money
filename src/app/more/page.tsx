@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -19,6 +20,11 @@ import {
   ShoppingBasket,
 } from "lucide-react";
 import { EmptyState } from "@/components/ui/empty-state";
+import { queryKeys } from "@/lib/api/query-keys";
+import { logout } from "@/services/auth-service";
+import { getSettings } from "@/services/user-service";
+import { listInbox } from "@/services/inbox-service";
+import { getShoppingListCount } from "@/services/shopping-list-service";
 
 interface UserProfile {
   id: string;
@@ -28,49 +34,28 @@ interface UserProfile {
 
 export default function MorePage() {
   const router = useRouter();
-  const [user, setUser] = useState<UserProfile | null>(null);
-  const [inboxCount, setInboxCount] = useState(0);
-  const [shoppingListCount, setShoppingListCount] = useState(0);
-  const [userLoading, setUserLoading] = useState(true);
-
-  useEffect(() => {
-    fetch("/api/user/settings", { cache: "no-store" })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (data?.user) {
-          setUser(data.user);
-        }
-      })
-      .catch(() => {})
-      .finally(() => setUserLoading(false));
-
-    fetch("/api/sms/inbox", { cache: "no-store" })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (data) {
-          setInboxCount(data.count ?? (data.items?.length || 0));
-        }
-      })
-      .catch(() => {});
-
-    fetch("/api/shopping-list/count", { cache: "no-store" })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (data) setShoppingListCount(data.count ?? 0);
-      })
-      .catch(() => {});
-  }, []);
+  const queryClient = useQueryClient();
+  const settingsQuery = useQuery({ queryKey: queryKeys.settings.user(), queryFn: getSettings });
+  const inboxQuery = useQuery({ queryKey: queryKeys.inbox.all(), queryFn: listInbox });
+  const shoppingCountQuery = useQuery({
+    queryKey: queryKeys.shoppingList.count(),
+    queryFn: getShoppingListCount,
+  });
+  const user: UserProfile | null = settingsQuery.data?.user ?? null;
+  const inboxCount = inboxQuery.data?.length ?? 0;
+  const shoppingListCount = shoppingCountQuery.data?.count ?? 0;
+  const userLoading = settingsQuery.isLoading;
+  const logoutMutation = useMutation({
+    mutationFn: logout,
+    onSettled: () => {
+      queryClient.clear();
+      localStorage.removeItem("hardmoney_active_user");
+      router.push("/login");
+    },
+  });
 
   const handleLogout = async () => {
-    try {
-      await fetch("/api/auth/logout", { method: "POST" });
-    } catch {
-      // ignore
-    }
-    if (typeof window !== "undefined") {
-      localStorage.removeItem("hardmoney_active_user");
-    }
-    router.push("/login");
+    await logoutMutation.mutateAsync();
   };
 
   const sections = [

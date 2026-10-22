@@ -2,6 +2,9 @@
 
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { register } from "@/services/auth-service";
+import { queryKeys } from "@/lib/api/query-keys";
 
 export function RegisterForm() {
   const router = useRouter();
@@ -10,7 +13,16 @@ export function RegisterForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const queryClient = useQueryClient();
+  const registerMutation = useMutation({
+    mutationFn: register,
+    onSuccess: (data) => {
+      if (data?.user?.id) localStorage.setItem("hardmoney_active_user", data.user.id);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.session() });
+      router.push("/");
+      router.refresh();
+    },
+  });
 
   const handleFocus = (e: React.FocusEvent<HTMLInputElement>) => {
     e.target.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -19,32 +31,10 @@ export function RegisterForm() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    setLoading(true);
-
     try {
-      const res = await fetch("/api/auth/register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, email, password }),
-      });
-
-      const data = await res.json().catch(() => ({}));
-
-      if (!res.ok) {
-        setError(data.error || "Failed to register account");
-        setLoading(false);
-        return;
-      }
-
-      if (data?.user?.id) {
-        localStorage.setItem("hardmoney_active_user", data.user.id);
-      }
-
-      router.push("/");
-      router.refresh();
-    } catch {
-      setError("An unexpected network error occurred");
-      setLoading(false);
+      await registerMutation.mutateAsync({ name, email, password });
+    } catch (mutationError) {
+      setError(mutationError instanceof Error ? mutationError.message : "Failed to register account");
     }
   };
 
@@ -136,10 +126,10 @@ export function RegisterForm() {
           type="submit"
           data-testid="register-submit"
           tabIndex={4}
-          disabled={loading}
+          disabled={registerMutation.isPending}
           className="w-full py-2.5 px-4 rounded text-sm font-semibold bg-[var(--accent)] text-white hover:opacity-95 active:scale-[0.98] transition-all disabled:opacity-50 cursor-pointer"
         >
-          {loading ? "Creating account…" : "Create Account"}
+          {registerMutation.isPending ? "Creating account…" : "Create Account"}
         </button>
       </form>
     </>

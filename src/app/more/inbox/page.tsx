@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useMemo, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -8,26 +9,12 @@ import {
   RefreshCw,
   XCircle,
   AlertCircle,
-  Inbox,
-  Send,
-  HelpCircle,
   ShieldAlert,
 } from "lucide-react";
 import { EmptyState } from "@/components/ui/empty-state";
-
-interface BankSmsItem {
-  id: string;
-  userId: string;
-  sender: string;
-  rawMessage: string;
-  receivedAt: string;
-  status: string;
-  parseMethod: string | null;
-  parsedPayload: any | null;
-  reviewReason: string | null;
-  failureReason: string | null;
-  attempts: number;
-}
+import { queryKeys } from "@/lib/api/query-keys";
+import { getAccounts, getCategories } from "@/services/user-service";
+import { ignoreInboxItem, listInbox, postInboxItem, retryInboxItem } from "@/services/inbox-service";
 
 interface AccountItem {
   id: string;
@@ -44,10 +31,6 @@ interface CategoryItem {
 }
 
 export default function SmsReviewInboxPage() {
-  const [items, setItems] = useState<BankSmsItem[]>([]);
-  const [accounts, setAccounts] = useState<AccountItem[]>([]);
-  const [categories, setCategories] = useState<CategoryItem[]>([]);
-  const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   // Form states per item
@@ -65,66 +48,61 @@ export default function SmsReviewInboxPage() {
 
   const [submitting, setSubmitting] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-
-  const fetchInbox = async () => {
-    try {
-      const res = await fetch("/api/sms/inbox", { cache: "no-store" });
-      if (res.ok) {
-        const data = await res.json();
-        const list: BankSmsItem[] = data.items || [];
-        setItems(list);
-        if (list.length > 0 && !selectedId) {
-          setSelectedId(list[0].id);
-        }
-
-        // Initialize form values
-        setFormValues((prev) => {
-          const next = { ...prev };
-          for (const item of list) {
-            if (!next[item.id]) {
-              const payload = item.parsedPayload || {};
-              next[item.id] = {
-                accountId: "",
-                amount: payload.amountText || "",
-                categoryId: "",
-                note: payload.merchantOrEntity || item.sender,
-              };
-            }
-          }
-          return next;
-        });
-      }
-    } catch {
-      // ignore
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchAccountsAndCategories = async () => {
-    try {
-      const [accRes, catRes] = await Promise.all([
-        fetch("/api/user/accounts", { cache: "no-store" }),
-        fetch("/api/user/categories", { cache: "no-store" }),
-      ]);
-
-      if (accRes.ok) {
-        const accData = await accRes.json();
-        setAccounts(accData.accounts || []);
-      }
-      if (catRes.ok) {
-        const catData = await catRes.json();
-        setCategories(catData.categories || []);
-      }
-    } catch {
-      // ignore
-    }
-  };
+  const queryClient = useQueryClient();
+  const inboxQuery = useQuery({ queryKey: queryKeys.inbox.all(), queryFn: listInbox });
+  const accountsQuery = useQuery({ queryKey: queryKeys.accounts.all(), queryFn: getAccounts });
+  const categoriesQuery = useQuery({ queryKey: queryKeys.categories.all(), queryFn: getCategories });
+  const items = useMemo(() => inboxQuery.data ?? [], [inboxQuery.data]);
+  const accounts: AccountItem[] = useMemo(() => accountsQuery.data ?? [], [accountsQuery.data]);
+  const categories: CategoryItem[] = useMemo(() => categoriesQuery.data ?? [], [categoriesQuery.data]);
+  const loading = inboxQuery.isLoading || accountsQuery.isLoading || categoriesQuery.isLoading;
 
   useEffect(() => {
-    fetchInbox();
-    fetchAccountsAndCategories();
-  }, []);
+    queueMicrotask(() => {
+      if (items.length > 0 && !selectedId) setSelectedId(items[0].id);
+      setFormValues((prev) => {
+        const next = { ...prev };
+        for (const item of items) {
+          if (!next[item.id]) {
+            const payload = item.parsedPayload || {};
+            next[item.id] = {
+              accountId: "",
+              amount: typeof payload.amountText === "string" ? payload.amountText : "",
+              categoryId: "",
+              note: typeof payload.merchantOrEntity === "string" ? payload.merchantOrEntity : item.sender,
+            };
+          }
+        }
+        return next;
+      });
+    });
+  }, [items, selectedId]);
+
+  const removeOptimistically = (itemId: string) => {
+    const previous = queryClient.getQueryData(queryKeys.inbox.all());
+    queryClient.setQueryData(
+      queryKeys.inbox.all(),
+      items.filter((item) => item.id !== itemId)
+    );
+    return previous;
+  };
+  const postMutation = useMutation({
+    mutationFn: ({ itemId, input }: { itemId: string; input: { accountId: string; amount?: string; categoryId?: string; note?: string } }) =>
+      postInboxItem(itemId, input),
+    onMutate: ({ itemId }) => removeOptimistically(itemId),
+    onError: (_error, _variables, previous) => queryClient.setQueryData(queryKeys.inbox.all(), previous),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: queryKeys.inbox.all() }),
+  });
+  const ignoreMutation = useMutation({
+    mutationFn: ignoreInboxItem,
+    onMutate: removeOptimistically,
+    onError: (_error, _itemId, previous) => queryClient.setQueryData(queryKeys.inbox.all(), previous),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: queryKeys.inbox.all() }),
+  });
+  const retryMutation = useMutation({
+    mutationFn: retryInboxItem,
+    onSettled: () => queryClient.invalidateQueries({ queryKey: queryKeys.inbox.all() }),
+  });
 
   const handleFieldChange = (
     itemId: string,
@@ -158,26 +136,18 @@ export default function SmsReviewInboxPage() {
     }
 
     try {
-      const res = await fetch(`/api/sms/inbox/${itemId}/post`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      await postMutation.mutateAsync({
+        itemId,
+        input: {
           accountId: values.accountId,
           amount: values.amount ? values.amount : undefined,
           categoryId: values.categoryId || undefined,
           note: values.note || undefined,
-        }),
+        },
       });
-
-      if (res.ok) {
-        setItems((prev) => prev.filter((it) => it.id !== itemId));
-        if (selectedId === itemId) {
-          const remaining = items.filter((it) => it.id !== itemId);
-          setSelectedId(remaining.length > 0 ? remaining[0].id : null);
-        }
-      } else {
-        const err = await res.json().catch(() => ({}));
-        setErrorMessage(err.error || "Failed to post transaction");
+      if (selectedId === itemId) {
+        const remaining = items.filter((it) => it.id !== itemId);
+        setSelectedId(remaining.length > 0 ? remaining[0].id : null);
       }
     } catch {
       setErrorMessage("Network error posting transaction");
@@ -191,16 +161,10 @@ export default function SmsReviewInboxPage() {
     setErrorMessage(null);
 
     try {
-      const res = await fetch(`/api/sms/inbox/${itemId}/ignore`, {
-        method: "POST",
-      });
-
-      if (res.ok) {
-        setItems((prev) => prev.filter((it) => it.id !== itemId));
-        if (selectedId === itemId) {
-          const remaining = items.filter((it) => it.id !== itemId);
-          setSelectedId(remaining.length > 0 ? remaining[0].id : null);
-        }
+      await ignoreMutation.mutateAsync(itemId);
+      if (selectedId === itemId) {
+        const remaining = items.filter((it) => it.id !== itemId);
+        setSelectedId(remaining.length > 0 ? remaining[0].id : null);
       }
     } catch {
       setErrorMessage("Failed to ignore SMS");
@@ -214,13 +178,7 @@ export default function SmsReviewInboxPage() {
     setErrorMessage(null);
 
     try {
-      const res = await fetch(`/api/sms/inbox/${itemId}/retry`, {
-        method: "POST",
-      });
-
-      if (res.ok) {
-        await fetchInbox();
-      }
+      await retryMutation.mutateAsync(itemId);
     } catch {
       setErrorMessage("Failed to retry SMS");
     } finally {
@@ -274,7 +232,7 @@ export default function SmsReviewInboxPage() {
 
         <button
           type="button"
-          onClick={fetchInbox}
+          onClick={() => void inboxQuery.refetch()}
           className="flex items-center gap-1.5 px-2.5 py-1 text-xs rounded border border-hairline font-medium hover:bg-surface text-[var(--text)] transition-colors"
         >
           <RefreshCw size={13} className={loading ? "animate-spin" : ""} />

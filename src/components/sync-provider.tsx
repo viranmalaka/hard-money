@@ -1,7 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useEffect, useState, useMemo, useCallback } from "react";
-import { usePathname } from "next/navigation";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLiveQuery } from "dexie-react-hooks";
 import {
   getDatabase,
@@ -18,6 +18,8 @@ import {
 } from "@/lib/db";
 import { syncNow, SyncState } from "@/lib/sync/client";
 import { RefreshCw, WifiOff, AlertCircle, CheckCircle2 } from "lucide-react";
+import { queryKeys } from "@/lib/api/query-keys";
+import { getSession } from "@/services/auth-service";
 
 interface SyncContextValue {
   db: HardMoneyDB;
@@ -93,7 +95,7 @@ async function warmLiveCache(db: HardMoneyDB) {
 }
 
 export function SyncProvider({ children }: { children: React.ReactNode }) {
-  const pathname = usePathname();
+  const queryClient = useQueryClient();
   const [userId, setUserId] = useState<string | null>(() => {
     if (typeof window !== "undefined") {
       return localStorage.getItem("hardmoney_active_user");
@@ -102,23 +104,25 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
   });
   const [syncState, setSyncState] = useState<SyncState>("idle");
 
-  // Fetch current user session to namespace Dexie database and refresh on route changes
+  const sessionQuery = useQuery({
+    queryKey: queryKeys.session(),
+    queryFn: getSession,
+  });
+
   useEffect(() => {
-    fetch("/api/auth/session")
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (data && data.user && data.user.id) {
-          setUserId(data.user.id);
-          localStorage.setItem("hardmoney_active_user", data.user.id);
-        } else if (data && !data.user) {
-          setUserId(null);
-          localStorage.removeItem("hardmoney_active_user");
-        }
-      })
-      .catch(() => {
-        // Retain cached active user on offline / aborted network calls
+    if (!sessionQuery.data) return;
+    const nextUserId = sessionQuery.data.user?.id ?? null;
+    if (nextUserId !== userId) {
+      queryClient.removeQueries({
+        predicate: ({ queryKey }) => queryKey[0] !== queryKeys.session()[0],
       });
-  }, [pathname]);
+    }
+    queueMicrotask(() => {
+      setUserId(nextUserId);
+      if (nextUserId) localStorage.setItem("hardmoney_active_user", nextUserId);
+      else localStorage.removeItem("hardmoney_active_user");
+    });
+  }, [queryClient, sessionQuery.data, userId]);
 
   const db = useMemo(() => getDatabase(userId), [userId]);
 

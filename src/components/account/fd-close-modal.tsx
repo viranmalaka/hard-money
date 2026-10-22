@@ -6,6 +6,8 @@ import { LocalFixedDeposit, LocalAccount } from "@/lib/db";
 import { useSync } from "@/components/sync-provider";
 import { localUpdateFixedDeposit, localCreateTransaction } from "@/lib/sync/client";
 import { formatMoney, parseMoneyToMinor } from "@/lib/finance-core/money";
+import { useMutation } from "@tanstack/react-query";
+import { closeFixedDeposit } from "@/services/fixed-deposit-service";
 
 interface FdCloseModalProps {
   fd: LocalFixedDeposit | null;
@@ -21,17 +23,20 @@ export function FdCloseModal({ fd, isOpen, onClose, accounts }: FdCloseModalProp
   const [targetAccountId, setTargetAccountId] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const closeMutation = useMutation({ mutationFn: closeFixedDeposit });
 
   React.useEffect(() => {
     if (fd) {
-      setProceedsStr((fd.principalAmountMinor / 100).toFixed(2));
-      setTargetAccountId(
-        fd.linkedPayoutAccountId ||
-          fd.fundingAccountId ||
-          accounts.find((a) => !a.isArchived && (a.type === "BANK_SAVINGS" || a.type === "CASH"))?.id ||
-          ""
-      );
-      setError("");
+      queueMicrotask(() => {
+        setProceedsStr((fd.principalAmountMinor / 100).toFixed(2));
+        setTargetAccountId(
+          fd.linkedPayoutAccountId ||
+            fd.fundingAccountId ||
+            accounts.find((a) => !a.isArchived && (a.type === "BANK_SAVINGS" || a.type === "CASH"))?.id ||
+            ""
+        );
+        setError("");
+      });
     }
   }, [fd, accounts]);
 
@@ -51,15 +56,7 @@ export function FdCloseModal({ fd, isOpen, onClose, accounts }: FdCloseModalProp
 
     setSubmitting(true);
     try {
-      // 1. Call server API to register premature closure
-      await fetch(`/api/fixed-deposits/${fd.id}/close`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          actualProceedsMinor,
-          targetAccountId,
-        }),
-      }).catch(() => {});
+      await closeMutation.mutateAsync({ id: fd.id, actualProceedsMinor, targetAccountId });
 
       // 2. Also register local transactions and local update in Dexie for offline consistency
       const now = new Date().toISOString();

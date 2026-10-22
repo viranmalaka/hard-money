@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useLiveQuery } from "dexie-react-hooks";
 import { ArrowLeft, Check, GripVertical, Pencil, Plus, Trash2, X } from "lucide-react";
 import Link from "next/link";
@@ -11,11 +12,8 @@ import {
   localUpdateShoppingListItem,
 } from "@/lib/sync/client";
 import type { LocalShoppingListItem } from "@/lib/db";
-
-interface Household {
-  id: string;
-  name: string;
-}
+import { listHouseholds } from "@/services/household-service";
+import { queryKeys } from "@/lib/api/query-keys";
 
 function sortItems(items: LocalShoppingListItem[]) {
   return [...items].sort((a, b) => {
@@ -29,7 +27,6 @@ function sortItems(items: LocalShoppingListItem[]) {
 
 export default function ShoppingListPage() {
   const { db, sync } = useSync();
-  const [households, setHouseholds] = useState<Household[]>([]);
   const [householdId, setHouseholdId] = useState("");
   const [name, setName] = useState("");
   const [quantity, setQuantity] = useState("");
@@ -56,16 +53,17 @@ export default function ShoppingListPage() {
   const openItems = sortedItems.filter((item) => !item.isCompleted);
   const completedItems = sortedItems.filter((item) => item.isCompleted);
 
+  const householdsQuery = useQuery({
+    queryKey: queryKeys.households.all(),
+    queryFn: listHouseholds,
+  });
+  const households = useMemo(() => householdsQuery.data ?? [], [householdsQuery.data]);
+
   useEffect(() => {
-    fetch("/api/households", { cache: "no-store" })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        const nextHouseholds = data?.households || [];
-        setHouseholds(nextHouseholds);
-        if (nextHouseholds.length > 0) setHouseholdId(nextHouseholds[0].id);
-      })
-      .catch(() => setError("Unable to load households"));
-  }, []);
+    if (householdId === "" && households.length > 0) {
+      queueMicrotask(() => setHouseholdId(households[0].id));
+    }
+  }, [householdId, households]);
 
   const addItem = async (event: FormEvent) => {
     event.preventDefault();
@@ -206,7 +204,11 @@ export default function ShoppingListPage() {
         </button>
       </form>
 
-      {error && <p className="text-xs text-[var(--expense)]">{error}</p>}
+      {(error || householdsQuery.error) && (
+        <p className="text-xs text-[var(--expense)]">
+          {error || "Unable to load households"}
+        </p>
+      )}
 
       <section
         className="flat-card divide-y divide-hairline"

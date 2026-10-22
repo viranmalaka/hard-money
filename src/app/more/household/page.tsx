@@ -1,135 +1,139 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { ArrowLeft, Users, UserPlus, Shield, Trash2, ArrowRightLeft, LogOut, Check } from "lucide-react";
 import { useSync } from "@/components/sync-provider";
+import { queryKeys } from "@/lib/api/query-keys";
+import {
+  createHousehold,
+  inviteMember,
+  listHouseholds,
+  removeMember,
+  transferOwnership,
+  updateMemberRole,
+} from "@/services/household-service";
 
-interface Member {
-  id: string;
-  householdId: string;
-  userId: string;
-  role: "OWNER" | "CO_OWNER" | "CONTRIBUTOR_ADD_ONLY" | "VIEWER";
-  createdAt: string;
-  user: {
-    id: string;
-    name: string;
-    email: string;
-  };
-}
-
-interface Household {
-  id: string;
-  name: string;
-  ownerId: string;
-  isOwner: boolean;
-  myRole: "OWNER" | "CO_OWNER" | "CONTRIBUTOR_ADD_ONLY" | "VIEWER";
-  createdAt: string;
-  members: Member[];
-}
+type Member = import("@/services/household-service").HouseholdMember;
+type Household = import("@/services/household-service").Household;
 
 export default function HouseholdPage() {
   const { sync, userId } = useSync();
-  const [households, setHouseholds] = useState<Household[]>([]);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
   // Create household state
   const [newHouseholdName, setNewHouseholdName] = useState("");
-  const [creating, setCreating] = useState(false);
-
   // Invite member state
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<"CO_OWNER" | "CONTRIBUTOR_ADD_ONLY" | "VIEWER">("CO_OWNER");
-  const [inviting, setInviting] = useState(false);
-
   // Mobile bottom-sheet role picker state
   const [selectedMemberForSheet, setSelectedMemberForSheet] = useState<Member | null>(null);
 
-  const fetchHouseholds = async () => {
-    try {
-      const res = await fetch("/api/households", { cache: "no-store" });
-      if (res.ok) {
-        const data = await res.json();
-        setHouseholds(data.households || []);
-      }
-    } catch (err: unknown) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const queryClient = useQueryClient();
+  const householdsQuery = useQuery({
+    queryKey: queryKeys.households.all(),
+    queryFn: listHouseholds,
+  });
+  const households = householdsQuery.data ?? [];
+  const loading = householdsQuery.isLoading;
 
-  useEffect(() => {
-    fetch("/api/households", { cache: "no-store" })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (data?.households) {
-          setHouseholds(data.households);
-        }
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, []);
-
-  const triggerSync = async () => {
+  const invalidateHouseholds = async () => {
+    await queryClient.invalidateQueries({ queryKey: queryKeys.households.all() });
     await sync();
   };
+
+  const createMutation = useMutation({
+    mutationFn: createHousehold,
+    onSuccess: invalidateHouseholds,
+  });
+  const inviteMutation = useMutation({
+    mutationFn: ({ householdId, email, role }: { householdId: string; email: string; role: Exclude<Household["myRole"], "OWNER"> }) =>
+      inviteMember(householdId, { email, role }),
+    onSuccess: invalidateHouseholds,
+  });
+  const roleMutation = useMutation({
+    mutationFn: ({ householdId, memberId, role }: { householdId: string; memberId: string; role: Exclude<Household["myRole"], "OWNER"> }) =>
+      updateMemberRole(householdId, memberId, role),
+    onMutate: async ({ householdId, memberId, role }) => {
+      await queryClient.cancelQueries({ queryKey: queryKeys.households.all() });
+      const previous = queryClient.getQueryData<Household[]>(queryKeys.households.all());
+      queryClient.setQueryData<Household[]>(queryKeys.households.all(), (current = []) =>
+        current.map((household) =>
+          household.id !== householdId
+            ? household
+            : {
+                ...household,
+                members: household.members.map((member) =>
+                  member.id === memberId ? { ...member, role } : member
+                ),
+              }
+        )
+      );
+      return { previous };
+    },
+    onError: (_error, _variables, context) => {
+      if (context?.previous) queryClient.setQueryData(queryKeys.households.all(), context.previous);
+    },
+    onSettled: invalidateHouseholds,
+  });
+  const removeMutation = useMutation({
+    mutationFn: ({ householdId, memberId }: { householdId: string; memberId: string }) =>
+      removeMember(householdId, memberId),
+    onMutate: async ({ householdId, memberId }) => {
+      await queryClient.cancelQueries({ queryKey: queryKeys.households.all() });
+      const previous = queryClient.getQueryData<Household[]>(queryKeys.households.all());
+      queryClient.setQueryData<Household[]>(queryKeys.households.all(), (current = []) =>
+        current.map((household) =>
+          household.id !== householdId
+            ? household
+            : { ...household, members: household.members.filter((member) => member.id !== memberId) }
+        )
+      );
+      return { previous };
+    },
+    onError: (_error, _variables, context) => {
+      if (context?.previous) queryClient.setQueryData(queryKeys.households.all(), context.previous);
+    },
+    onSettled: invalidateHouseholds,
+  });
+  const transferMutation = useMutation({
+    mutationFn: ({ householdId, newOwnerId }: { householdId: string; newOwnerId: string }) =>
+      transferOwnership(householdId, newOwnerId),
+    onSuccess: invalidateHouseholds,
+  });
+  const creating = createMutation.isPending;
+  const inviting = inviteMutation.isPending;
 
   const handleCreateHousehold = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newHouseholdName.trim()) return;
-    setCreating(true);
     setError(null);
+    createMutation.reset();
     setSuccess(null);
 
     try {
-      const res = await fetch("/api/households", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: newHouseholdName.trim() }),
-      });
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || "Failed to create household");
-      }
+      await createMutation.mutateAsync(newHouseholdName.trim());
       setNewHouseholdName("");
       setSuccess("Household created successfully");
-      await fetchHouseholds();
-      await triggerSync();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to create household");
-    } finally {
-      setCreating(false);
     }
   };
 
   const handleInviteMember = async (householdId: string, e: React.FormEvent) => {
     e.preventDefault();
     if (!inviteEmail.trim()) return;
-    setInviting(true);
     setError(null);
     setSuccess(null);
 
     try {
-      const res = await fetch(`/api/households/${householdId}/members`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: inviteEmail.trim(), role: inviteRole }),
-      });
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || "Failed to invite member");
-      }
+      await inviteMutation.mutateAsync({ householdId, email: inviteEmail.trim(), role: inviteRole });
       setInviteEmail("");
       setSuccess("Member added successfully");
-      await fetchHouseholds();
-      await triggerSync();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to invite member");
-    } finally {
-      setInviting(false);
     }
   };
 
@@ -138,19 +142,9 @@ export default function HouseholdPage() {
     setSuccess(null);
 
     try {
-      const res = await fetch(`/api/households/${householdId}/members/${memberId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ role: newRole }),
-      });
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || "Failed to change role");
-      }
+      await roleMutation.mutateAsync({ householdId, memberId, role: newRole as Exclude<Household["myRole"], "OWNER"> });
       setSuccess("Member role updated");
       setSelectedMemberForSheet(null);
-      await fetchHouseholds();
-      await triggerSync();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to change role");
     }
@@ -161,16 +155,8 @@ export default function HouseholdPage() {
     setSuccess(null);
 
     try {
-      const res = await fetch(`/api/households/${householdId}/members/${memberId}`, {
-        method: "DELETE",
-      });
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || "Failed to remove member");
-      }
+      await removeMutation.mutateAsync({ householdId, memberId });
       setSuccess("Member removed");
-      await fetchHouseholds();
-      await triggerSync();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to remove member");
     }
@@ -189,16 +175,8 @@ export default function HouseholdPage() {
     if (!myMember) return;
 
     try {
-      const res = await fetch(`/api/households/${household.id}/members/${myMember.id}`, {
-        method: "DELETE",
-      });
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || "Failed to leave household");
-      }
+      await removeMutation.mutateAsync({ householdId: household.id, memberId: myMember.id });
       setSuccess("You have left the household");
-      await fetchHouseholds();
-      await triggerSync();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to leave household");
     }
@@ -209,18 +187,8 @@ export default function HouseholdPage() {
     setSuccess(null);
 
     try {
-      const res = await fetch(`/api/households/${householdId}/transfer-ownership`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ newOwnerId: targetUserId }),
-      });
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || "Failed to transfer ownership");
-      }
+      await transferMutation.mutateAsync({ householdId, newOwnerId: targetUserId });
       setSuccess("Ownership transferred successfully");
-      await fetchHouseholds();
-      await triggerSync();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to transfer ownership");
     }
