@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useMemo } from "react";
-import { Plus, Trash2, Edit2, PieChart, AlertTriangle, ArrowUpRight, ArrowDownRight } from "lucide-react";
+import { Plus, Trash2, PieChart, AlertTriangle, ArrowUpRight, ArrowDownRight } from "lucide-react";
 import { MonthSwitcher } from "@/components/ui/month-switcher";
 import { EmptyState } from "@/components/ui/empty-state";
 import {
@@ -19,6 +19,8 @@ import {
 import { formatMoney, parseMoneyToMinor } from "@/lib/finance-core/money";
 import { getRemainingDaysInMonth } from "@/lib/finance-core/budget";
 import { LocalBudget } from "@/lib/db";
+import { BudgetCard, BudgetViewModel } from "@/components/budget/budget-card";
+import { BudgetOverview } from "@/components/budget/budget-overview";
 
 function getMonthString(d: Date): string {
   const y = d.getFullYear();
@@ -103,17 +105,14 @@ export default function BudgetPage() {
   }, [transactions, monthStr]);
 
   // Calculate remaining days for safe-to-spend
-  const remainingDays = useMemo(() => {
-    const now = new Date();
-    // If viewing the current calendar month, calculate remaining days from today
-    if (now.getFullYear() === currentDate.getFullYear() && now.getMonth() === currentDate.getMonth()) {
-      return getRemainingDaysInMonth(now);
-    }
-    return getRemainingDaysInMonth(currentDate);
-  }, [currentDate]);
+  const now = new Date();
+  const remainingDays =
+    now.getFullYear() === currentDate.getFullYear() && now.getMonth() === currentDate.getMonth()
+      ? getRemainingDaysInMonth(now)
+      : getRemainingDaysInMonth(currentDate);
 
   // Build budget view models with rollover snapshots
-  const budgetViewModels = useMemo(() => {
+  const budgetViewModels = useMemo<BudgetViewModel[]>(() => {
     return budgets.map((b) => {
       const category = categoryMap.get(b.categoryId);
       const categoryName = category?.name || "Uncategorized";
@@ -192,14 +191,14 @@ export default function BudgetPage() {
     setModalOpen(true);
   };
 
-  const openEditModal = (b: LocalBudget) => {
-    setEditingBudget(b);
-    setFormCategoryId(b.categoryId);
-    setFormLimitInput((b.monthlyLimitMinor / 100).toString());
-    setFormEnableRollover(b.enableRollover);
+  const handleEditBudget = React.useCallback((budget: LocalBudget) => {
+    setEditingBudget(budget);
+    setFormCategoryId(budget.categoryId);
+    setFormLimitInput((budget.monthlyLimitMinor / 100).toString());
+    setFormEnableRollover(budget.enableRollover);
     setFormError(null);
     setModalOpen(true);
-  };
+  }, []);
 
   const closeModal = () => {
     setModalOpen(false);
@@ -239,8 +238,8 @@ export default function BudgetPage() {
         });
       }
       closeModal();
-    } catch (err: any) {
-      setFormError(err.message || "Failed to save budget");
+    } catch (err: unknown) {
+      setFormError(err instanceof Error ? err.message : "Failed to save budget");
     }
   };
 
@@ -249,8 +248,8 @@ export default function BudgetPage() {
     try {
       await localDeleteBudget(db, editingBudget.id);
       closeModal();
-    } catch (err: any) {
-      setFormError(err.message || "Failed to delete budget");
+    } catch (err: unknown) {
+      setFormError(err instanceof Error ? err.message : "Failed to delete budget");
     }
   };
 
@@ -280,55 +279,13 @@ export default function BudgetPage() {
 
       {/* Overview Card */}
       {budgetViewModels.length > 0 && (
-        <div data-testid="budget-overview" className="flat-panel p-4 space-y-3">
-          <div className="flex items-center justify-between border-b border-hairline pb-2">
-            <span className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
-              Month Overview
-            </span>
-            <span
-              data-testid="budget-overview-safe-to-spend"
-              className="text-xs font-semibold px-2 py-0.5 rounded bg-surface text-[var(--text)]"
-            >
-              Safe-to-Spend: {formatMoney(overall.overallDailySafe)} / day
-            </span>
-          </div>
-
-          <div className="grid grid-cols-3 gap-2 text-center sm:text-left">
-            <div>
-              <span className="text-[11px] text-[var(--text-muted)]">Total Limit</span>
-              <p
-                data-testid="budget-overview-total-limit"
-                className="text-sm sm:text-base font-semibold text-[var(--text)] tabular-nums"
-              >
-                {formatMoney(overall.totalAvailable)}
-              </p>
-            </div>
-            <div>
-              <span className="text-[11px] text-[var(--text-muted)]">Total Spent</span>
-              <p
-                data-testid="budget-overview-total-spent"
-                className="text-sm sm:text-base font-semibold text-[var(--expense)] tabular-nums"
-              >
-                {formatMoney(overall.totalSpent)}
-              </p>
-            </div>
-            <div>
-              <span className="text-[11px] text-[var(--text-muted)]">
-                {overall.isOverallOver ? "Over Budget" : "Remaining"}
-              </span>
-              <p
-                data-testid="budget-overview-remaining"
-                className={`text-sm sm:text-base font-semibold tabular-nums ${
-                  overall.isOverallOver ? "text-[var(--expense)]" : "text-[var(--income)]"
-                }`}
-              >
-                {overall.isOverallOver
-                  ? `Over by ${formatMoney(Math.abs(overall.totalRemaining))}`
-                  : formatMoney(overall.totalRemaining)}
-              </p>
-            </div>
-          </div>
-        </div>
+        <BudgetOverview
+          totalAvailable={overall.totalAvailable}
+          totalSpent={overall.totalSpent}
+          totalRemaining={overall.totalRemaining}
+          overallDailySafe={overall.overallDailySafe}
+          isOverallOver={overall.isOverallOver}
+        />
       )}
 
       {/* Budget List */}
@@ -345,13 +302,10 @@ export default function BudgetPage() {
       ) : (
         <div className="space-y-3" data-testid="budget-list">
           {budgetViewModels.map((item) => (
-            <div
+            <BudgetCard
               key={item.budget.id}
-              data-testid={`budget-row-${item.budget.id}`}
-              data-budget-id={item.budget.id}
-              data-budget-status={item.status}
-              onClick={() => openEditModal(item.budget)}
-              className="flat-panel p-3.5 space-y-2.5 cursor-pointer hover:bg-surface/50 transition-colors select-none"
+              item={item}
+              onEdit={handleEditBudget}
             >
               {/* Row Header */}
               <div className="flex items-center justify-between">
@@ -469,7 +423,7 @@ export default function BudgetPage() {
                   )}
                 </div>
               </div>
-            </div>
+            </BudgetCard>
           ))}
         </div>
       )}

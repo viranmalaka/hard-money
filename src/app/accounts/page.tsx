@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo, useEffect } from "react";
+import React, { memo, useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import { Wallet, Plus, CreditCard, Building2, Banknote, Edit2, Archive, Trash2, X, AlertTriangle, PiggyBank, Landmark } from "lucide-react";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -1303,7 +1303,7 @@ export default function AccountsPage() {
   );
 }
 
-function AccountCard({
+const AccountCard = memo(function AccountCard({
   account,
   balance,
   householdRoleMap,
@@ -1447,9 +1447,9 @@ function AccountCard({
       )}
     </div>
   );
-}
+});
 
-function CreditCardAccountCard({
+const CreditCardAccountCard = memo(function CreditCardAccountCard({
   account,
   balance,
   blockedPrincipal,
@@ -1652,4 +1652,4 @@ function CreditCardAccountCard({
       )}
     </div>
   );
-}
+});
