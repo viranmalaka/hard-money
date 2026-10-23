@@ -10,10 +10,20 @@ export function isNonTransactionalMessage(rawMessage: string): boolean {
   // (e.g. security footers like "Do not Share OTP" or "Call 0112303050" should NOT cause it to be marked as OTP)
   const hasFinancialAction =
     /\b(?:debited|credited|withdrawn|spent|paid|used for|transaction of|txn of|auth pmt)\b/i.test(text);
-  const hasAmount = /(?:lkr|rs\.?)\s*[\d,]+(?:\.\d{1,2})?/i.test(text);
+  const hasAmount = /(?:lkr|usd|rs\.?)\s*[\d,]+(?:\.\d{1,2})?/i.test(text);
 
   if (hasFinancialAction && hasAmount) {
     return false;
+  }
+
+  // These notices mention an amount but do not represent a completed ledger
+  // transaction.
+  if (
+    /\b(?:dclnd|declnd|declined)\s+pmt\b/i.test(text) ||
+    /statement outstanding/i.test(text) ||
+    /\b(?:new\s+fd\s+opened|fd\s+\*{2}\d+\s+renewed)\b/i.test(text)
+  ) {
+    return true;
   }
 
   // Explicit OTP or authentication keywords
@@ -120,9 +130,13 @@ export function parseBankSmsTemplate(
   }
 
   // Helper regex matchers
-  const extractAmount = (str: string): string | null => {
-    const match = str.match(/(?:LKR|Rs\.?)\s*([\d,]+(?:\.\d{1,2})?)/i);
-    return match ? match[1] : null;
+  const extractAmount = (str: string): { amountText: string; currency: string } | null => {
+    const match = str.match(/(LKR|USD|Rs\.?)\s*((?:[\d,]+|\.\d{1,2})(?:\.\d{1,2})?)/i);
+    if (!match) return null;
+    return {
+      amountText: match[2],
+      currency: match[1].toUpperCase() === "RS." ? "LKR" : match[1].toUpperCase(),
+    };
   };
 
   const extractLast4 = (str: string): string | null => {
@@ -132,15 +146,19 @@ export function parseBankSmsTemplate(
     return match ? match[1] : null;
   };
 
-  const extractBalanceAfter = (str: string): string | null => {
+  const extractBalanceAfter = (str: string): { amountText: string; currency: string } | null => {
     const match = str.match(
-      /(?:Your bal is|Avl Bal|Avail(?:able)?(?:\s+bal(?:ance)?)?|bal(?:ance)?)\s*(?:is|:)?\s*(?:LKR|Rs\.?)?\s*([\d,]+(?:\.\d{1,2})?)/i
+      /(?:Your bal is|Avl Bal|AVBAL|Avail(?:able)?(?:\s+bal(?:ance)?)?|bal(?:ance)?)\s*(?:is|:)?\s*(LKR|USD|Rs\.?)?\s*((?:[\d,]+|\.\d{1,2})(?:\.\d{1,2})?)/i
     );
-    return match ? match[1] : null;
+    if (!match) return null;
+    return {
+      amountText: match[2],
+      currency: match[1]?.toUpperCase() === "RS." ? "LKR" : match[1]?.toUpperCase() || "LKR",
+    };
   };
 
-  const amountText = extractAmount(text);
-  if (!amountText) {
+  const amount = extractAmount(text);
+  if (!amount) {
     return { matched: false };
   }
 
@@ -154,6 +172,14 @@ export function parseBankSmsTemplate(
   const refMatch = text.match(/ref:\s*([^.\n]+?)(?:\.\s*(?:Your bal|If unauthorized)|$|\n)/i);
   if (refMatch) {
     merchant = refMatch[1].trim();
+  }
+
+  // DFCC credit-card alerts put the merchant after "ALERT CR CARD:".
+  if (!merchant) {
+    const cardAlertMatch = text.match(/^ALERT\s+CR\s+CARD:\s*([^\n]+)/i);
+    if (cardAlertMatch) {
+      merchant = cardAlertMatch[1].trim();
+    }
   }
 
   // Pattern 2: at <MERCHANT> (before Avl Bal / on / Enq / .)
@@ -172,16 +198,29 @@ export function parseBankSmsTemplate(
     }
   }
 
+  if (!merchant) {
+    const feeMatch = text.match(/\b(Fee:\s*[^.\n]+)/i);
+    if (feeMatch) {
+      merchant = feeMatch[1].trim();
+    }
+  }
+
   // Determine transaction type and channel
   const isRefund = /\b(?:refund|refunded|reversal)\b/i.test(text);
-  const isCardPayment = /\b(?:payment.*received for card|card payment|credit card settlement)\b/i.test(text);
+  const isCardPayment =
+    /\b(?:payment.*received for card|card payment|credit card settlement|c\/card\s+(?:payment|autopay)|c\/c\s+autopay)\b/i.test(
+      text,
+    );
   const isBankFee =
-    /\b(?:withdrawal fee|bank fee|atm fee|bank charge|service charge|annual fee|for atm.*fee)\b/i.test(text) &&
+    (/\b(?:withdrawal fee|bank fee|atm fee|bank charge|service charge|annual fee|for atm.*fee)\b/i.test(
+      text,
+    ) ||
+      /\bfee:\s*sms[_ -]?alerts/i.test(text)) &&
     !/\bvia atm\b/i.test(text);
   const isAtmOther = /\batm\b/i.test(text) && /\b(?:other bank|other-bank|other)\b/i.test(text);
   const isAtm = /\batm\b/i.test(text) || /\bwithdrawn\b/i.test(text);
   const isCredit = /\b(?:credited|deposit|inward|salary)\b/i.test(text);
-  const isTransfer = /\b(?:ceft|transfer|donation|vsrpmt)\b/i.test(text);
+  const isTransfer = /\b(?:ceft|transfer|donation|vsrpmt|funding\s+a\/c)\b/i.test(text);
 
   let transactionType: ParsedTransactionPayload["transactionType"] = "DEBIT";
   let channel: ParsedTransactionPayload["channel"] = "POS";
@@ -189,8 +228,8 @@ export function parseBankSmsTemplate(
   if (isRefund) {
     transactionType = "REFUND_REVERSAL";
     channel = "UNKNOWN";
-  } else if (isCardPayment) {
-    transactionType = "CREDIT";
+  } else if (isCardPayment || /\bcredit\s+transfer\b/i.test(text)) {
+    transactionType = isCredit ? "CREDIT" : "DEBIT";
     channel = "CARD_PAYMENT";
   } else if (isBankFee) {
     transactionType = "DEBIT";
@@ -226,12 +265,12 @@ export function parseBankSmsTemplate(
       isTransaction: true,
       transactionType,
       channel,
-      amountText,
-      currency: "LKR",
+      amountText: amount.amountText,
+      currency: amount.currency,
       accountLast4: last4,
       merchantOrEntity: merchant || (isAtm ? "ATM Withdrawal" : `${bankName} Merchant`),
       inferredCategory: isAtm ? "Cash Withdrawal" : null,
-      balanceAfterText: balanceAfter,
+      balanceAfterText: balanceAfter?.amountText || null,
       transactionTimestamp: null,
       confidence: "HIGH",
     },
