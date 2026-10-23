@@ -753,6 +753,10 @@ export default function AccountsPage() {
                     fd.compoundingFrequency,
                     fd.withholdingTaxRateBps
                   );
+                  const paidPeriods = Math.min(fd.tenureMonths, Math.max(0, fd.paidPeriods || 0));
+                  const progressPercent = fd.tenureMonths > 0
+                    ? Math.min(100, Math.round((paidPeriods / fd.tenureMonths) * 100))
+                    : 0;
 
                   return (
                     <div
@@ -817,6 +821,29 @@ export default function AccountsPage() {
                               </span>
                             </div>
                           )}
+                        </div>
+                      </div>
+
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between text-[11px]">
+                          <span
+                            data-testid="fd-progress-text"
+                            className="text-[var(--text-muted)]"
+                          >
+                            {paidPeriods} of {fd.tenureMonths} months
+                          </span>
+                          <span className="font-mono tabular-nums text-[var(--text)]">
+                            {progressPercent}%
+                          </span>
+                        </div>
+                        <div
+                          data-testid="fd-progress-bar"
+                          className="w-full bg-[var(--border)] h-1.5 rounded-full overflow-hidden"
+                        >
+                          <div
+                            className="bg-blue-500 h-full rounded-full transition-all duration-300"
+                            style={{ width: `${progressPercent}%` }}
+                          />
                         </div>
                       </div>
 

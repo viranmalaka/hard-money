@@ -12,6 +12,8 @@ import {
   Smartphone,
   Sparkles,
 } from "lucide-react";
+import { parseBankSmsTemplate } from "@/lib/sms/template-parser";
+import type { TemplateParseResult } from "@/lib/sms/types";
 
 export default function DeveloperPage() {
   // Webhook Key state
@@ -28,6 +30,12 @@ export default function DeveloperPage() {
   const [smsAutoPostMode, setSmsAutoPostMode] = useState("AUTO_VALIDATED");
   const [geminiSaving, setGeminiSaving] = useState(false);
   const [geminiSavedNotice, setGeminiSavedNotice] = useState(false);
+  const [smsTestSender, setSmsTestSender] = useState("");
+  const [smsTestMessage, setSmsTestMessage] = useState("");
+  const [smsTestApiKey, setSmsTestApiKey] = useState("");
+  const [smsTestResult, setSmsTestResult] = useState<TemplateParseResult | null>(null);
+  const [smsIngressResult, setSmsIngressResult] = useState<{ status: number; message: string } | null>(null);
+  const [smsIngressSending, setSmsIngressSending] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -120,6 +128,43 @@ export default function DeveloperPage() {
       // ignore
     } finally {
       setGeminiSaving(false);
+    }
+  };
+
+  const handleTestSms = (e: React.FormEvent) => {
+    e.preventDefault();
+    setSmsTestResult(parseBankSmsTemplate(smsTestSender, smsTestMessage));
+  };
+
+  const handleIngressSms = async () => {
+    setSmsIngressSending(true);
+    setSmsIngressResult(null);
+
+    try {
+      const response = await fetch("/api/v1/webhooks/sms-ingress", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": smsTestApiKey.trim(),
+        },
+        body: JSON.stringify({
+          rawSms: smsTestMessage,
+          sender: smsTestSender.trim(),
+          receivedAt: new Date().toISOString(),
+        }),
+      });
+      const data = await response.json().catch(() => null);
+      setSmsIngressResult({
+        status: response.status,
+        message: data?.message || data?.status || data?.error || "Ingress request completed",
+      });
+    } catch {
+      setSmsIngressResult({
+        status: 0,
+        message: "Could not reach the SMS ingress endpoint",
+      });
+    } finally {
+      setSmsIngressSending(false);
     }
   };
 
@@ -366,6 +411,149 @@ export default function DeveloperPage() {
         >
           View Guide
         </Link>
+      </div>
+
+      {/* SMS Template Tester */}
+      <div className="space-y-1">
+        <span className="text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wider px-1">
+          SMS Template Tester
+        </span>
+        <form onSubmit={handleTestSms} className="flat-card p-4 space-y-3">
+          <p className="text-[11px] text-[var(--text-muted)]">
+            Test the standard bank SMS parser locally, or send the SMS through the real authenticated ingress endpoint.
+          </p>
+
+          <div className="space-y-1">
+            <label
+              htmlFor="sms-test-api-key"
+              className="block text-xs font-medium text-[var(--text-muted)]"
+            >
+              Webhook API key
+            </label>
+            <input
+              id="sms-test-api-key"
+              data-testid="sms-test-api-key-input"
+              type="password"
+              value={smsTestApiKey}
+              onChange={(e) => setSmsTestApiKey(e.target.value)}
+              placeholder="hm_live_..."
+              autoComplete="off"
+              className="w-full h-8 px-2.5 rounded bg-[var(--bg)] border border-hairline text-xs text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
+            />
+            <p className="text-[10px] text-[var(--text-muted)]">
+              Used only for this request as the <code>x-api-key</code> header and never saved or decrypted.
+            </p>
+          </div>
+
+          <div className="space-y-1">
+            <label
+              htmlFor="sms-test-sender"
+              className="block text-xs font-medium text-[var(--text-muted)]"
+            >
+              Sender
+            </label>
+            <input
+              id="sms-test-sender"
+              data-testid="sms-test-sender-input"
+              type="text"
+              value={smsTestSender}
+              onChange={(e) => setSmsTestSender(e.target.value)}
+              placeholder="e.g. COMBANK"
+              className="w-full h-8 px-2.5 rounded bg-[var(--bg)] border border-hairline text-xs text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
+            />
+          </div>
+
+          <div className="space-y-1">
+            <label
+              htmlFor="sms-test-message"
+              className="block text-xs font-medium text-[var(--text-muted)]"
+            >
+              Message content
+            </label>
+            <textarea
+              id="sms-test-message"
+              data-testid="sms-test-message-input"
+              value={smsTestMessage}
+              onChange={(e) => setSmsTestMessage(e.target.value)}
+              placeholder="Paste the bank SMS message here..."
+              rows={5}
+              className="w-full px-2.5 py-2 rounded bg-[var(--bg)] border border-hairline text-xs text-[var(--text)] resize-y focus:outline-none focus:border-[var(--accent)]"
+            />
+          </div>
+
+          <div className="flex flex-wrap justify-end gap-2">
+            <button
+              type="submit"
+              data-testid="sms-test-submit"
+              disabled={!smsTestSender.trim() || !smsTestMessage.trim()}
+              className="px-3 py-1.5 rounded bg-[var(--accent)] text-white text-xs font-semibold hover:opacity-90 active:scale-95 transition-all disabled:opacity-50"
+            >
+              Test SMS
+            </button>
+            <button
+              type="button"
+              data-testid="sms-ingress-submit"
+              onClick={handleIngressSms}
+              disabled={
+                smsIngressSending ||
+                !smsTestApiKey.trim() ||
+                !smsTestSender.trim() ||
+                !smsTestMessage.trim()
+              }
+              className="px-3 py-1.5 rounded bg-[var(--income)] text-white text-xs font-semibold hover:opacity-90 active:scale-95 transition-all disabled:opacity-50"
+            >
+              {smsIngressSending ? "Sending..." : "Send to Ingress"}
+            </button>
+          </div>
+
+          {smsIngressResult && (
+            <div
+              data-testid="sms-ingress-result"
+              className={`p-3 rounded border text-[11px] ${
+                smsIngressResult.status >= 200 && smsIngressResult.status < 300
+                  ? "bg-[var(--income)]/10 border-[var(--income)]/30 text-[var(--income)]"
+                  : "bg-[var(--expense)]/10 border-[var(--expense)]/30 text-[var(--expense)]"
+              }`}
+            >
+              Ingress response ({smsIngressResult.status || "network error"}):{" "}
+              {smsIngressResult.message}
+            </div>
+          )}
+
+          {smsTestResult && (
+            <div
+              data-testid="sms-test-result"
+              className="p-3 rounded bg-[var(--surface-hover)]/40 border border-hairline space-y-2"
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-[var(--text)]">Parser result</span>
+                <span
+                  className={`text-[10px] font-semibold ${
+                    smsTestResult.matched
+                      ? "text-[var(--income)]"
+                      : "text-[var(--text-muted)]"
+                  }`}
+                >
+                  {smsTestResult.matched ? "MATCHED" : "NO MATCH"}
+                </span>
+              </div>
+
+              {smsTestResult.payload ? (
+                <pre className="overflow-x-auto rounded bg-[var(--bg)] border border-hairline p-2 text-[11px] leading-relaxed text-[var(--text)]">
+                  {JSON.stringify(
+                    { bank: smsTestResult.bank, ...smsTestResult.payload },
+                    null,
+                    2
+                  )}
+                </pre>
+              ) : (
+                <p className="text-[11px] text-[var(--text-muted)]">
+                  No known bank template matched this sender and message.
+                </p>
+              )}
+            </div>
+          )}
+        </form>
       </div>
     </main>
   );
