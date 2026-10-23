@@ -12,7 +12,10 @@ import { rateLimit } from "@/lib/rate-limit";
 const RegisterSchema = z.object({
   name: z.string().min(1, "Name is required").max(100),
   email: z.string().email("Valid email is required").max(254),
-  password: z.string().min(10, "Password must be at least 10 characters").max(128),
+  password: z
+    .string()
+    .min(6, "Password must be at least 6 characters")
+    .max(128),
 });
 
 export async function POST(request: NextRequest) {
@@ -24,24 +27,29 @@ export async function POST(request: NextRequest) {
   if (process.env.ALLOW_REGISTRATION === "false" || isTestDisabled) {
     return NextResponse.json(
       { error: "Registration is closed on this server" },
-      { status: 403 }
+      { status: 403 },
     );
   }
 
   const body = await request.json().catch(() => null);
-  const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+  const ip =
+    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
   const parsed = RegisterSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json(
       { error: parsed.error.issues[0]?.message || "Invalid input" },
-      { status: 400 }
+      { status: 400 },
     );
   }
 
   const { name, email, password } = parsed.data;
   const normalizedEmail = email.toLowerCase().trim();
   const ipLimit = rateLimit(`register:ip:${ip}`, 5, 60 * 60_000);
-  const emailLimit = rateLimit(`register:email:${normalizedEmail}`, 5, 60 * 60_000);
+  const emailLimit = rateLimit(
+    `register:email:${normalizedEmail}`,
+    5,
+    60 * 60_000,
+  );
   const retryAfter = Math.max(ipLimit.retryAfter, emailLimit.retryAfter);
   if (!ipLimit.allowed || !emailLimit.allowed) {
     return NextResponse.json(
@@ -57,7 +65,7 @@ export async function POST(request: NextRequest) {
   if (existing) {
     return NextResponse.json(
       { error: "An account with this email already exists" },
-      { status: 409 }
+      { status: 409 },
     );
   }
 
@@ -109,7 +117,7 @@ export async function POST(request: NextRequest) {
         defaultCurrency: user.defaultCurrency,
       },
     },
-    { status: 201 }
+    { status: 201 },
   );
 
   response.cookies.set({
