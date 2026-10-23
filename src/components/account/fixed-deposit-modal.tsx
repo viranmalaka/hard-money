@@ -44,8 +44,8 @@ export function FixedDepositModal({ isOpen, onClose, accounts, fixedDeposit = nu
   const isWhtDirtyRef = React.useRef(false);
 
   useEffect(() => {
-    if (!isOpen || !fixedDeposit) return;
-    queueMicrotask(() => {
+    if (!isOpen) return;
+    if (fixedDeposit) {
       setBankName(fixedDeposit.bankName);
       setAccountNumber(fixedDeposit.accountNumber || "");
       setPrincipalStr((fixedDeposit.principalAmountMinor / 100).toFixed(2));
@@ -58,7 +58,23 @@ export function FixedDepositModal({ isOpen, onClose, accounts, fixedDeposit = nu
       setFundingAccountId(fixedDeposit.fundingAccountId || "");
       setWhtStr((fixedDeposit.withholdingTaxRateBps / 100).toFixed(1));
       setAutoRenew(fixedDeposit.autoRenew);
-    });
+      isWhtDirtyRef.current = true;
+    } else {
+      setBankName("");
+      setAccountNumber("");
+      setPrincipalStr("1000000.00");
+      setAprStr("12.0");
+      setTenureMonthsStr("12");
+      setStartDateStr(new Date().toISOString().slice(0, 10));
+      setCompoundingFrequency("MONTHLY");
+      setPayoutMode("MONTHLY_PAYOUT_TO_ACCOUNT");
+      setLinkedAccountId("");
+      setFundingAccountId("");
+      setWhtStr("0.0");
+      setAutoRenew(false);
+      isWhtDirtyRef.current = false;
+    }
+    setErrors({});
   }, [isOpen, fixedDeposit]);
 
   useEffect(() => {
@@ -159,6 +175,7 @@ export function FixedDepositModal({ isOpen, onClose, accounts, fixedDeposit = nu
             tenureMonths: values.tenureMonths,
             startDate: values.startDate,
             paidPeriods,
+            withholdingTaxRateBps: values.withholdingTaxRateBps,
           }),
         });
         await localUpdateFixedDeposit(db, fixedDeposit.id, {

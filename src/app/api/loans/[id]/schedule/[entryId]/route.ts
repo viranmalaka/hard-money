@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { generateAmortizationSchedule } from "@/lib/finance-core/loans";
-import { addMonthsClamped } from "@/lib/finance-core/dates";
+import { addMonthsOnDay } from "@/lib/finance-core/dates";
 import { getNextServerSeq } from "@/lib/server-seq";
 import { v4 as uuidv4 } from "uuid";
 import { authorizeLoan } from "@/lib/authorization";
@@ -103,7 +103,11 @@ export async function PATCH(
       for (let i = 0; i < subSchedule.length; i++) {
         const row = subSchedule[i];
         const instNum = startInstallment + i;
-        const dueDate = addMonthsClamped(baseDate, instNum);
+        const dueDate = addMonthsOnDay(
+          baseDate,
+          instNum,
+          loan.paymentDueDay || baseDate.getUTCDate(),
+        );
 
         await tx.loanScheduleEntry.create({
           data: {

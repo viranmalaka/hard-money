@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { reamortizeRemainingSchedule } from "@/lib/finance-core/loans";
-import { addMonthsClamped } from "@/lib/finance-core/dates";
+import { addMonthsOnDay } from "@/lib/finance-core/dates";
 import { getNextServerSeq } from "@/lib/server-seq";
 import { v4 as uuidv4 } from "uuid";
 import { authorizeLoan, assertCanWriteAccount } from "@/lib/authorization";
@@ -203,7 +203,11 @@ export async function POST(
         // Insert new regenerated entries
         const baseDate = new Date(loan.startDate);
         for (const row of newRows) {
-          const dueDate = addMonthsClamped(baseDate, row.installmentNumber);
+          const dueDate = addMonthsOnDay(
+            baseDate,
+            row.installmentNumber,
+            loan.paymentDueDay || baseDate.getUTCDate(),
+          );
 
           await tx.loanScheduleEntry.create({
             data: {

@@ -1,5 +1,5 @@
 import { v4 as uuidv4 } from "uuid";
-import { addMonthsClamped } from "../finance-core/dates";
+import { addMonthsOnDay } from "../finance-core/dates";
 import {
   HardMoneyDB,
   LocalAccount,
@@ -937,7 +937,11 @@ export async function localCreateLoan(
 
   for (const row of scheduleRows) {
     const entryId = uuidv4();
-    const dueDate = addMonthsClamped(baseDate, row.installmentNumber);
+    const dueDate = addMonthsOnDay(
+      baseDate,
+      row.installmentNumber,
+      fullLoan.paymentDueDay || baseDate.getUTCDate(),
+    );
 
     const entry: import("../db").LocalLoanScheduleEntry = {
       id: entryId,

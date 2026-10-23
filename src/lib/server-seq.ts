@@ -1,10 +1,13 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "./prisma";
 
 let sequenceInitialized = false;
 
-export async function getNextServerSeq(): Promise<bigint> {
+export async function getNextServerSeq(
+  client: Prisma.TransactionClient | typeof prisma = prisma,
+): Promise<bigint> {
   try {
-    const result = await prisma.$queryRawUnsafe<{ nextval: string | number | bigint }[]>(
+    const result = await client.$queryRawUnsafe<{ nextval: string | number | bigint }[]>(
       "SELECT nextval('global_server_seq') as nextval"
     );
     if (result && result.length > 0) {
@@ -13,7 +16,7 @@ export async function getNextServerSeq(): Promise<bigint> {
   } catch {
     if (!sequenceInitialized) {
       try {
-        await prisma.$executeRawUnsafe(
+        await client.$executeRawUnsafe(
           "CREATE SEQUENCE IF NOT EXISTS global_server_seq START WITH 1 INCREMENT BY 1"
         );
         sequenceInitialized = true;
@@ -22,7 +25,7 @@ export async function getNextServerSeq(): Promise<bigint> {
       }
     }
     try {
-      const result = await prisma.$queryRawUnsafe<{ nextval: string | number | bigint }[]>(
+      const result = await client.$queryRawUnsafe<{ nextval: string | number | bigint }[]>(
         "SELECT nextval('global_server_seq') as nextval"
       );
       if (result && result.length > 0) {
@@ -34,11 +37,10 @@ export async function getNextServerSeq(): Promise<bigint> {
   }
 
   // Fallback to SyncSequence row
-  const updated = await prisma.syncSequence.upsert({
+  const updated = await client.syncSequence.upsert({
     where: { id: 1 },
     update: { seq: { increment: 1 } },
     create: { id: 1, seq: 1 },
   });
   return updated.seq;
 }
-

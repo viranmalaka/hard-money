@@ -3,7 +3,7 @@ import { getSessionUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { authorizeLoan } from "@/lib/authorization";
 import { generateAmortizationSchedule } from "@/lib/finance-core/loans";
-import { addMonthsClamped } from "@/lib/finance-core/dates";
+import { addMonthsOnDay } from "@/lib/finance-core/dates";
 import { getNextServerSeq } from "@/lib/server-seq";
 
 export async function GET(
@@ -54,11 +54,12 @@ export async function PATCH(
   const calculationType = body.calculationType ?? loan.calculationType;
   const residual = body.residualValueMinor ?? loan.residualValueMinor ?? 0;
   const startDate = body.startDate ? new Date(body.startDate) : loan.startDate;
+  const paymentDueDay = body.paymentDueDay ?? loan.paymentDueDay ?? startDate.getUTCDate();
   const paidInstallments = Math.max(
     0,
     Math.min(tenure, Number.isInteger(body.paidInstallments) ? body.paidInstallments : loan.paidInstallments),
   );
-  if (!Number.isInteger(principal) || principal <= 0 || !Number.isInteger(tenure) || tenure <= 0 || Number.isNaN(startDate.getTime())) {
+  if (!Number.isInteger(principal) || principal <= 0 || !Number.isInteger(tenure) || tenure <= 0 || Number.isNaN(startDate.getTime()) || !Number.isInteger(paymentDueDay) || paymentDueDay < 1 || paymentDueDay > 31) {
     return NextResponse.json({ error: "Invalid loan values" }, { status: 400 });
   }
   const rows = generateAmortizationSchedule(principal, rate, tenure, calculationType, residual);
@@ -73,9 +74,10 @@ export async function PATCH(
         tenureMonths: tenure,
         paidInstallments,
         startDate,
+        paymentDueDay,
         monthlyEmiAmountMinor: rows[0]?.emiAmountMinor || 0,
         calculationType,
-        serverSeq: await getNextServerSeq(),
+        serverSeq: await getNextServerSeq(tx),
       },
     });
     const entries = await tx.loanScheduleEntry.findMany({
@@ -87,13 +89,13 @@ export async function PATCH(
       const entry = entries[index];
       const data = {
         installmentNumber: row.installmentNumber,
-        dueDate: addMonthsClamped(startDate, row.installmentNumber),
+        dueDate: addMonthsOnDay(startDate, row.installmentNumber, paymentDueDay),
         principalComponentMinor: row.principalComponentMinor,
         interestComponentMinor: row.interestComponentMinor,
         openingBalanceMinor: row.openingBalanceMinor,
         closingBalanceMinor: row.closingBalanceMinor,
         status: row.installmentNumber <= paidInstallments ? "PAID" : "SCHEDULED",
-        serverSeq: await getNextServerSeq(),
+        serverSeq: await getNextServerSeq(tx),
       };
       if (entry) await tx.loanScheduleEntry.update({ where: { id: entry.id }, data });
       else await tx.loanScheduleEntry.create({ data: { id: crypto.randomUUID(), loanId: id, ...data } });

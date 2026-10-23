@@ -5,6 +5,7 @@ import { X, Edit2, Check } from "lucide-react";
 import { LocalAccount, LocalLoan, LocalLoanScheduleEntry, LocalLoanPayment } from "@/lib/db";
 import { formatMoney, parseMoneyToMinor } from "@/lib/finance-core/money";
 import { useSync } from "@/components/sync-provider";
+import { localDeleteLoan } from "@/lib/sync/client";
 
 const getEntryEmi = (entry: LocalLoanScheduleEntry) =>
   entry.emiAmountMinor ?? (entry.principalComponentMinor + entry.interestComponentMinor);
@@ -41,6 +42,7 @@ export function LoanDetailModal({ loan, isOpen, onClose, accounts }: LoanDetailM
   const [editRate, setEditRate] = useState("");
   const [editTenure, setEditTenure] = useState("");
   const [editStartDate, setEditStartDate] = useState("");
+  const [editPaymentDueDay, setEditPaymentDueDay] = useState("");
   const [editPaidInstallments, setEditPaidInstallments] = useState("");
   const [editCalculationType, setEditCalculationType] = useState<"REDUCING_BALANCE" | "FLAT_RATE">("REDUCING_BALANCE");
 
@@ -120,6 +122,7 @@ export function LoanDetailModal({ loan, isOpen, onClose, accounts }: LoanDetailM
     setEditRate((loan.annualInterestRateBps / 100).toFixed(2));
     setEditTenure(String(loan.tenureMonths));
     setEditStartDate(loan.startDate.slice(0, 10));
+    setEditPaymentDueDay(String(loan.paymentDueDay || new Date(loan.startDate).getUTCDate()));
     setEditPaidInstallments(String(loan.paidInstallments || 0));
     setEditCalculationType(loan.calculationType);
     setIsLoanEditOpen(true);
@@ -135,6 +138,7 @@ export function LoanDetailModal({ loan, isOpen, onClose, accounts }: LoanDetailM
         annualInterestRateBps: Math.round(Number(editRate) * 100),
         tenureMonths: Number(editTenure),
         startDate: editStartDate,
+        paymentDueDay: Number(editPaymentDueDay),
         paidInstallments: Number(editPaidInstallments),
         calculationType: editCalculationType,
       }),
@@ -196,6 +200,12 @@ export function LoanDetailModal({ loan, isOpen, onClose, accounts }: LoanDetailM
     } catch {
       // ignore
     }
+  };
+
+  const handleDeleteLoan = async () => {
+    if (!confirm("Delete this loan and its schedule? This cannot be undone.")) return;
+    await localDeleteLoan(db, loan.id);
+    onClose();
   };
 
   const handleSaveOverride = async (entryId: string) => {
@@ -260,6 +270,7 @@ export function LoanDetailModal({ loan, isOpen, onClose, accounts }: LoanDetailM
             <p className="text-xs text-[var(--text-muted)] mt-0.5">
               Original: {formatMoney(loan.originalPrincipalMinor)} • APR:{" "}
               {(loan.annualInterestRateBps / 100).toFixed(2)}% • {loan.tenureMonths} Months •{" "}
+              Due day: {loan.paymentDueDay || new Date(loan.startDate).getUTCDate()} •{" "}
               {loan.calculationType === "REDUCING_BALANCE" ? "Reducing Balance" : "Flat Rate"}
             </p>
           </div>
@@ -274,6 +285,9 @@ export function LoanDetailModal({ loan, isOpen, onClose, accounts }: LoanDetailM
           <button type="button" onClick={openLoanEdit} className="px-2 py-1 rounded border border-hairline text-xs font-medium">
             Edit loan
           </button>
+          <button type="button" onClick={handleDeleteLoan} className="px-2 py-1 rounded border border-red-500/50 text-red-500 text-xs font-medium">
+            Delete loan
+          </button>
         </div>
 
         {isLoanEditOpen && (
@@ -282,6 +296,7 @@ export function LoanDetailModal({ loan, isOpen, onClose, accounts }: LoanDetailM
             <label>APR %<input type="number" step="0.01" value={editRate} onChange={(e) => setEditRate(e.target.value)} className="w-full mt-1 px-2 py-1 rounded border border-hairline bg-[var(--surface)]" /></label>
             <label>Tenure months<input type="number" value={editTenure} onChange={(e) => setEditTenure(e.target.value)} className="w-full mt-1 px-2 py-1 rounded border border-hairline bg-[var(--surface)]" /></label>
             <label>Started date<input type="date" value={editStartDate} onChange={(e) => setEditStartDate(e.target.value)} className="w-full mt-1 px-2 py-1 rounded border border-hairline bg-[var(--surface)]" /></label>
+            <label>EMI due day<input type="number" min="1" max="31" value={editPaymentDueDay} onChange={(e) => setEditPaymentDueDay(e.target.value)} className="w-full mt-1 px-2 py-1 rounded border border-hairline bg-[var(--surface)]" /></label>
             <label>Paid installments<input type="number" min="0" value={editPaidInstallments} onChange={(e) => setEditPaidInstallments(e.target.value)} className="w-full mt-1 px-2 py-1 rounded border border-hairline bg-[var(--surface)]" /></label>
             <label>Calculation<select value={editCalculationType} onChange={(e) => setEditCalculationType(e.target.value as "REDUCING_BALANCE" | "FLAT_RATE")} className="w-full mt-1 px-2 py-1 rounded border border-hairline bg-[var(--surface)]"><option value="REDUCING_BALANCE">Reducing balance</option><option value="FLAT_RATE">Flat rate</option></select></label>
             <div className="col-span-2 flex justify-end gap-2"><button type="button" onClick={() => setIsLoanEditOpen(false)} className="px-2 py-1 rounded border border-hairline">Cancel</button><button type="submit" className="px-2 py-1 rounded bg-[var(--accent)] text-white">Save</button></div>

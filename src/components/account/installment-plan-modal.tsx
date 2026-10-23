@@ -2,10 +2,11 @@
 
 import React, { useState, useMemo } from "react";
 import { X } from "lucide-react";
-import { LocalAccount } from "@/lib/db";
+import { LocalAccount, LocalInstallmentPlan } from "@/lib/db";
 import { useCategories, useSync } from "@/components/sync-provider";
 import {
   localCreateInstallmentPlan,
+  localUpdateInstallmentPlan,
   localCreateTransaction,
   localCreateCategory,
 } from "@/lib/sync/client";
@@ -16,6 +17,7 @@ interface InstallmentPlanModalProps {
   onClose: () => void;
   accounts: LocalAccount[];
   defaultAccountId?: string;
+  installmentPlan?: LocalInstallmentPlan | null;
 }
 
 export function InstallmentPlanModal({
@@ -23,6 +25,7 @@ export function InstallmentPlanModal({
   onClose,
   accounts,
   defaultAccountId,
+  installmentPlan = null,
 }: InstallmentPlanModalProps) {
   const { db, userId } = useSync();
   const categories = useCategories();
@@ -32,16 +35,17 @@ export function InstallmentPlanModal({
     [accounts]
   );
 
-  const [accountId, setAccountId] = useState(defaultAccountId || creditCards[0]?.id || "");
-  const [merchantName, setMerchantName] = useState("");
-  const [totalAmountStr, setTotalAmountStr] = useState("");
-  const [tenureMonths, setTenureMonths] = useState(12);
-  const [initialPaidInstallments, setInitialPaidInstallments] = useState(0);
+  const [accountId, setAccountId] = useState(installmentPlan?.accountId || defaultAccountId || creditCards[0]?.id || "");
+  const [merchantName, setMerchantName] = useState(installmentPlan?.merchantName || "");
+  const [totalAmountStr, setTotalAmountStr] = useState(installmentPlan ? (installmentPlan.totalAmountMinor / 100).toFixed(2) : "");
+  const [tenureMonths, setTenureMonths] = useState(installmentPlan?.tenureMonths || 12);
+  const [initialPaidInstallments, setInitialPaidInstallments] = useState(installmentPlan?.initialPaidInstallments || 0);
   const [firstStatementDate, setFirstStatementDate] = useState(() => {
+    if (installmentPlan) return installmentPlan.firstStatementDate.slice(0, 10);
     const now = new Date();
     return now.toISOString().slice(0, 10);
   });
-  const [processingFeeStr, setProcessingFeeStr] = useState("");
+  const [processingFeeStr, setProcessingFeeStr] = useState(installmentPlan ? (installmentPlan.processingFeeMinor / 100).toFixed(2) : "");
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const totalAmountMinor = useMemo(() => parseMoneyToMinor(totalAmountStr), [totalAmountStr]);
@@ -65,8 +69,11 @@ export function InstallmentPlanModal({
     if (totalAmountMinor <= 0) {
       newErrors.totalAmount = "Please enter a valid total amount";
     }
-    if (!tenureMonths || tenureMonths < 1) {
+    if (!Number.isInteger(tenureMonths) || tenureMonths < 1) {
       newErrors.tenure = "Tenure must be at least 1 month";
+    }
+    if (initialPaidInstallments < 0 || initialPaidInstallments >= tenureMonths) {
+      newErrors.paid = "Paid months must be less than the tenure";
     }
 
     if (Object.keys(newErrors).length > 0) {
@@ -78,7 +85,7 @@ export function InstallmentPlanModal({
     const finalAmountMinor = totalAmountMinor - monthlyAmountMinor * (tenureMonths - 1);
 
     // If brand new plan with processing fee, post FEE transaction in Bank Fees category
-    if (initialPaidInstallments === 0 && feeMinor > 0) {
+    if (!installmentPlan && initialPaidInstallments === 0 && feeMinor > 0) {
       let bankFeesCat = categories.find(
         (c) =>
           c.name.toLowerCase().includes("bank fee") ||
@@ -113,7 +120,7 @@ export function InstallmentPlanModal({
     }
 
     const effectiveUserId = userId || "current-user";
-    await localCreateInstallmentPlan(db, {
+    const values = {
       userId: effectiveUserId,
       accountId,
       merchantName: merchantName.trim(),
@@ -127,8 +134,24 @@ export function InstallmentPlanModal({
       startDate: new Date().toISOString(),
       firstStatementDate: new Date(firstStatementDate + "T12:00:00.000Z").toISOString(),
       isOngoingSetup: initialPaidInstallments > 0,
-      status: "ACTIVE",
-    });
+      status: "ACTIVE" as const,
+    };
+    if (installmentPlan) {
+      await localUpdateInstallmentPlan(db, installmentPlan.id, {
+        accountId,
+        merchantName: merchantName.trim(),
+        totalAmountMinor,
+        tenureMonths,
+        monthlyAmountMinor,
+        finalInstallmentAmountMinor: finalAmountMinor,
+        initialPaidInstallments: Number(initialPaidInstallments) || 0,
+        processingFeeMinor: feeMinor,
+        firstStatementDate: values.firstStatementDate,
+        isOngoingSetup: initialPaidInstallments > 0,
+      });
+    } else {
+      await localCreateInstallmentPlan(db, values);
+    }
 
     onClose();
   };
@@ -140,7 +163,7 @@ export function InstallmentPlanModal({
     >
       <div className="w-full md:max-w-md bg-[var(--surface)] border border-hairline rounded-t-xl md:rounded-lg shadow-xl p-5 pb-sheet-safe md:pb-5 space-y-4 modal-sheet-dialog overflow-y-auto">
         <div className="flex items-center justify-between pb-2 border-b border-hairline">
-          <h2 className="text-sm font-semibold text-[var(--text)]">Add 0% Installment Plan</h2>
+          <h2 className="text-sm font-semibold text-[var(--text)]">{installmentPlan ? "Edit" : "Add"} 0% Installment Plan</h2>
           <button
             type="button"
             data-testid="installment-plan-cancel"
@@ -184,6 +207,7 @@ export function InstallmentPlanModal({
               placeholder="e.g. Singer, Abans, Apple Store"
               className="w-full px-3 py-2 rounded border border-hairline bg-[var(--bg)] text-[var(--text)] focus:outline-none focus:ring-1 focus:ring-[var(--text)]"
             />
+            {errors.paid && <p className="text-red-500 text-[11px]">{errors.paid}</p>}
             {errors.merchantName && (
               <p className="text-red-500 text-[11px]">{errors.merchantName}</p>
             )}
@@ -208,19 +232,14 @@ export function InstallmentPlanModal({
 
             <div className="space-y-1">
               <label className="font-medium text-[var(--text-muted)]">Tenure (Months)</label>
-              <select
+              <input
+                type="number"
+                min={1}
                 data-testid="installment-tenure-input"
                 value={tenureMonths}
                 onChange={(e) => setTenureMonths(Number(e.target.value))}
                 className="w-full px-3 py-2 rounded border border-hairline bg-[var(--bg)] text-[var(--text)] font-mono focus:outline-none focus:ring-1 focus:ring-[var(--text)]"
-              >
-                <option value={3}>3 Months</option>
-                <option value={6}>6 Months</option>
-                <option value={12}>12 Months</option>
-                <option value={18}>18 Months</option>
-                <option value={24}>24 Months</option>
-                <option value={36}>36 Months</option>
-              </select>
+              />
             </div>
           </div>
 
@@ -282,7 +301,7 @@ export function InstallmentPlanModal({
               data-testid="installment-plan-submit"
               className="w-full py-2.5 rounded bg-[var(--text)] text-[var(--bg)] font-semibold hover:opacity-90 active:scale-98 transition-all"
             >
-              Add Installment Plan
+              {installmentPlan ? "Save Changes" : "Add Installment Plan"}
             </button>
           </div>
         </form>

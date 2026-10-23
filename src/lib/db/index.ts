@@ -219,6 +219,7 @@ export interface LocalLoan {
   tenureMonths: number;
   paidInstallments: number;
   startDate: string;
+  paymentDueDay: number;
   monthlyEmiAmountMinor: number;
   calculationType: "REDUCING_BALANCE" | "FLAT_RATE";
   linkedDisbursementAccountId?: string | null;

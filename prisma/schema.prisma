@@ -452,6 +452,7 @@ model Loan {
   tenureMonths                Int
   paidInstallments            Int               @default(0)
   startDate                   DateTime
+  paymentDueDay               Int               @default(1)
   monthlyEmiAmountMinor       Int
   calculationType             String              @default("REDUCING_BALANCE") // REDUCING_BALANCE | FLAT_RATE
   linkedDisbursementAccountId String?

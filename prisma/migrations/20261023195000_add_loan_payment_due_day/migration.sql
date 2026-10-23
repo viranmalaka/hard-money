@@ -1,0 +1,4 @@
+ALTER TABLE "Loan" ADD COLUMN "paymentDueDay" INTEGER NOT NULL DEFAULT 1;
+
+UPDATE "Loan"
+SET "paymentDueDay" = EXTRACT(DAY FROM "startDate")::INTEGER;

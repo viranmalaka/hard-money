@@ -23,6 +23,7 @@ export function LoanModal({ isOpen, onClose, accounts }: LoanModalProps) {
   const [aprStr, setAprStr] = useState("12.0");
   const [tenureMonthsStr, setTenureMonthsStr] = useState("12");
   const [startDateStr, setStartDateStr] = useState(new Date().toISOString().slice(0, 10));
+  const [paymentDueDayStr, setPaymentDueDayStr] = useState(String(new Date().getDate()));
   const [calculationType, setCalculationType] = useState<"REDUCING_BALANCE" | "FLAT_RATE">(
     "REDUCING_BALANCE"
   );
@@ -67,6 +68,11 @@ export function LoanModal({ isOpen, onClose, accounts }: LoanModalProps) {
       newErrors.tenure = "Valid tenure months is required";
     }
 
+    const paymentDueDay = parseInt(paymentDueDayStr, 10);
+    if (isNaN(paymentDueDay) || paymentDueDay < 1 || paymentDueDay > 31) {
+      newErrors.paymentDueDay = "Due day must be between 1 and 31";
+    }
+
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
       return;
@@ -79,7 +85,10 @@ export function LoanModal({ isOpen, onClose, accounts }: LoanModalProps) {
       let paidInstallments = 0;
       while (paidInstallments < tenureNum) {
         const dueDate = new Date(startDate);
+        dueDate.setDate(1);
         dueDate.setMonth(dueDate.getMonth() + paidInstallments + 1);
+        const lastDay = new Date(dueDate.getFullYear(), dueDate.getMonth() + 1, 0).getDate();
+        dueDate.setDate(Math.min(Number(paymentDueDayStr), lastDay));
         if (dueDate > now) break;
         paidInstallments += 1;
       }
@@ -95,6 +104,7 @@ export function LoanModal({ isOpen, onClose, accounts }: LoanModalProps) {
         tenureMonths: tenureNum,
         paidInstallments,
         startDate,
+        paymentDueDay,
         monthlyEmiAmountMinor: 0, // Will be computed by localCreateLoan
         calculationType,
         linkedDisbursementAccountId: disbursementAccountId || null,
@@ -180,6 +190,12 @@ export function LoanModal({ isOpen, onClose, accounts }: LoanModalProps) {
           <div className="space-y-1">
             <label className="block text-xs font-medium text-[var(--text-muted)]">Started Date</label>
             <input type="date" data-testid="loan-form-start-date" value={startDateStr} onChange={(e) => setStartDateStr(e.target.value)} className="w-full h-8 px-2 rounded bg-[var(--bg)] border border-hairline text-xs text-[var(--text)]" />
+          </div>
+          <div className="space-y-1">
+            <label className="block text-xs font-medium text-[var(--text-muted)]">Monthly EMI Due Day</label>
+            <input type="number" min="1" max="31" data-testid="loan-form-payment-due-day" value={paymentDueDayStr} onChange={(e) => setPaymentDueDayStr(e.target.value)} className="w-full h-8 px-2 rounded bg-[var(--bg)] border border-hairline text-xs text-[var(--text)]" />
+            <p className="text-[10px] text-[var(--text-muted)]">For shorter months, the due date uses the last day of that month.</p>
+            {errors.paymentDueDay && <p className="text-[11px] text-[var(--expense)]">{errors.paymentDueDay}</p>}
           </div>
 
           {/* Principal & Residual */}

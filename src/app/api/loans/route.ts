@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { generateAmortizationSchedule } from "@/lib/finance-core/loans";
-import { addMonthsClamped } from "@/lib/finance-core/dates";
+import { addMonthsOnDay } from "@/lib/finance-core/dates";
 import { v4 as uuidv4 } from "uuid";
 import { assertCanWriteAccount } from "@/lib/authorization";
 import { getNextServerSeq } from "@/lib/server-seq";
@@ -89,6 +89,7 @@ export async function POST(request: NextRequest) {
     tenureMonths,
     paidInstallments = 0,
     startDate,
+    paymentDueDay,
     calculationType = "REDUCING_BALANCE",
     linkedDisbursementAccountId,
   } = body;
@@ -108,13 +109,17 @@ export async function POST(request: NextRequest) {
   const monthlyEmiAmountMinor = scheduleRows[0]?.emiAmountMinor || 0;
   const loanId = uuidv4();
   const startDateTime = startDate ? new Date(startDate) : new Date();
+  const resolvedPaymentDueDay = paymentDueDay ?? startDateTime.getUTCDate();
+  if (!Number.isInteger(resolvedPaymentDueDay) || resolvedPaymentDueDay < 1 || resolvedPaymentDueDay > 31) {
+    return NextResponse.json({ error: "Payment due day must be between 1 and 31" }, { status: 400 });
+  }
   if (linkedDisbursementAccountId && !(await assertCanWriteAccount(session, linkedDisbursementAccountId))) {
     return NextResponse.json({ error: "Forbidden disbursement account" }, { status: 403 });
   }
 
   // Create loan and schedule in a transaction
   const createdLoan = await prisma.$transaction(async (tx) => {
-    const loanSeq = await getNextServerSeq();
+    const loanSeq = await getNextServerSeq(tx);
     const loan = await tx.loan.create({
       data: {
         id: loanId,
@@ -127,6 +132,7 @@ export async function POST(request: NextRequest) {
         tenureMonths,
         paidInstallments: Math.max(0, Math.min(tenureMonths, paidInstallments)),
         startDate: startDateTime,
+        paymentDueDay: resolvedPaymentDueDay,
         monthlyEmiAmountMinor,
         calculationType,
         linkedDisbursementAccountId: linkedDisbursementAccountId || null,
@@ -136,8 +142,8 @@ export async function POST(request: NextRequest) {
     });
 
     for (const row of scheduleRows) {
-      const scheduleSeq = await getNextServerSeq();
-      const dueDate = addMonthsClamped(new Date(startDateTime), row.installmentNumber);
+      const scheduleSeq = await getNextServerSeq(tx);
+      const dueDate = addMonthsOnDay(new Date(startDateTime), row.installmentNumber, resolvedPaymentDueDay);
 
       await tx.loanScheduleEntry.create({
         data: {
@@ -156,7 +162,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (linkedDisbursementAccountId && originalPrincipalMinor > 0) {
-      const transactionSeq = await getNextServerSeq();
+      const transactionSeq = await getNextServerSeq(tx);
       await tx.transaction.create({
         data: {
           id: `${loan.id}-disbursement`,

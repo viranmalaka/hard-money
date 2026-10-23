@@ -102,6 +102,7 @@ export interface ClientLoan {
   tenureMonths: number;
   paidInstallments: number;
   startDate: string;
+  paymentDueDay: number;
   monthlyEmiAmountMinor: number;
   calculationType: "REDUCING_BALANCE" | "FLAT_RATE";
   status: "ACTIVE" | "CLOSED";

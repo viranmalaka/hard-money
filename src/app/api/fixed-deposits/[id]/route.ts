@@ -16,8 +16,14 @@ export async function PATCH(
   const body = await request.json().catch(() => ({}));
   const startDate = body.startDate ? new Date(body.startDate) : existing.startDate;
   const tenureMonths = Number.isInteger(body.tenureMonths) ? body.tenureMonths : existing.tenureMonths;
+  const withholdingTaxRateBps = body.withholdingTaxRateBps !== undefined
+    ? Number(body.withholdingTaxRateBps)
+    : existing.withholdingTaxRateBps;
   if (Number.isNaN(startDate.getTime()) || tenureMonths <= 0) {
     return NextResponse.json({ error: "Invalid start date or tenure" }, { status: 400 });
+  }
+  if (!Number.isInteger(withholdingTaxRateBps) || withholdingTaxRateBps < 0) {
+    return NextResponse.json({ error: "Invalid withholding tax rate" }, { status: 400 });
   }
   const paidPeriods = Math.max(0, Math.min(tenureMonths, Number.isInteger(body.paidPeriods) ? body.paidPeriods : existing.paidPeriods));
   const updated = await prisma.fixedDeposit.update({
@@ -30,6 +36,7 @@ export async function PATCH(
       startDate,
       maturityDate: addMonthsClamped(startDate, tenureMonths),
       paidPeriods,
+      withholdingTaxRateBps,
       serverSeq: await getNextServerSeq(),
     },
   });

@@ -27,6 +27,7 @@ export default function AccountsPage() {
   const [editingAccount, setEditingAccount] = useState<LocalAccount | null>(null);
   const [settlingCard, setSettlingCard] = useState<LocalAccount | null>(null);
   const [isInstallmentModalOpen, setIsInstallmentModalOpen] = useState(false);
+  const [editingInstallmentPlan, setEditingInstallmentPlan] = useState<LocalInstallmentPlan | null>(null);
   const [payoffPlan, setPayoffPlan] = useState<LocalInstallmentPlan | null>(null);
   const [payoffRemainingMinor, setPayoffRemainingMinor] = useState(0);
 
@@ -510,6 +511,17 @@ export default function AccountsPage() {
                         <div className="flex items-center gap-2">
                           {plan.status === "ACTIVE" && (
                             <>
+                              <button
+                                type="button"
+                                data-testid="edit-installment-plan-btn"
+                                onClick={() => {
+                                  setEditingInstallmentPlan(plan);
+                                  setIsInstallmentModalOpen(true);
+                                }}
+                                className="px-2 py-0.5 rounded border border-hairline text-[11px] font-medium hover:bg-[var(--border)] text-[var(--text)] transition-colors"
+                              >
+                                Edit
+                              </button>
                               <button
                                 type="button"
                                 data-testid="installment-early-payoff-btn"
@@ -1110,8 +1122,12 @@ export default function AccountsPage() {
       {isInstallmentModalOpen && (
         <InstallmentPlanModal
           isOpen={isInstallmentModalOpen}
-          onClose={() => setIsInstallmentModalOpen(false)}
+          onClose={() => {
+            setIsInstallmentModalOpen(false);
+            setEditingInstallmentPlan(null);
+          }}
           accounts={accounts}
+          installmentPlan={editingInstallmentPlan}
         />
       )}
 
