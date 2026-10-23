@@ -790,7 +790,7 @@ The look and feel is inspired by Realbyte's Money Manager: a utilitarian, data-d
 
 - **Performance**: quick-add saves locally in < 100 ms and works fully offline from cold start; the dashboard renders from IndexedDB without waiting on the network; derived balances are computed incrementally and cached locally.
 - **Security & privacy**:
-  - Gemini and webhook keys per Section 1 (AES-256-GCM, hash-only webhook key, shown once). `APP_ENCRYPTION_KEY` rotation is supported through the versioned ciphertext prefix.
+  - Gemini API keys use AES-256-GCM; webhook keys are stored as hashes and shown once. `APP_ENCRYPTION_KEY` rotation is supported through the versioned ciphertext prefix.
   - Webhook rate limiting; Zod validation on all inputs; role checks on every mutation.
   - Raw SMS and parsed payloads are never written to application logs.
   - SMS content is sent to Google (via the user's own key) only when no template matches; Settings must disclose this clearly, and account numbers are masked to the last 4 digits first.

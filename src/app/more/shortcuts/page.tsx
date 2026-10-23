@@ -36,7 +36,7 @@ export default function ShortcutsGuidePage() {
           </p>
         </div>
         <a
-          href="/api/shortcuts/download"
+          href="/HardMoney_SMS_Ingress.shortcut"
           download="HardMoney_SMS_Ingress.shortcut"
           data-testid="download-shortcut-btn"
           className="flex items-center justify-center gap-2 px-4 py-2 rounded bg-[var(--accent)] text-white text-xs font-semibold hover:opacity-90 active:scale-95 transition-all"
@@ -51,7 +51,7 @@ export default function ShortcutsGuidePage() {
         <div className="text-xs space-y-1">
           <span className="font-semibold text-[var(--text)] block">API key warning</span>
           <p className="text-[var(--text-muted)]">
-            The downloaded Shortcut contains your current webhook API key. If you regenerate or rotate the key, older Shortcuts will stop working and must be downloaded again.
+            The downloaded Shortcut is a template. Open it in Apple Shortcuts and replace the placeholder URL and API key with your HardMoney values before using it.
           </p>
         </div>
       </div>
@@ -117,7 +117,7 @@ export default function ShortcutsGuidePage() {
             <div className="space-y-1">
               <span className="font-semibold block">Forward Payload to Webhook</span>
               <p className="text-[var(--text-muted)]">
-                Add a <strong>Get Contents of URL</strong> action. Set:
+                Open the downloaded Shortcut, then update its <strong>Get Contents of URL</strong> action. Set:
                 <br />• <strong>URL:</strong> <code>https://your-domain.com/api/v1/webhooks/sms-ingress</code>
                 <br />• <strong>Method:</strong> POST
                 <br />• <strong>Headers:</strong> <code>x-api-key: [YOUR_API_KEY]</code>, <code>Content-Type: application/json</code>

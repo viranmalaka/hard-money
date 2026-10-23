@@ -506,12 +506,10 @@ test.describe("Step 14: SMS Ingress, Archival & Template Parsing @s14", () => {
     const downloadBtn = page.locator('[data-testid="download-shortcut-btn"]');
     await expect(downloadBtn).toBeVisible();
 
-    // Download returns valid file
-    const downloadRes = await page.request.get("http://localhost:3000/api/shortcuts/download");
+    // Download returns a static template without user-specific server state
+    const downloadRes = await page.request.get("http://localhost:3000/HardMoney_SMS_Ingress.shortcut");
     expect(downloadRes.status()).toBe(200);
-    const contentDisposition = downloadRes.headers()["content-disposition"] || "";
-    expect(contentDisposition).toContain("attachment");
-    expect(contentDisposition).toContain(".shortcut");
+    expect(await downloadRes.text()).toContain("YOUR_WEBHOOK_API_KEY");
   });
 
   test("S14-14: Real-world Sampath Bank SMS with security footer -> successfully processes without false OTP trigger", async ({ page }) => {
