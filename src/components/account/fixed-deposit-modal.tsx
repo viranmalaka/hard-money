@@ -2,9 +2,9 @@
 
 import React, { useState, useEffect } from "react";
 import { X } from "lucide-react";
-import { LocalAccount } from "@/lib/db";
+import { LocalAccount, LocalFixedDeposit } from "@/lib/db";
 import { useSync } from "@/components/sync-provider";
-import { localCreateFixedDeposit } from "@/lib/sync/client";
+import { localCreateFixedDeposit, localUpdateFixedDeposit } from "@/lib/sync/client";
 import { parseMoneyToMinor } from "@/lib/finance-core/money";
 import { addMonthsClamped } from "@/lib/finance-core/dates";
 
@@ -12,9 +12,10 @@ interface FixedDepositModalProps {
   isOpen: boolean;
   onClose: () => void;
   accounts: LocalAccount[];
+  fixedDeposit?: LocalFixedDeposit | null;
 }
 
-export function FixedDepositModal({ isOpen, onClose, accounts }: FixedDepositModalProps) {
+export function FixedDepositModal({ isOpen, onClose, accounts, fixedDeposit = null }: FixedDepositModalProps) {
   const { db, userId } = useSync();
 
   const [bankName, setBankName] = useState("");
@@ -22,6 +23,7 @@ export function FixedDepositModal({ isOpen, onClose, accounts }: FixedDepositMod
   const [principalStr, setPrincipalStr] = useState("1000000.00");
   const [aprStr, setAprStr] = useState("12.0");
   const [tenureMonthsStr, setTenureMonthsStr] = useState("12");
+  const [startDateStr, setStartDateStr] = useState(new Date().toISOString().slice(0, 10));
   const [compoundingFrequency, setCompoundingFrequency] = useState<
     "MONTHLY" | "QUARTERLY" | "ANNUALLY" | "AT_MATURITY"
   >("MONTHLY");
@@ -40,6 +42,24 @@ export function FixedDepositModal({ isOpen, onClose, accounts }: FixedDepositMod
   );
 
   const isWhtDirtyRef = React.useRef(false);
+
+  useEffect(() => {
+    if (!isOpen || !fixedDeposit) return;
+    queueMicrotask(() => {
+      setBankName(fixedDeposit.bankName);
+      setAccountNumber(fixedDeposit.accountNumber || "");
+      setPrincipalStr((fixedDeposit.principalAmountMinor / 100).toFixed(2));
+      setAprStr((fixedDeposit.annualInterestRateBps / 100).toFixed(2));
+      setTenureMonthsStr(String(fixedDeposit.tenureMonths));
+      setStartDateStr(fixedDeposit.startDate.slice(0, 10));
+      setCompoundingFrequency(fixedDeposit.compoundingFrequency);
+      setPayoutMode(fixedDeposit.payoutMode);
+      setLinkedAccountId(fixedDeposit.linkedPayoutAccountId || "");
+      setFundingAccountId(fixedDeposit.fundingAccountId || "");
+      setWhtStr((fixedDeposit.withholdingTaxRateBps / 100).toFixed(1));
+      setAutoRenew(fixedDeposit.autoRenew);
+    });
+  }, [isOpen, fixedDeposit]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -99,12 +119,15 @@ export function FixedDepositModal({ isOpen, onClose, accounts }: FixedDepositMod
 
     setSubmitting(true);
     try {
-      const now = new Date();
-      const startDate = now.toISOString();
+      const startDate = new Date(`${startDateStr}T00:00:00`).toISOString();
+      const now = new Date(startDate);
       const maturity = addMonthsClamped(now, tenureNum);
       const maturityDate = maturity.toISOString();
+      let paidPeriods = 0;
+      const today = new Date();
+      while (paidPeriods < tenureNum && addMonthsClamped(now, paidPeriods + 1) <= today) paidPeriods += 1;
 
-      await localCreateFixedDeposit(db, {
+      const values: Omit<LocalFixedDeposit, "id" | "serverSeq" | "createdAt" | "updatedAt"> = {
         userId: userId || "",
         householdId: null,
         bankName: bankName.trim(),
@@ -112,6 +135,7 @@ export function FixedDepositModal({ isOpen, onClose, accounts }: FixedDepositMod
         principalAmountMinor: principalMinor,
         annualInterestRateBps: Math.round(aprNum * 100),
         tenureMonths: tenureNum,
+        paidPeriods,
         startDate,
         maturityDate,
         compoundingFrequency,
@@ -123,7 +147,30 @@ export function FixedDepositModal({ isOpen, onClose, accounts }: FixedDepositMod
         status: "ACTIVE",
         closedAt: null,
         prematureClosure: false,
-      });
+      };
+      if (fixedDeposit) {
+        await fetch(`/api/fixed-deposits/${fixedDeposit.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            bankName: values.bankName,
+            principalAmountMinor: values.principalAmountMinor,
+            annualInterestRateBps: values.annualInterestRateBps,
+            tenureMonths: values.tenureMonths,
+            startDate: values.startDate,
+            paidPeriods,
+          }),
+        });
+        await localUpdateFixedDeposit(db, fixedDeposit.id, {
+          ...values,
+          id: fixedDeposit.id,
+          serverSeq: fixedDeposit.serverSeq,
+          createdAt: fixedDeposit.createdAt,
+          updatedAt: new Date().toISOString(),
+        });
+      } else {
+        await localCreateFixedDeposit(db, values);
+      }
 
       onClose();
     } catch (err) {
@@ -137,7 +184,7 @@ export function FixedDepositModal({ isOpen, onClose, accounts }: FixedDepositMod
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-150 overflow-y-auto">
       <div className="w-full max-w-md bg-[var(--surface)] border border-hairline rounded shadow-2xl overflow-hidden modal-sheet-dialog flex flex-col">
         <div className="flex items-center justify-between px-4 py-3 border-b border-hairline shrink-0">
-          <h2 className="text-sm font-semibold text-[var(--text)]">New Fixed Deposit</h2>
+          <h2 className="text-sm font-semibold text-[var(--text)]">{fixedDeposit ? "Edit Fixed Deposit" : "New Fixed Deposit"}</h2>
           <button
             type="button"
             onClick={onClose}
@@ -188,6 +235,10 @@ export function FixedDepositModal({ isOpen, onClose, accounts }: FixedDepositMod
                 className="w-full h-8 px-2.5 rounded bg-[var(--bg)] border border-hairline text-xs text-[var(--text)] focus:outline-none focus:border-[var(--accent)] font-mono"
               />
               {errors.principal && <p className="text-[11px] text-[var(--expense)]">{errors.principal}</p>}
+            </div>
+            <div className="space-y-1">
+              <label className="block text-xs font-medium text-[var(--text-muted)]">Started Date</label>
+              <input type="date" data-testid="fd-form-start-date" value={startDateStr} onChange={(e) => setStartDateStr(e.target.value)} className="w-full h-8 px-2.5 rounded bg-[var(--bg)] border border-hairline text-xs text-[var(--text)]" />
             </div>
 
             <div className="space-y-1">

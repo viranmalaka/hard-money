@@ -36,6 +36,13 @@ export function LoanDetailModal({ loan, isOpen, onClose, accounts }: LoanDetailM
   const [overrideInterestStr, setOverrideInterestStr] = useState("");
   const [overridePrincipalStr, setOverridePrincipalStr] = useState("");
   const [savingOverride, setSavingOverride] = useState(false);
+  const [isLoanEditOpen, setIsLoanEditOpen] = useState(false);
+  const [editPrincipal, setEditPrincipal] = useState("");
+  const [editRate, setEditRate] = useState("");
+  const [editTenure, setEditTenure] = useState("");
+  const [editStartDate, setEditStartDate] = useState("");
+  const [editPaidInstallments, setEditPaidInstallments] = useState("");
+  const [editCalculationType, setEditCalculationType] = useState<"REDUCING_BALANCE" | "FLAT_RATE">("REDUCING_BALANCE");
 
   const eligibleAccounts = accounts.filter(
     (a) => !a.isArchived && (a.type === "BANK_SAVINGS" || a.type === "CASH")
@@ -106,6 +113,36 @@ export function LoanDetailModal({ loan, isOpen, onClose, accounts }: LoanDetailM
     }
     setIsExtraPrincipal(false);
     setIsEmiDialogOpen(true);
+  };
+
+  const openLoanEdit = () => {
+    setEditPrincipal((loan.originalPrincipalMinor / 100).toFixed(2));
+    setEditRate((loan.annualInterestRateBps / 100).toFixed(2));
+    setEditTenure(String(loan.tenureMonths));
+    setEditStartDate(loan.startDate.slice(0, 10));
+    setEditPaidInstallments(String(loan.paidInstallments || 0));
+    setEditCalculationType(loan.calculationType);
+    setIsLoanEditOpen(true);
+  };
+
+  const handleLoanEdit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const response = await fetch(`/api/loans/${loan.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        originalPrincipalMinor: parseMoneyToMinor(editPrincipal),
+        annualInterestRateBps: Math.round(Number(editRate) * 100),
+        tenureMonths: Number(editTenure),
+        startDate: editStartDate,
+        paidInstallments: Number(editPaidInstallments),
+        calculationType: editCalculationType,
+      }),
+    });
+    if (!response.ok) return;
+    setIsLoanEditOpen(false);
+    await sync();
+    await fetchDetails();
   };
 
   const handlePayEmi = async (e: React.FormEvent) => {
@@ -234,7 +271,22 @@ export function LoanDetailModal({ loan, isOpen, onClose, accounts }: LoanDetailM
           >
             <X size={18} />
           </button>
+          <button type="button" onClick={openLoanEdit} className="px-2 py-1 rounded border border-hairline text-xs font-medium">
+            Edit loan
+          </button>
         </div>
+
+        {isLoanEditOpen && (
+          <form onSubmit={handleLoanEdit} className="grid grid-cols-2 gap-2 p-3 rounded border border-hairline bg-[var(--bg)] text-xs">
+            <label>Principal<input value={editPrincipal} onChange={(e) => setEditPrincipal(e.target.value)} className="w-full mt-1 px-2 py-1 rounded border border-hairline bg-[var(--surface)]" /></label>
+            <label>APR %<input type="number" step="0.01" value={editRate} onChange={(e) => setEditRate(e.target.value)} className="w-full mt-1 px-2 py-1 rounded border border-hairline bg-[var(--surface)]" /></label>
+            <label>Tenure months<input type="number" value={editTenure} onChange={(e) => setEditTenure(e.target.value)} className="w-full mt-1 px-2 py-1 rounded border border-hairline bg-[var(--surface)]" /></label>
+            <label>Started date<input type="date" value={editStartDate} onChange={(e) => setEditStartDate(e.target.value)} className="w-full mt-1 px-2 py-1 rounded border border-hairline bg-[var(--surface)]" /></label>
+            <label>Paid installments<input type="number" min="0" value={editPaidInstallments} onChange={(e) => setEditPaidInstallments(e.target.value)} className="w-full mt-1 px-2 py-1 rounded border border-hairline bg-[var(--surface)]" /></label>
+            <label>Calculation<select value={editCalculationType} onChange={(e) => setEditCalculationType(e.target.value as "REDUCING_BALANCE" | "FLAT_RATE")} className="w-full mt-1 px-2 py-1 rounded border border-hairline bg-[var(--surface)]"><option value="REDUCING_BALANCE">Reducing balance</option><option value="FLAT_RATE">Flat rate</option></select></label>
+            <div className="col-span-2 flex justify-end gap-2"><button type="button" onClick={() => setIsLoanEditOpen(false)} className="px-2 py-1 rounded border border-hairline">Cancel</button><button type="submit" className="px-2 py-1 rounded bg-[var(--accent)] text-white">Save</button></div>
+          </form>
+        )}
 
         {/* Summary KPIs */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2 py-2 px-3 bg-[var(--bg)] rounded-lg border border-hairline text-center">

@@ -394,6 +394,7 @@ model FixedDeposit {
   principalAmountMinor  Int
   annualInterestRateBps Int
   tenureMonths          Int
+  paidPeriods           Int                   @default(0)
   startDate             DateTime
   maturityDate          DateTime
   compoundingFrequency  String                @default("MONTHLY") // MONTHLY | QUARTERLY | ANNUALLY | AT_MATURITY
@@ -449,6 +450,7 @@ model Loan {
   residualValueMinor          Int?                @default(0) // Balloon/residual for LEASE
   annualInterestRateBps       Int
   tenureMonths                Int
+  paidInstallments            Int               @default(0)
   startDate                   DateTime
   monthlyEmiAmountMinor       Int
   calculationType             String              @default("REDUCING_BALANCE") // REDUCING_BALANCE | FLAT_RATE

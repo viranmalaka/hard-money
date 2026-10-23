@@ -177,6 +177,7 @@ export interface LocalFixedDeposit {
   principalAmountMinor: number;
   annualInterestRateBps: number;
   tenureMonths: number;
+  paidPeriods: number;
   startDate: string;
   maturityDate: string;
   compoundingFrequency: "MONTHLY" | "QUARTERLY" | "ANNUALLY" | "AT_MATURITY";
@@ -216,6 +217,7 @@ export interface LocalLoan {
   residualValueMinor?: number | null;
   annualInterestRateBps: number;
   tenureMonths: number;
+  paidInstallments: number;
   startDate: string;
   monthlyEmiAmountMinor: number;
   calculationType: "REDUCING_BALANCE" | "FLAT_RATE";

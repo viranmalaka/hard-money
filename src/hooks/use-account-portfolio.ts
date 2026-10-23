@@ -7,6 +7,7 @@ import {
   useInstallmentPlans,
   useLoanPayments,
   useLoans,
+  useLoanScheduleEntries,
   useSync,
   useTransactions,
 } from "@/components/sync-provider";
@@ -24,6 +25,7 @@ export function useAccountPortfolio(showArchived: boolean, settlingCard: LocalAc
   const fixedDeposits = useFixedDeposits();
   const loans = useLoans();
   const loanPayments = useLoanPayments();
+  const loanScheduleEntries = useLoanScheduleEntries();
   const { db } = useSync();
   const [householdRoleMap, setHouseholdRoleMap] = useState<Map<string, string>>(new Map());
   const [activeHouseholdId, setActiveHouseholdId] = useState<string | null>(null);
@@ -180,10 +182,13 @@ export function useAccountPortfolio(showArchived: boolean, settlingCard: LocalAc
       const paidPrincipal = loanPayments
         .filter((payment) => payment.loanId === loan.id)
         .reduce((total, payment) => total + payment.principalComponentMinor, 0);
-      map.set(loan.id, Math.max(0, loan.originalPrincipalMinor - paidPrincipal));
+      const recordedPrincipal = loanScheduleEntries
+        .filter((entry) => entry.loanId === loan.id && entry.status === "PAID")
+        .reduce((total, entry) => total + entry.principalComponentMinor, 0);
+      map.set(loan.id, Math.max(0, loan.originalPrincipalMinor - Math.max(paidPrincipal, recordedPrincipal)));
     }
     return map;
-  }, [loans, loanPayments]);
+  }, [loans, loanPayments, loanScheduleEntries]);
   const loansSubtotal = useMemo(
     () =>
       loans

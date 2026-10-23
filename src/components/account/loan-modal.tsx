@@ -22,6 +22,7 @@ export function LoanModal({ isOpen, onClose, accounts }: LoanModalProps) {
   const [residualStr, setResidualStr] = useState("0.00");
   const [aprStr, setAprStr] = useState("12.0");
   const [tenureMonthsStr, setTenureMonthsStr] = useState("12");
+  const [startDateStr, setStartDateStr] = useState(new Date().toISOString().slice(0, 10));
   const [calculationType, setCalculationType] = useState<"REDUCING_BALANCE" | "FLAT_RATE">(
     "REDUCING_BALANCE"
   );
@@ -73,8 +74,15 @@ export function LoanModal({ isOpen, onClose, accounts }: LoanModalProps) {
 
     setSubmitting(true);
     try {
+      const startDate = new Date(`${startDateStr}T00:00:00`).toISOString();
       const now = new Date();
-      const startDate = now.toISOString();
+      let paidInstallments = 0;
+      while (paidInstallments < tenureNum) {
+        const dueDate = new Date(startDate);
+        dueDate.setMonth(dueDate.getMonth() + paidInstallments + 1);
+        if (dueDate > now) break;
+        paidInstallments += 1;
+      }
 
       await localCreateLoan(db, {
         userId: userId || "",
@@ -85,6 +93,7 @@ export function LoanModal({ isOpen, onClose, accounts }: LoanModalProps) {
         residualValueMinor: residualMinor,
         annualInterestRateBps: Math.round(aprNum * 100),
         tenureMonths: tenureNum,
+        paidInstallments,
         startDate,
         monthlyEmiAmountMinor: 0, // Will be computed by localCreateLoan
         calculationType,
@@ -167,6 +176,10 @@ export function LoanModal({ isOpen, onClose, accounts }: LoanModalProps) {
             {errors.lenderName && (
               <p className="text-[11px] text-[var(--expense)]">{errors.lenderName}</p>
             )}
+          </div>
+          <div className="space-y-1">
+            <label className="block text-xs font-medium text-[var(--text-muted)]">Started Date</label>
+            <input type="date" data-testid="loan-form-start-date" value={startDateStr} onChange={(e) => setStartDateStr(e.target.value)} className="w-full h-8 px-2 rounded bg-[var(--bg)] border border-hairline text-xs text-[var(--text)]" />
           </div>
 
           {/* Principal & Residual */}

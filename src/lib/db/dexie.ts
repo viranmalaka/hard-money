@@ -61,6 +61,7 @@ export interface ClientInstallmentPlan {
   merchantName: string;
   totalAmountMinor: number;
   tenureMonths: number;
+  paidPeriods: number;
   monthlyAmountMinor: number;
   finalInstallmentAmountMinor: number;
   initialPaidInstallments: number;
@@ -80,6 +81,7 @@ export interface ClientFixedDeposit {
   principalAmountMinor: number;
   annualInterestRateBps: number;
   tenureMonths: number;
+  paidPeriods: number;
   startDate: string;
   maturityDate: string;
   compoundingFrequency: "MONTHLY" | "QUARTERLY" | "ANNUALLY" | "AT_MATURITY";
@@ -98,6 +100,7 @@ export interface ClientLoan {
   originalPrincipalMinor: number;
   annualInterestRateBps: number;
   tenureMonths: number;
+  paidInstallments: number;
   startDate: string;
   monthlyEmiAmountMinor: number;
   calculationType: "REDUCING_BALANCE" | "FLAT_RATE";

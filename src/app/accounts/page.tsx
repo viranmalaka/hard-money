@@ -32,6 +32,7 @@ export default function AccountsPage() {
 
   // Fixed Deposits modal states
   const [isFdModalOpen, setIsFdModalOpen] = useState(false);
+  const [editingFd, setEditingFd] = useState<LocalFixedDeposit | null>(null);
   const [closeFd, setCloseFd] = useState<LocalFixedDeposit | null>(null);
 
   // Loans modal states
@@ -646,6 +647,7 @@ export default function AccountsPage() {
                             <span>Principal: {formatMoney(loan.originalPrincipalMinor)}</span>
                             <span>APR: {(loan.annualInterestRateBps / 100).toFixed(2)}%</span>
                             <span>Tenure: {loan.tenureMonths} mo</span>
+                            <span>Paid: {loan.paidInstallments || 0}</span>
                             {loan.residualValueMinor ? (
                               <span>Residual: {formatMoney(loan.residualValueMinor)}</span>
                             ) : null}
@@ -707,7 +709,10 @@ export default function AccountsPage() {
                 <button
                   type="button"
                   data-testid="add-fd-btn"
-                  onClick={() => setIsFdModalOpen(true)}
+                  onClick={() => {
+                    setEditingFd(null);
+                    setIsFdModalOpen(true);
+                  }}
                   className="flex items-center gap-1 text-[11px] font-medium text-[var(--text)] px-2 py-0.5 rounded border border-hairline hover:bg-[var(--border)] transition-colors"
                 >
                   <Plus size={12} />
@@ -773,6 +778,7 @@ export default function AccountsPage() {
                             <span>Principal: {formatMoney(fd.principalAmountMinor)}</span>
                             <span>APR: {(fd.annualInterestRateBps / 100).toFixed(2)}%</span>
                             <span>Tenure: {fd.tenureMonths} mo</span>
+                            <span>Elapsed: {fd.paidPeriods || 0} mo</span>
                             <span>WHT: {(fd.withholdingTaxRateBps / 100).toFixed(1)}%</span>
                           </div>
                         </div>
@@ -820,14 +826,17 @@ export default function AccountsPage() {
                           )}
 
                           {fd.status !== "CLOSED" && (
-                            <button
-                              type="button"
-                              data-testid="fd-close-btn"
-                              onClick={() => setCloseFd(fd)}
-                              className="px-2 py-0.5 rounded border border-hairline text-xs font-medium text-[var(--expense)] hover:bg-[var(--border)] transition-colors"
-                            >
-                              Premature Close
-                            </button>
+                            <>
+                              <button type="button" onClick={() => { setEditingFd(fd); setIsFdModalOpen(true); }} className="px-2 py-0.5 rounded border border-hairline text-xs font-medium hover:bg-[var(--border)]">Edit</button>
+                              <button
+                                type="button"
+                                data-testid="fd-close-btn"
+                                onClick={() => setCloseFd(fd)}
+                                className="px-2 py-0.5 rounded border border-hairline text-xs font-medium text-[var(--expense)] hover:bg-[var(--border)] transition-colors"
+                              >
+                                Premature Close
+                              </button>
+                            </>
                           )}
                         </div>
                       </div>
@@ -1123,8 +1132,9 @@ export default function AccountsPage() {
       {isFdModalOpen && (
         <FixedDepositModal
           isOpen={isFdModalOpen}
-          onClose={() => setIsFdModalOpen(false)}
+          onClose={() => { setIsFdModalOpen(false); setEditingFd(null); }}
           accounts={accounts}
+          fixedDeposit={editingFd}
         />
       )}
 
