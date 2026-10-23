@@ -56,6 +56,17 @@ export default function ShortcutsGuidePage() {
         </div>
       </div>
 
+      <div className="flat-card p-4 space-y-2 bg-[var(--surface)] border border-hairline">
+        <span className="font-semibold text-sm text-[var(--text)] block">
+          Before you start
+        </span>
+        <ul className="text-xs text-[var(--text-muted)] space-y-1.5 list-disc pl-4">
+          <li>Your HardMoney website must use a public <strong>HTTPS</strong> address. An iPhone cannot call <code>localhost</code> on your computer.</li>
+          <li>Apple lets an automation run when a message arrives, but iOS does not let an app secretly read every SMS. You choose the sender or senders in the automation.</li>
+          <li>The shortcut sends the message text and sender to HardMoney. It does not create a transaction directly; HardMoney parses the SMS after it receives it.</li>
+        </ul>
+      </div>
+
       {/* Step-by-step instructions */}
       <div className="space-y-3">
         <span className="text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wider px-1">
@@ -80,9 +91,9 @@ export default function ShortcutsGuidePage() {
               2
             </div>
             <div className="space-y-1">
-              <span className="font-semibold block">Create an iOS Automation</span>
+              <span className="font-semibold block">Open the Automation screen</span>
               <p className="text-[var(--text-muted)]">
-                Open the <strong>Shortcuts</strong> app on your iPhone or iPad, tap the <strong>Automation</strong> tab, and tap <strong>New Automation</strong>.
+                Open the <strong>Shortcuts</strong> app on your iPhone, tap <strong>Automation</strong>, tap <strong>New Automation</strong> (or the <strong>+</strong> button), then choose <strong>Message</strong>.
               </p>
             </div>
           </div>
@@ -94,7 +105,7 @@ export default function ShortcutsGuidePage() {
             <div className="space-y-1">
               <span className="font-semibold block">Select Message Trigger</span>
               <p className="text-[var(--text-muted)]">
-                Choose <strong>Message</strong>. Add your bank senders (e.g. <code>COMBANK</code>, <code>SAMPATH</code>, <code>HNB</code>) and select <strong>Run Immediately</strong> (without asking to run).
+                Under <strong>Sender</strong>, add the bank sender names exactly as they appear in your Messages app, for example <code>COMBANK</code> or <code>SAMPATH</code>. Choose <strong>Run Immediately</strong> (or turn off <strong>Ask Before Running</strong>), then tap <strong>Next</strong>.
               </p>
             </div>
           </div>
@@ -106,15 +117,54 @@ export default function ShortcutsGuidePage() {
             <div className="space-y-1">
               <span className="font-semibold block">Forward Payload to Webhook</span>
               <p className="text-[var(--text-muted)]">
-                Add a <strong>Get Contents of URL</strong> action:
+                Add a <strong>Get Contents of URL</strong> action. Set:
                 <br />• <strong>URL:</strong> <code>https://your-domain.com/api/v1/webhooks/sms-ingress</code>
                 <br />• <strong>Method:</strong> POST
                 <br />• <strong>Headers:</strong> <code>x-api-key: [YOUR_API_KEY]</code>, <code>Content-Type: application/json</code>
-                <br />• <strong>Request Body:</strong> JSON with fields <code>rawSms</code>, <code>sender</code>, and <code>receivedAt</code>.
+                <br />• <strong>Request Body:</strong> JSON
+                <br />• <strong>rawSms:</strong> choose the trigger&apos;s <strong>Message</strong> magic variable
+                <br />• <strong>sender:</strong> choose the trigger&apos;s <strong>Sender</strong> magic variable
+                <br />• <strong>receivedAt:</strong> choose <strong>Current Date</strong>
               </p>
             </div>
           </div>
         </div>
+      </div>
+
+      <div className="space-y-3">
+        <span className="text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wider px-1">
+          Tiny example
+        </span>
+        <div className="flat-card p-4 space-y-2 text-xs text-[var(--text)]">
+          <p>
+            Imagine your bank sends: <code>LKR 2,000.00 debited from AC **4681 for groceries</code>.
+          </p>
+          <p className="text-[var(--text-muted)]">
+            The automation sends this small package:
+          </p>
+          <pre className="overflow-x-auto rounded bg-[var(--bg)] border border-hairline p-3 text-[11px]">
+{`{
+  "rawSms": "LKR 2,000.00 debited from AC **4681 for groceries",
+  "sender": "SAMPATH",
+  "receivedAt": "2026-10-23T09:00:00.000Z"
+}`}
+          </pre>
+          <p className="text-[var(--text-muted)]">
+            HardMoney stores the SMS, tries its normal template parser first, and only uses Gemini if the template parser cannot understand the message.
+          </p>
+        </div>
+      </div>
+
+      <div className="flat-card p-4 space-y-2 bg-[var(--surface)] border border-hairline">
+        <span className="font-semibold text-sm text-[var(--text)] block">
+          How to test it
+        </span>
+        <ol className="text-xs text-[var(--text-muted)] space-y-1.5 list-decimal pl-4">
+          <li>Send a test bank SMS to the iPhone, or wait for a real bank alert.</li>
+          <li>Open HardMoney and visit <strong>More &gt; SMS Activity</strong>.</li>
+          <li>Look for <strong>PROCESSED</strong> and <strong>TEMPLATE</strong>. Unknown formats may show <strong>GEMINI</strong> or <strong>NEEDS_REVIEW</strong>.</li>
+          <li>If nothing appears, check that the sender filter matches exactly and that the webhook key was copied correctly.</li>
+        </ol>
       </div>
 
       {/* Privacy disclosure */}
