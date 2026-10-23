@@ -167,6 +167,8 @@ model Transaction {
   toAccountId                  String?
   categoryId                   String?
   amountMinor                  Int
+  destinationAmountMinor       Int?
+  exchangeRateMicros            Int?
   direction                    String?   // IN | OUT
   type                         String    // EXPENSE | INCOME | TRANSFER | REFUND | ADJUSTMENT
   subType                      String?

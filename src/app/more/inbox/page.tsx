@@ -47,6 +47,9 @@ export default function SmsReviewInboxPage() {
               amount: typeof payload.amountText === "string" ? payload.amountText : "",
               categoryId: "",
               note: typeof payload.merchantOrEntity === "string" ? payload.merchantOrEntity : item.sender,
+              toAccountId: "",
+              destinationAmount: "",
+              exchangeRate: "",
             };
           }
         }
@@ -64,7 +67,7 @@ export default function SmsReviewInboxPage() {
     return previous;
   };
   const postMutation = useMutation({
-    mutationFn: ({ itemId, input }: { itemId: string; input: { accountId: string; amount?: string; categoryId?: string; note?: string } }) =>
+    mutationFn: ({ itemId, input }: { itemId: string; input: { accountId: string; amount?: string; categoryId?: string; note?: string; toAccountId?: string; destinationAmount?: string; exchangeRate?: string } }) =>
       postInboxItem(itemId, input),
     onMutate: ({ itemId }) => removeOptimistically(itemId),
     onError: (_error, _variables, previous) => queryClient.setQueryData(queryKeys.inbox.all(), previous),
@@ -83,7 +86,7 @@ export default function SmsReviewInboxPage() {
 
   const handleFieldChange = useCallback((
     itemId: string,
-    field: "accountId" | "amount" | "categoryId" | "note",
+    field: "accountId" | "amount" | "categoryId" | "note" | "toAccountId" | "destinationAmount" | "exchangeRate",
     value: string
   ) => {
     setFormValues((prev) => ({
@@ -104,6 +107,9 @@ export default function SmsReviewInboxPage() {
       amount: "",
       categoryId: "",
       note: "",
+      toAccountId: "",
+      destinationAmount: "",
+      exchangeRate: "",
     };
 
     if (!values.accountId) {
@@ -120,6 +126,9 @@ export default function SmsReviewInboxPage() {
           amount: values.amount ? values.amount : undefined,
           categoryId: values.categoryId || undefined,
           note: values.note || undefined,
+          toAccountId: values.toAccountId || undefined,
+          destinationAmount: values.destinationAmount || undefined,
+          exchangeRate: values.exchangeRate || undefined,
         },
       });
       if (selectedId === itemId) {

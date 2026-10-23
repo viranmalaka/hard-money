@@ -3,6 +3,12 @@ import { getSessionUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getNextServerSeq } from "@/lib/server-seq";
 import { amountTextToMinor } from "@/lib/sms/template-parser";
+import type { ParsedTransactionPayload } from "@/lib/sms/types";
+import {
+  calculateConvertedMinor,
+  calculateExchangeRateMicros,
+  rateNumberToMicros,
+} from "@/lib/finance-core/currency";
 
 export async function POST(
   request: NextRequest,
@@ -23,7 +29,7 @@ export async function POST(
   }
 
   const body = await request.json().catch(() => ({}));
-  const parsedPayload = (sms.parsedPayload as any) || {};
+  const parsedPayload = (sms.parsedPayload as Partial<ParsedTransactionPayload> | null) || {};
 
   let amountMinor = 0;
   if (typeof body.amountMinor === "number") {
@@ -56,6 +62,46 @@ export async function POST(
     return NextResponse.json({ error: "Account not found" }, { status: 404 });
   }
 
+  const toAccountId = typeof body.toAccountId === "string" ? body.toAccountId : null;
+  const toAccount = toAccountId
+    ? await prisma.account.findFirst({ where: { id: toAccountId, userId: session.userId } })
+    : null;
+  const parsedCurrency = parsedPayload.currency === "USD" ? "USD" : "LKR";
+  let destinationAmountMinor =
+    typeof body.destinationAmountMinor === "number"
+      ? Math.round(body.destinationAmountMinor)
+      : typeof body.destinationAmount === "number"
+        ? Math.round(body.destinationAmount * 100)
+        : typeof body.destinationAmount === "string"
+          ? amountTextToMinor(body.destinationAmount)
+          : typeof parsedPayload.destinationAmountText === "string"
+            ? amountTextToMinor(parsedPayload.destinationAmountText)
+        : null;
+  const exchangeRateMicros =
+    typeof body.exchangeRateMicros === "number"
+      ? Math.round(body.exchangeRateMicros)
+      : typeof body.exchangeRate === "number"
+        ? rateNumberToMicros(body.exchangeRate)
+        : typeof body.exchangeRate === "string"
+          ? rateNumberToMicros(Number(body.exchangeRate))
+        : null;
+
+  if (
+    parsedCurrency === "USD" &&
+    toAccount &&
+    (!destinationAmountMinor || destinationAmountMinor <= 0) &&
+    exchangeRateMicros &&
+    exchangeRateMicros > 0
+  ) {
+    destinationAmountMinor = calculateConvertedMinor(amountMinor, exchangeRateMicros);
+  }
+
+  if (parsedCurrency === "USD" && toAccount) {
+    if (account.currency !== "USD" || toAccount.currency !== "LKR" || destinationAmountMinor === null || destinationAmountMinor <= 0) {
+      return NextResponse.json({ error: "USD SMS transfers require a USD source, LKR destination, and final LKR amount" }, { status: 400 });
+    }
+  }
+
   const txType =
     body.type ||
     (parsedPayload.transactionType === "CREDIT" ? "INCOME" : "EXPENSE");
@@ -68,7 +114,14 @@ export async function POST(
     data: {
       userId: session.userId,
       accountId: account.id,
+      toAccountId: toAccount?.id || null,
       amountMinor,
+      destinationAmountMinor:
+        parsedCurrency === "USD" && toAccount ? destinationAmountMinor : null,
+      exchangeRateMicros:
+        parsedCurrency === "USD" && toAccount
+          ? exchangeRateMicros || calculateExchangeRateMicros(amountMinor, destinationAmountMinor || 0)
+          : null,
       type: txType,
       subType,
       categoryId,

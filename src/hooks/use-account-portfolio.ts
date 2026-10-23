@@ -152,6 +152,17 @@ export function useAccountPortfolio(showArchived: boolean, settlingCard: LocalAc
     () => bankAccounts.reduce((total, account) => total + balanceFor(account), 0),
     [bankAccounts, balanceFor]
   );
+  const bankSubtotalByCurrency = useMemo(
+    () =>
+      bankAccounts.reduce(
+        (totals, account) => {
+          totals[account.currency === "USD" ? "USD" : "LKR"] += balanceFor(account);
+          return totals;
+        },
+        { LKR: 0, USD: 0 },
+      ),
+    [bankAccounts, balanceFor],
+  );
   const creditSubtotal = useMemo(
     () => creditAccounts.reduce((total, account) => total + balanceFor(account), 0),
     [creditAccounts, balanceFor]
@@ -184,20 +195,35 @@ export function useAccountPortfolio(showArchived: boolean, settlingCard: LocalAc
   const netWorth = useMemo(() => {
     let assets = 0;
     let liabilities = 0;
+    const assetsByCurrency = { LKR: 0, USD: 0 };
+    const liabilitiesByCurrency = { LKR: 0, USD: 0 };
     for (const account of visibleAccounts) {
+      const currency = account.currency === "USD" ? "USD" : "LKR";
       const balance = balanceFor(account);
       if (account.type === "CREDIT_CARD") {
         liabilities += (balance < 0 ? Math.abs(balance) : 0) + (accountBlockedPrincipalMap[account.id] || 0);
+        liabilitiesByCurrency[currency] += (balance < 0 ? Math.abs(balance) : 0) + (accountBlockedPrincipalMap[account.id] || 0);
         if (balance > 0) assets += balance;
+        if (balance > 0) assetsByCurrency[currency] += balance;
       } else if (balance >= 0) {
         assets += balance;
+        assetsByCurrency[currency] += balance;
       } else {
         liabilities += Math.abs(balance);
+        liabilitiesByCurrency[currency] += Math.abs(balance);
       }
     }
     assets += fixedDepositsSubtotal;
     liabilities += loansSubtotal;
-    return { assetsTotal: assets, liabilitiesTotal: liabilities, netWorthTotal: assets - liabilities };
+    assetsByCurrency.LKR += fixedDepositsSubtotal;
+    liabilitiesByCurrency.LKR += loansSubtotal;
+    return {
+      assetsTotal: assets,
+      liabilitiesTotal: liabilities,
+      netWorthTotal: assets - liabilities,
+      assetsByCurrency,
+      liabilitiesByCurrency,
+    };
   }, [visibleAccounts, balanceFor, accountBlockedPrincipalMap, fixedDepositsSubtotal, loansSubtotal]);
 
   const settlingCardCycle = useMemo(() => {
@@ -235,6 +261,7 @@ export function useAccountPortfolio(showArchived: boolean, settlingCard: LocalAc
     creditAccounts,
     cashSubtotal,
     bankSubtotal,
+    bankSubtotalByCurrency,
     creditSubtotal,
     fixedDepositsSubtotal,
     loanRemainingMap,

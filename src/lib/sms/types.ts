@@ -27,6 +27,7 @@ export const BankSmsSchema = z.object({
   ]),
   // Amount as a decimal string exactly as printed (e.g. "1,250.50"); the server converts it to integer minor units.
   amountText: z.string().nullable(),
+  destinationAmountText: z.string().nullable().optional(),
   currency: z.string().default("LKR"),
   accountLast4: z
     .string()

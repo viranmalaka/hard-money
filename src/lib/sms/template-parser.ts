@@ -118,6 +118,7 @@ export function parseBankSmsTemplate(
         transactionType: "UNKNOWN",
         channel: "UNKNOWN",
         amountText: null,
+        destinationAmountText: null,
         currency: "LKR",
         accountLast4: null,
         merchantOrEntity: null,
@@ -164,6 +165,10 @@ export function parseBankSmsTemplate(
 
   const last4 = extractLast4(text);
   const balanceAfter = extractBalanceAfter(text);
+  const destinationAmountText =
+    amount.currency === "USD"
+      ? text.match(/(?:LKR|Rs\.?)\s*((?:[\d,]+|\.\d{1,2})(?:\.\d{1,2})?)/i)?.[1] || null
+      : null;
 
   // Extract merchant / reference / entity
   let merchant: string | null = null;
@@ -266,6 +271,7 @@ export function parseBankSmsTemplate(
       transactionType,
       channel,
       amountText: amount.amountText,
+      destinationAmountText,
       currency: amount.currency,
       accountLast4: last4,
       merchantOrEntity: merchant || (isAtm ? "ATM Withdrawal" : `${bankName} Merchant`),

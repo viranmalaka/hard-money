@@ -74,6 +74,8 @@ export interface LocalTransaction {
   toAccountId?: string | null;
   categoryId?: string | null;
   amountMinor: number;
+  destinationAmountMinor?: number | null;
+  exchangeRateMicros?: number | null;
   direction?: "IN" | "OUT" | null;
   type: "EXPENSE" | "INCOME" | "TRANSFER" | "REFUND" | "ADJUSTMENT";
   subType?: string | null;

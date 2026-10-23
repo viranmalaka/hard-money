@@ -11,6 +11,7 @@ export interface LedgerTransaction {
   accountId: string;
   toAccountId?: string | null;
   amountMinor: number;
+  destinationAmountMinor?: number | null;
   type: TransactionType;
   direction?: TransactionDirection | null;
   transactionDate: Date | string;
@@ -55,7 +56,7 @@ export function calculateLedgerEffect(
 
     case "TRANSFER":
       if (isPrimary) return -tx.amountMinor;
-      if (isDestination) return tx.amountMinor;
+      if (isDestination) return tx.destinationAmountMinor ?? tx.amountMinor;
       return 0;
 
     case "ADJUSTMENT":

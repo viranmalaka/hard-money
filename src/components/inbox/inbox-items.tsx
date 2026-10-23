@@ -8,6 +8,7 @@ export interface InboxAccount {
   id: string;
   name: string;
   type: string;
+  currency: string;
 }
 
 export interface InboxCategory {
@@ -21,6 +22,9 @@ export interface InboxFormValues {
   amount: string;
   categoryId: string;
   note: string;
+  toAccountId: string;
+  destinationAmount: string;
+  exchangeRate: string;
 }
 
 type Field = keyof InboxFormValues;
@@ -64,7 +68,7 @@ function FormFields({
           <span className="text-[10px] font-medium text-[var(--text-muted)]">Account *</span>
           <select data-testid="inbox-account-select" value={form.accountId} onChange={(e) => onFieldChange(item.id, "accountId", e.target.value)} className="w-full h-8 px-2 rounded bg-[var(--bg)] border border-hairline text-xs text-[var(--text)] focus:outline-none focus:border-[var(--accent)]">
             <option value="">-- Select Account --</option>
-            {accounts.map((account) => <option key={account.id} value={account.id}>{account.name} ({account.type})</option>)}
+            {accounts.map((account) => <option key={account.id} value={account.id}>{account.name} ({account.type}, {account.currency})</option>)}
           </select>
         </label>
         <label className="space-y-1">
@@ -72,6 +76,27 @@ function FormFields({
           <input data-testid="inbox-amount-input" type="text" value={form.amount} onChange={(e) => onFieldChange(item.id, "amount", e.target.value)} placeholder="e.g. 1500.00" className="w-full h-8 px-2 rounded bg-[var(--bg)] border border-hairline text-xs text-[var(--text)] focus:outline-none focus:border-[var(--accent)]" />
         </label>
       </div>
+      {item.parsedPayload?.currency === "USD" && (
+        <>
+          <div className="grid grid-cols-2 gap-2">
+            <label className="space-y-1">
+            <span className="text-[10px] font-medium text-[var(--text-muted)]">Destination LKR account</span>
+            <select data-testid="inbox-to-account-select" value={form.toAccountId} onChange={(e) => onFieldChange(item.id, "toAccountId", e.target.value)} className="w-full h-8 px-2 rounded bg-[var(--bg)] border border-hairline text-xs text-[var(--text)] focus:outline-none focus:border-[var(--accent)]">
+              <option value="">-- Optional --</option>
+              {accounts.filter((account) => account.currency === "LKR").map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}
+            </select>
+            </label>
+            <label className="space-y-1">
+            <span className="text-[10px] font-medium text-[var(--text-muted)]">Final LKR amount</span>
+            <input data-testid="inbox-destination-amount" type="number" min="0" step="0.01" value={form.destinationAmount} onChange={(e) => onFieldChange(item.id, "destinationAmount", e.target.value)} placeholder="Optional" className="w-full h-8 px-2 rounded bg-[var(--bg)] border border-hairline text-xs text-[var(--text)]" />
+            </label>
+          </div>
+          <label className="space-y-1 block">
+          <span className="text-[10px] font-medium text-[var(--text-muted)]">Rate (LKR / USD)</span>
+          <input data-testid="inbox-exchange-rate" type="number" min="0" step="0.000001" value={form.exchangeRate} onChange={(e) => onFieldChange(item.id, "exchangeRate", e.target.value)} placeholder="Optional if final LKR amount is entered" className="w-full h-8 px-2 rounded bg-[var(--bg)] border border-hairline text-xs text-[var(--text)]" />
+          </label>
+        </>
+      )}
       <div className="grid grid-cols-2 gap-2">
         <label className="space-y-1">
           <span className="text-[10px] font-medium text-[var(--text-muted)]">Category</span>

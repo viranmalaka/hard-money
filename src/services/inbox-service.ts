@@ -21,7 +21,15 @@ export async function listInbox() {
 
 export async function postInboxItem(
   itemId: string,
-  input: { accountId: string; amount?: string; categoryId?: string; note?: string }
+  input: {
+    accountId: string;
+    amount?: string;
+    categoryId?: string;
+    note?: string;
+    toAccountId?: string;
+    destinationAmount?: string;
+    exchangeRate?: string;
+  }
 ) {
   const { data } = await apiClient.post(`/sms/inbox/${itemId}/post`, input);
   return data;

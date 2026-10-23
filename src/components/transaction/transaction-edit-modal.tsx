@@ -1,12 +1,18 @@
 "use client";
 
 import { groupCategoriesByType } from "@/lib/categories-data";
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useMemo } from "react";
 import { X, Trash2, Split, Plus, AlertCircle, Ban } from "lucide-react";
 import { useAccounts, useCategories, useTransactions, useSync } from "@/components/sync-provider";
 import { localUpdateTransaction, localDeleteTransaction, localCreateInstallmentPlan } from "@/lib/sync/client";
 import { LocalTransaction, LocalSplitItem } from "@/lib/db";
 import { formatMoney, parseMoneyToMinor } from "@/lib/finance-core/money";
+import {
+  calculateConvertedMinor,
+  calculateExchangeRateMicros,
+  rateMicrosToNumber,
+  rateNumberToMicros,
+} from "@/lib/finance-core/currency";
 
 interface TransactionEditModalProps {
   transaction: LocalTransaction | null;
@@ -52,6 +58,12 @@ function TransactionEditContent({
   );
   const [accountId, setAccountId] = useState(transaction.accountId);
   const [toAccountId, setToAccountId] = useState(transaction.toAccountId || "");
+  const [destinationAmountStr, setDestinationAmountStr] = useState(
+    transaction.destinationAmountMinor ? (transaction.destinationAmountMinor / 100).toFixed(2) : "",
+  );
+  const [exchangeRateStr, setExchangeRateStr] = useState(
+    transaction.exchangeRateMicros ? rateMicrosToNumber(transaction.exchangeRateMicros).toFixed(6) : "",
+  );
   const [categoryId, setCategoryId] = useState(transaction.categoryId || "");
   const [date, setDate] = useState(transaction.transactionDate.slice(0, 10));
   const [note, setNote] = useState(transaction.note || "");
@@ -82,6 +94,12 @@ function TransactionEditContent({
 
   const activeAccounts = useMemo(() => accounts.filter((a) => !a.isArchived), [accounts]);
   const targetAccount = useMemo(() => accounts.find((a) => a.id === transaction.accountId), [accounts, transaction.accountId]);
+  const selectedSourceAccount = useMemo(() => accounts.find((a) => a.id === accountId), [accounts, accountId]);
+  const selectedDestinationAccount = useMemo(() => accounts.find((a) => a.id === toAccountId), [accounts, toAccountId]);
+  const isUsdToLkrTransfer =
+    transaction.type === "TRANSFER" &&
+    selectedSourceAccount?.currency === "USD" &&
+    selectedDestinationAccount?.currency === "LKR";
   const isCardExpense = targetAccount?.type === "CREDIT_CARD" && transaction.type === "EXPENSE" && transaction.subType !== "CC_INSTALLMENT" && !transaction.excludeFromBalance;
   const isSystemInstallment = transaction.subType === "CC_INSTALLMENT";
 
@@ -188,10 +206,33 @@ function TransactionEditContent({
     }
 
     try {
+      let destinationAmountMinor: number | null = null;
+      let exchangeRateMicros: number | null = null;
+      if (isUsdToLkrTransfer) {
+        const enteredDestinationMinor = Math.round(Number(destinationAmountStr) * 100);
+        const enteredRateMicros = rateNumberToMicros(Number(exchangeRateStr));
+        if (enteredDestinationMinor <= 0 && enteredRateMicros <= 0) {
+          setErrorMsg("Enter an LKR amount or exchange rate");
+          return;
+        }
+        if (enteredRateMicros > 0) {
+          exchangeRateMicros = enteredRateMicros;
+          destinationAmountMinor = calculateConvertedMinor(targetAmountMinor, exchangeRateMicros);
+        } else {
+          destinationAmountMinor = enteredDestinationMinor;
+          exchangeRateMicros = calculateExchangeRateMicros(targetAmountMinor, destinationAmountMinor);
+        }
+      }
       await localUpdateTransaction(db, transaction.id, {
         amountMinor: targetAmountMinor,
         accountId,
         toAccountId: transaction.type === "TRANSFER" ? toAccountId : null,
+        destinationAmountMinor: isUsdToLkrTransfer
+          ? destinationAmountMinor
+          : transaction.destinationAmountMinor ?? null,
+        exchangeRateMicros: isUsdToLkrTransfer
+          ? exchangeRateMicros
+          : transaction.exchangeRateMicros ?? null,
         categoryId: isSplit ? null : categoryId,
         transactionDate: date,
         note: note.trim() || null,
@@ -252,7 +293,9 @@ function TransactionEditContent({
         <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-3.5 text-xs">
           {/* Amount input */}
           <div className="space-y-1">
-            <label className="text-[11px] font-medium text-[var(--text-muted)]">Amount (LKR)</label>
+            <label className="text-[11px] font-medium text-[var(--text-muted)]">
+              Amount ({selectedSourceAccount?.currency || "LKR"})
+            </label>
             <input
               type="text"
               data-testid="transaction-edit-amount"
@@ -273,7 +316,7 @@ function TransactionEditContent({
             >
               {activeAccounts.map((a) => (
                 <option key={a.id} value={a.id}>
-                  {a.name}
+                  {a.name} ({a.currency})
                 </option>
               ))}
             </select>
@@ -293,10 +336,48 @@ function TransactionEditContent({
                   .filter((a) => a.id !== accountId)
                   .map((a) => (
                     <option key={a.id} value={a.id}>
-                      {a.name}
+                      {a.name} ({a.currency})
                     </option>
                   ))}
               </select>
+            </div>
+          )}
+
+          {isUsdToLkrTransfer && (
+            <div className="grid grid-cols-2 gap-2">
+              <label className="space-y-1">
+                <span className="text-[11px] font-medium text-[var(--text-muted)]">Final LKR amount</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={destinationAmountStr}
+                  onChange={(e) => {
+                    setDestinationAmountStr(e.target.value);
+                    const destinationMinor = Math.round(Number(e.target.value) * 100);
+                    setExchangeRateStr(
+                      targetAmountMinor > 0 && destinationMinor > 0
+                        ? (calculateExchangeRateMicros(targetAmountMinor, destinationMinor) / 1_000_000).toFixed(6)
+                        : "",
+                    );
+                  }}
+                  className="w-full px-3 py-2 rounded border border-hairline bg-[var(--bg)] text-[var(--text)] font-mono focus:outline-none focus:ring-1 focus:ring-[var(--text)]"
+                />
+              </label>
+              <label className="space-y-1">
+                <span className="text-[11px] font-medium text-[var(--text-muted)]">Rate (LKR / USD)</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.000001"
+                  value={exchangeRateStr}
+                  onChange={(e) => {
+                    setExchangeRateStr(e.target.value);
+                    setDestinationAmountStr("");
+                  }}
+                  className="w-full px-3 py-2 rounded border border-hairline bg-[var(--bg)] text-[var(--text)] font-mono focus:outline-none focus:ring-1 focus:ring-[var(--text)]"
+                />
+              </label>
             </div>
           )}
 

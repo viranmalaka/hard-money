@@ -13,7 +13,10 @@ export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => ({}));
   const {
     accountId,
+    toAccountId,
     amountMinor,
+    destinationAmountMinor,
+    exchangeRateMicros,
     categoryId,
     note,
     type = "EXPENSE",
@@ -32,6 +35,30 @@ export async function POST(request: NextRequest) {
   if (!account) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   if (!Number.isInteger(amountMinor) || amountMinor <= 0) return NextResponse.json({ error: "Invalid amount" }, { status: 400 });
   if (!["EXPENSE", "INCOME", "TRANSFER", "REFUND", "ADJUSTMENT"].includes(type)) return NextResponse.json({ error: "Invalid transaction type" }, { status: 400 });
+  const validatedDestinationAmountMinor =
+    typeof destinationAmountMinor === "number" ? destinationAmountMinor : null;
+  const validatedExchangeRateMicros =
+    typeof exchangeRateMicros === "number" ? exchangeRateMicros : null;
+  if (type === "TRANSFER" && toAccountId) {
+    const destination = await assertCanWriteAccount(user, toAccountId);
+    if (!destination) {
+      return NextResponse.json({ error: "Destination account not found" }, { status: 404 });
+    }
+    if (account.currency === "USD" && destination.currency === "LKR") {
+      if (
+        validatedDestinationAmountMinor === null ||
+        validatedDestinationAmountMinor <= 0 ||
+        validatedExchangeRateMicros === null ||
+        validatedExchangeRateMicros <= 0 ||
+        !Number.isInteger(validatedDestinationAmountMinor) ||
+        !Number.isInteger(validatedExchangeRateMicros)
+      ) {
+        return NextResponse.json({ error: "Cross-currency transfers require destination amount and exchange rate" }, { status: 400 });
+      }
+    } else if (account.currency !== destination.currency) {
+      return NextResponse.json({ error: "Only USD to LKR transfers are supported" }, { status: 400 });
+    }
+  }
   const householdId = account.accessScope === "SHARED_HOUSEHOLD" ? account.householdId : null;
 
   const nextSeq = await getNextServerSeq();
@@ -40,7 +67,10 @@ export async function POST(request: NextRequest) {
       userId: user.id,
       householdId,
       accountId,
+      toAccountId: toAccountId || null,
       amountMinor,
+      destinationAmountMinor: validatedDestinationAmountMinor,
+      exchangeRateMicros: validatedExchangeRateMicros,
       type,
       categoryId: categoryId || null,
       note: note || null,

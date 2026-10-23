@@ -15,6 +15,11 @@ import { CategoryIcon } from "@/components/ui/category-icon";
 import { NumberKeypadPopup } from "@/components/ui/number-keypad-popup";
 import { MobileQuickAdd } from "./mobile-quick-add";
 import { getCategoryType, groupCategoriesByType } from "@/lib/categories-data";
+import {
+  calculateConvertedMinor,
+  calculateExchangeRateMicros,
+  rateNumberToMicros,
+} from "@/lib/finance-core/currency";
 
 /**
  * Returns today's date in YYYY-MM-DD formatted for Asia/Colombo or local timezone
@@ -60,6 +65,8 @@ function QuickAddModalContent() {
   const [rawAccountId, setAccountId] = useState<string>(initialAccountId || "");
   const [rawToAccountId, setToAccountId] = useState<string>("");
   const [rawCategoryId, setCategoryId] = useState<string>("");
+  const [destinationAmountStr, setDestinationAmountStr] = useState("");
+  const [exchangeRateStr, setExchangeRateStr] = useState("");
   const [note, setNote] = useState<string>("");
   const [excludeFromBudget, setExcludeFromBudget] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string>("");
@@ -104,6 +111,10 @@ function QuickAddModalContent() {
     const dest = activeAccounts.find((a) => a.id !== accountId);
     return dest?.id || "";
   }, [rawToAccountId, activeAccounts, accountId]);
+  const sourceAccount = useMemo(() => activeAccounts.find((a) => a.id === accountId), [activeAccounts, accountId]);
+  const destinationAccount = useMemo(() => activeAccounts.find((a) => a.id === toAccountId), [activeAccounts, toAccountId]);
+  const isUsdToLkrTransfer =
+    type === "TRANSFER" && sourceAccount?.currency === "USD" && destinationAccount?.currency === "LKR";
 
   const categoryGroups = useMemo(() => groupCategoriesByType(categories), [categories]);
 
@@ -218,6 +229,23 @@ function QuickAddModalContent() {
     }
 
     const amountMinor = Math.round(finalAmount * 100);
+    let destinationAmountMinor: number | null = null;
+    let exchangeRateMicros: number | null = null;
+    if (isUsdToLkrTransfer) {
+      const enteredDestinationMinor = Math.round(Number(destinationAmountStr) * 100);
+      const enteredRateMicros = rateNumberToMicros(Number(exchangeRateStr));
+      if (enteredDestinationMinor <= 0 && enteredRateMicros <= 0) {
+        setErrorMsg("Enter an LKR amount or exchange rate");
+        return;
+      }
+      if (enteredRateMicros > 0) {
+        exchangeRateMicros = enteredRateMicros;
+        destinationAmountMinor = calculateConvertedMinor(amountMinor, exchangeRateMicros);
+      } else {
+        destinationAmountMinor = enteredDestinationMinor;
+        exchangeRateMicros = calculateExchangeRateMicros(amountMinor, destinationAmountMinor);
+      }
+    }
 
     try {
       await localCreateTransaction(db, {
@@ -226,6 +254,8 @@ function QuickAddModalContent() {
         toAccountId: type === "TRANSFER" ? toAccountId : null,
         categoryId: type === "TRANSFER" ? null : categoryId,
         amountMinor,
+        destinationAmountMinor,
+        exchangeRateMicros,
         direction: type === "EXPENSE" ? "OUT" : type === "INCOME" ? "IN" : null,
         type,
         transactionDate: date,
@@ -407,7 +437,7 @@ function QuickAddModalContent() {
               >
                 {activeAccounts.map((a) => (
                   <option key={a.id} value={a.id}>
-                    {a.name}
+                    {a.name} ({a.currency})
                   </option>
                 ))}
               </select>
@@ -428,10 +458,53 @@ function QuickAddModalContent() {
                   .filter((a) => a.id !== accountId)
                   .map((a) => (
                     <option key={a.id} value={a.id}>
-                      {a.name}
+                      {a.name} ({a.currency})
                     </option>
                   ))}
               </select>
+            </div>
+          )}
+
+          {isUsdToLkrTransfer && (
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <label className="space-y-1">
+                <span className="text-[11px] font-medium text-[var(--text-muted)]">Final LKR amount</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  data-testid="quick-add-destination-amount"
+                  value={destinationAmountStr}
+                  onChange={(e) => {
+                    setDestinationAmountStr(e.target.value);
+                    const destinationMinor = Math.round(Number(e.target.value) * 100);
+                    const sourceMinor = Math.round(evalResult.value * 100);
+                    setExchangeRateStr(
+                      sourceMinor > 0 && destinationMinor > 0
+                        ? (calculateExchangeRateMicros(sourceMinor, destinationMinor) / 1_000_000).toFixed(6)
+                        : "",
+                    );
+                  }}
+                  placeholder="Optional"
+                  className="w-full px-2.5 py-2 rounded border border-hairline bg-[var(--bg)] text-[var(--text)] font-mono focus:outline-none focus:ring-1 focus:ring-[var(--text)]"
+                />
+              </label>
+              <label className="space-y-1">
+                <span className="text-[11px] font-medium text-[var(--text-muted)]">Rate (LKR / USD)</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.000001"
+                  data-testid="quick-add-exchange-rate"
+                  value={exchangeRateStr}
+                  onChange={(e) => {
+                    setExchangeRateStr(e.target.value);
+                    setDestinationAmountStr("");
+                  }}
+                  placeholder="Optional"
+                  className="w-full px-2.5 py-2 rounded border border-hairline bg-[var(--bg)] text-[var(--text)] font-mono focus:outline-none focus:ring-1 focus:ring-[var(--text)]"
+                />
+              </label>
             </div>
           )}
 
@@ -439,7 +512,7 @@ function QuickAddModalContent() {
           <div className="p-3 rounded-lg border border-hairline bg-[var(--bg)] space-y-1">
             <div className="flex items-baseline justify-between">
               <span className="text-[11px] font-medium text-[var(--text-muted)] uppercase tracking-wider">
-                Amount
+                Amount ({sourceAccount?.currency || "LKR"})
               </span>
               <span
                 data-testid="calculator-preview"
@@ -613,4 +686,3 @@ function QuickAddModalContent() {
     </>
   );
 }
-

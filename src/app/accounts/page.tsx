@@ -54,14 +54,13 @@ export default function AccountsPage() {
     bankAccounts,
     creditAccounts,
     cashSubtotal,
-    bankSubtotal,
+    bankSubtotalByCurrency,
     creditSubtotal,
     fixedDepositsSubtotal,
     loanRemainingMap,
     loansSubtotal,
-    assetsTotal,
-    liabilitiesTotal,
-    netWorthTotal,
+    assetsByCurrency,
+    liabilitiesByCurrency,
     settlingCardCycle,
     householdRoleMap,
     activeHouseholdId,
@@ -70,6 +69,7 @@ export default function AccountsPage() {
   // Form State
   const [name, setName] = useState("");
   const [type, setType] = useState<"CASH" | "BANK_SAVINGS" | "CREDIT_CARD">("CASH");
+  const [currency, setCurrency] = useState<"LKR" | "USD">("LKR");
   const [openingBalanceStr, setOpeningBalanceStr] = useState("0.00");
   const [accountNumberLast4, setAccountNumberLast4] = useState("");
   const [bankSender, setBankSender] = useState("");
@@ -109,6 +109,7 @@ export default function AccountsPage() {
     setEditingAccount(null);
     setName("");
     setType("CASH");
+    setCurrency("LKR");
     setAccessScope("PRIVATE");
     setOpeningBalanceStr("0.00");
     setAccountNumberLast4("");
@@ -125,6 +126,7 @@ export default function AccountsPage() {
     setEditingAccount(acc);
     setName(acc.name);
     setType(acc.type);
+    setCurrency(acc.currency === "USD" && acc.type === "BANK_SAVINGS" ? "USD" : "LKR");
     setAccessScope(acc.accessScope || "PRIVATE");
     setOpeningBalanceStr((acc.openingBalanceMinor / 100).toFixed(2));
     setAccountNumberLast4(acc.accountNumberLast4 || "");
@@ -194,6 +196,7 @@ export default function AccountsPage() {
       await localUpdateAccount(db, editingAccount.id, {
         name: name.trim(),
         type,
+        currency: type === "BANK_SAVINGS" ? currency : "LKR",
         openingBalanceMinor: openingMinor,
         accountNumberLast4: accountNumberLast4.trim() || null,
         bankSenderIds,
@@ -210,7 +213,7 @@ export default function AccountsPage() {
         name: name.trim(),
         type,
         openingBalanceMinor: openingMinor,
-        currency: "LKR",
+        currency: type === "BANK_SAVINGS" ? currency : "LKR",
         accountNumberLast4: accountNumberLast4.trim() || null,
         bankSenderIds,
         accessScope,
@@ -268,19 +271,24 @@ export default function AccountsPage() {
         <div>
           <span className="text-[11px] text-[var(--text-muted)] font-medium">Assets</span>
           <p data-testid="net-worth-assets" className="text-income font-semibold tabular-nums mt-0.5">
-            {formatMoney(assetsTotal)}
+            <span className="block">{formatMoney(assetsByCurrency.LKR, "LKR")}</span>
+            {assetsByCurrency.USD !== 0 && <span className="block text-[10px]">{formatMoney(assetsByCurrency.USD, "USD")}</span>}
           </p>
         </div>
         <div>
           <span className="text-[11px] text-[var(--text-muted)] font-medium">Liabilities</span>
           <p data-testid="net-worth-liabilities" className="text-expense font-semibold tabular-nums mt-0.5">
-            {formatMoney(liabilitiesTotal)}
+            <span className="block">{formatMoney(liabilitiesByCurrency.LKR, "LKR")}</span>
+            {liabilitiesByCurrency.USD !== 0 && <span className="block text-[10px]">{formatMoney(liabilitiesByCurrency.USD, "USD")}</span>}
           </p>
         </div>
         <div>
           <span className="text-[11px] text-[var(--text-muted)] font-medium">Net Worth</span>
           <p data-testid="net-worth-total" className="text-[var(--text)] font-semibold tabular-nums mt-0.5">
-            {formatMoney(netWorthTotal)}
+            <span className="block">{formatMoney(assetsByCurrency.LKR - liabilitiesByCurrency.LKR, "LKR")}</span>
+            {(assetsByCurrency.USD !== 0 || liabilitiesByCurrency.USD !== 0) && (
+              <span className="block text-[10px]">{formatMoney(assetsByCurrency.USD - liabilitiesByCurrency.USD, "USD")}</span>
+            )}
           </p>
         </div>
       </div>
@@ -376,7 +384,8 @@ export default function AccountsPage() {
                   <span>Bank accounts</span>
                 </span>
                 <span data-testid="subtotal-bank" className="tabular-nums font-semibold text-[var(--text)]">
-                  {formatMoney(bankSubtotal)}
+                  <span className="block">{formatMoney(bankSubtotalByCurrency.LKR, "LKR")}</span>
+                  {bankSubtotalByCurrency.USD !== 0 && <span className="block">{formatMoney(bankSubtotalByCurrency.USD, "USD")}</span>}
                 </span>
               </div>
               <div className="grid gap-2">
@@ -892,6 +901,22 @@ export default function AccountsPage() {
                 </div>
 
                 {/* Access Scope (Private vs Shared) */}
+                {type === "BANK_SAVINGS" && (
+                  <div className="space-y-1">
+                    <label className="font-medium text-[var(--text-muted)]">Currency</label>
+                    <select
+                      data-testid="account-currency"
+                      value={currency}
+                      onChange={(e) => setCurrency(e.target.value as "LKR" | "USD")}
+                      className="w-full px-3 py-2 rounded border border-hairline bg-[var(--bg)] text-[var(--text)] focus:outline-none focus:ring-1 focus:ring-[var(--text)]"
+                    >
+                      <option value="LKR">LKR — Sri Lankan Rupee</option>
+                      <option value="USD">USD — US Dollar</option>
+                    </select>
+                  </div>
+                )}
+
+                {/* Access Scope (Private vs Shared) */}
                 <div className="space-y-1">
                   <label className="font-medium text-[var(--text-muted)]">Access Scope</label>
                   <div className="grid grid-cols-2 gap-2">
@@ -1185,7 +1210,7 @@ const AccountCard = memo(function AccountCard({
             {account.bankSenderIds?.[0] && <span>{account.bankSenderIds[0]}</span>}
             {account.type === "CREDIT_CARD" && (
               <>
-                {!isContributor && account.creditLimitMinor && <span>Limit: {formatMoney(account.creditLimitMinor)}</span>}
+                {!isContributor && account.creditLimitMinor && <span>Limit: {formatMoney(account.creditLimitMinor, account.currency)}</span>}
                 {account.statementCutoffDay && <span>Cutoff: Day {account.statementCutoffDay}</span>}
                 {account.paymentDueDay && <span>Due: Day {account.paymentDueDay}</span>}
               </>
@@ -1197,10 +1222,10 @@ const AccountCard = memo(function AccountCard({
           {account.type === "CREDIT_CARD" && balance < 0 ? (
             <div className="text-right">
               <div data-testid="card-outstanding" className="font-semibold text-xs tabular-nums text-expense">
-                Outstanding {isContributor ? "—" : formatMoney(Math.abs(balance))}
+                Outstanding {isContributor ? "—" : formatMoney(Math.abs(balance), account.currency)}
               </div>
               <div data-testid="account-card-balance" className="text-[10px] text-[var(--text-muted)] tabular-nums">
-                <span data-testid="account-balance">{isContributor ? "—" : formatMoney(balance)}</span>
+                <span data-testid="account-balance">{isContributor ? "—" : formatMoney(balance, account.currency)}</span>
               </div>
             </div>
           ) : (
@@ -1216,7 +1241,7 @@ const AccountCard = memo(function AccountCard({
                   : "text-[var(--text)]"
               }`}
             >
-              <span data-testid="account-card-balance">{isContributor ? "—" : formatMoney(balance)}</span>
+              <span data-testid="account-card-balance">              {isContributor ? "—" : formatMoney(balance, account.currency)}</span>
             </span>
           )}
 

@@ -231,7 +231,10 @@ export async function POST(request: NextRequest) {
               type: payload.type || "CASH",
               openingBalanceMinor: payload.openingBalanceMinor ?? 0,
               balanceCacheMinor: payload.balanceCacheMinor ?? null,
-              currency: payload.currency || "LKR",
+              currency:
+                payload.type === "BANK_SAVINGS" && payload.currency === "USD"
+                  ? "USD"
+                  : "LKR",
               accountNumberLast4: payload.accountNumberLast4 || null,
               bankSenderIds: payload.bankSenderIds || [],
               accessScope: payload.accessScope || "PRIVATE",
@@ -249,7 +252,10 @@ export async function POST(request: NextRequest) {
               type: payload.type,
               openingBalanceMinor: payload.openingBalanceMinor,
               balanceCacheMinor: payload.balanceCacheMinor,
-              currency: payload.currency,
+              currency:
+                payload.type === "BANK_SAVINGS" && payload.currency === "USD"
+                  ? "USD"
+                  : "LKR",
               accountNumberLast4: payload.accountNumberLast4,
               bankSenderIds: payload.bankSenderIds,
               accessScope: payload.accessScope,
@@ -479,6 +485,8 @@ export async function POST(request: NextRequest) {
               toAccountId: payload.toAccountId || null,
               categoryId: payload.categoryId || null,
               amountMinor: payload.amountMinor ?? 0,
+              destinationAmountMinor: payload.destinationAmountMinor ?? null,
+              exchangeRateMicros: payload.exchangeRateMicros ?? null,
               direction: payload.direction || null,
               type: payload.type || "EXPENSE",
               subType: payload.subType || null,
@@ -503,6 +511,8 @@ export async function POST(request: NextRequest) {
               toAccountId: payload.toAccountId || null,
               categoryId: payload.categoryId || null,
               amountMinor: payload.amountMinor,
+              destinationAmountMinor: payload.destinationAmountMinor ?? null,
+              exchangeRateMicros: payload.exchangeRateMicros ?? null,
               direction: payload.direction || null,
               type: payload.type,
               subType: payload.subType || null,
@@ -587,6 +597,12 @@ export async function POST(request: NextRequest) {
               ...(payload.toAccountId !== undefined && { toAccountId: payload.toAccountId }),
               ...(payload.categoryId !== undefined && { categoryId: payload.categoryId }),
               ...(payload.amountMinor !== undefined && { amountMinor: payload.amountMinor }),
+              ...(payload.destinationAmountMinor !== undefined && {
+                destinationAmountMinor: payload.destinationAmountMinor,
+              }),
+              ...(payload.exchangeRateMicros !== undefined && {
+                exchangeRateMicros: payload.exchangeRateMicros,
+              }),
               ...(payload.direction !== undefined && { direction: payload.direction }),
               ...(payload.type !== undefined && { type: payload.type }),
               ...(payload.subType !== undefined && { subType: payload.subType }),
