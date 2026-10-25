@@ -20,9 +20,11 @@ import { useMounted } from "@/lib/use-mounted";
 import { useTheme } from "../theme-provider";
 import { SyncIndicator } from "../sync-provider";
 import { useQuickAdd } from "../transaction/quick-add-context";
+import { useTabNavigation, TabId } from "./tab-navigation-context";
 
 export function Sidebar() {
   const pathname = usePathname();
+  const { activeTab, switchToTab, prefetchTab } = useTabNavigation();
   const { resolvedTheme, toggleTheme, colorSwap, toggleColorSwap } = useTheme();
   const { openQuickAdd } = useQuickAdd();
   const [collapsed, setCollapsed] = useState(false);
@@ -49,7 +51,7 @@ export function Sidebar() {
     });
   };
 
-  const navItems = [
+  const navItems: { id: TabId; name: string; href: string; icon: typeof ArrowLeftRight }[] = [
     { id: "trans", name: "Trans.", href: "/", icon: ArrowLeftRight },
     { id: "stats", name: "Stats", href: "/stats", icon: BarChart3 },
     { id: "budget", name: "Budget", href: "/budget", icon: PieChart },
@@ -91,8 +93,11 @@ export function Sidebar() {
       {/* Navigation Links */}
       <nav className="flex-1 py-4 px-2 space-y-1">
         {navItems.map((item) => {
-          const isActive =
-            item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
+          const isActive = activeTab
+            ? activeTab === item.id
+            : item.href === "/"
+            ? pathname === "/"
+            : pathname.startsWith(item.href);
           const Icon = item.icon;
 
           return (
@@ -103,6 +108,11 @@ export function Sidebar() {
               data-testid={`sidebar-nav-${item.id}`}
               data-active={isActive ? "true" : "false"}
               aria-current={isActive ? "page" : undefined}
+              onClick={(e) => {
+                e.preventDefault();
+                switchToTab(item.id);
+              }}
+              onMouseEnter={() => prefetchTab(item.id)}
               className={`flex items-center gap-3 px-3 py-2.5 rounded text-sm font-medium transition-colors ${
                 isActive
                   ? "bg-[var(--border)] text-[var(--text)] font-semibold"

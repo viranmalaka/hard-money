@@ -8,6 +8,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { useTransactions, useCategories } from "@/components/sync-provider";
 import { formatMoney, calculatePercentagesLargestRemainder } from "@/lib/finance-core";
 import { CategoryList, CategoryTransactions, TrendSection } from "@/components/stats/stats-sections";
+import { useTabActiveRefresh } from "@/hooks/use-tab-active-refresh";
 
 function getMonthString(d: Date): string {
   const y = d.getFullYear();
@@ -19,6 +20,11 @@ export default function StatsPage() {
   const [currentDate, setCurrentDate] = useState(() => new Date(2026, 9, 1)); // Oct 2026 default
   const [activeTab, setActiveTab] = useState<"expense" | "income" | "trend">("expense");
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
+
+  // Revalidate or trigger refresh when stats tab becomes active
+  useTabActiveRefresh("/stats", () => {
+    // Tab became active; Dexie live queries auto-reflect changes, hook provides hook point for background sync
+  });
 
   const transactions = useTransactions();
   const categories = useCategories();

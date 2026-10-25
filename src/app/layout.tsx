@@ -11,6 +11,8 @@ import { Fab } from "@/components/ui/fab";
 import { PwaManager } from "@/components/pwa-manager";
 import { ScrollContainer } from "@/components/navigation/scroll-container";
 import { QueryProvider } from "@/components/query-provider";
+import { TabNavigationProvider } from "@/components/navigation/tab-navigation-context";
+import { NativeTabContainer } from "@/components/navigation/native-tab-container";
 
 export const viewport: Viewport = {
   width: "device-width",
@@ -58,29 +60,33 @@ export default function RootLayout({
             <QueryProvider>
               <SyncProvider>
                 <QuickAddProvider>
-                  <div className="flex h-full w-full overflow-hidden pt-shell-safe">
-                  {/* Desktop Collapsible Sidebar */}
-                  <Sidebar />
+                  <TabNavigationProvider>
+                    <div className="flex h-full w-full overflow-hidden pt-shell-safe">
+                      {/* Desktop Collapsible Sidebar */}
+                      <Sidebar />
 
-                  {/* Main Application Area */}
-                  <div className="flex-1 flex flex-col h-full min-w-0 overflow-hidden relative">
-                    <ScrollContainer className="flex-1 overflow-y-auto pb-nav-safe">
-                      {children}
-                    </ScrollContainer>
+                      {/* Main Application Area */}
+                      <div className="flex-1 flex flex-col h-full min-w-0 overflow-hidden relative">
+                        <ScrollContainer className="flex-1 overflow-y-auto pb-nav-safe">
+                          <NativeTabContainer>
+                            {children}
+                          </NativeTabContainer>
+                        </ScrollContainer>
 
-                    {/* Floating Action Button */}
-                    <Fab />
-                  </div>
+                        {/* Floating Action Button */}
+                        <Fab />
+                      </div>
 
-                  {/* Mobile Bottom Navigation */}
-                  <BottomNav />
+                      {/* Mobile Bottom Navigation */}
+                      <BottomNav />
 
-                  {/* Global Quick-Add Modal */}
-                  <QuickAddModal />
+                      {/* Global Quick-Add Modal */}
+                      <QuickAddModal />
 
-                  {/* PWA Service Worker & Update Handler */}
-                  <PwaManager />
-                  </div>
+                      {/* PWA Service Worker & Update Handler */}
+                      <PwaManager />
+                    </div>
+                  </TabNavigationProvider>
                 </QuickAddProvider>
               </SyncProvider>
             </QueryProvider>

@@ -13,6 +13,9 @@ export default defineConfig({
     timezoneId: "Asia/Colombo",
     locale: "en-LK",
     serviceWorkers: "block",
+    extraHTTPHeaders: {
+      "x-e2e-secret": process.env.E2E_SECRET || "e2e-test-secret",
+    },
   },
   projects: [
     {
@@ -44,5 +47,9 @@ export default defineConfig({
     url: "http://localhost:3000/api/health",
     reuseExistingServer: true,
     timeout: 120000,
+    env: {
+      E2E_MODE: "1",
+      E2E_SECRET: process.env.E2E_SECRET || "e2e-test-secret",
+    },
   },
 });

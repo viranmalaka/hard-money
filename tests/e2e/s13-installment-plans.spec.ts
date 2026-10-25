@@ -247,6 +247,7 @@ test.describe("Step 13 — 0% Installment Plans @s13", () => {
     await app.testApi.setClock(clockTime);
 
     await app.go("accounts");
+    await page.click('[data-testid="tab-liabilities"]');
     await app.triggerSync();
 
     // Click Add Ongoing Plan
@@ -257,7 +258,7 @@ test.describe("Step 13 — 0% Installment Plans @s13", () => {
     // Fill form
     await modal.locator('[data-testid="installment-merchant-input"]').fill("Singer Home");
     await modal.locator('[data-testid="installment-total-input"]').fill("120000");
-    await modal.locator('[data-testid="installment-tenure-input"]').selectOption("12");
+    await modal.locator('[data-testid="installment-tenure-input"]').fill("12");
     await modal.locator('[data-testid="installment-paid-input"]').fill("0");
     await modal.locator('[data-testid="installment-plan-submit"]').click();
 

@@ -8,6 +8,10 @@ export class AuthHelper {
 
   async register(data: { name: string; email: string; password?: string }) {
     await this.page.context().clearCookies();
+    await this.page.context().setExtraHTTPHeaders({
+      "x-forwarded-for": `10.0.${Math.floor(Math.random() * 250)}.${Math.floor(Math.random() * 250)}`,
+      "x-e2e-secret": process.env.E2E_SECRET || "e2e-test-secret",
+    });
     await this.page.goto("/register");
     const nameInput = this.page.locator('[data-testid="register-name"]').first();
     await nameInput.waitFor({ state: "visible" });
