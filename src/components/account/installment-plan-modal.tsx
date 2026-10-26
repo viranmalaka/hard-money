@@ -11,6 +11,7 @@ import {
   localCreateCategory,
 } from "@/lib/sync/client";
 import { formatMoney, parseMoneyToMinor } from "@/lib/finance-core/money";
+import { useModalHistory } from "@/hooks/use-modal-history";
 
 interface InstallmentPlanModalProps {
   isOpen: boolean;
@@ -27,6 +28,7 @@ export function InstallmentPlanModal({
   defaultAccountId,
   installmentPlan = null,
 }: InstallmentPlanModalProps) {
+  useModalHistory(isOpen, onClose, "installment-modal");
   const { db, userId } = useSync();
   const categories = useCategories();
 

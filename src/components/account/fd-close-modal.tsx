@@ -8,6 +8,7 @@ import { localUpdateFixedDeposit } from "@/lib/sync/client";
 import { formatMoney, parseMoneyToMinor } from "@/lib/finance-core/money";
 import { useMutation } from "@tanstack/react-query";
 import { closeFixedDeposit } from "@/services/fixed-deposit-service";
+import { useModalHistory } from "@/hooks/use-modal-history";
 
 interface FdCloseModalProps {
   fd: LocalFixedDeposit | null;
@@ -17,6 +18,7 @@ interface FdCloseModalProps {
 }
 
 export function FdCloseModal({ fd, isOpen, onClose, accounts }: FdCloseModalProps) {
+  useModalHistory(isOpen, onClose, "fd-close-modal");
   const { db } = useSync();
 
   const [proceedsStr, setProceedsStr] = useState("");

@@ -6,6 +6,7 @@ import { LocalAccount, LocalLoan, LocalLoanScheduleEntry, LocalLoanPayment } fro
 import { formatMoney, parseMoneyToMinor } from "@/lib/finance-core/money";
 import { useSync } from "@/components/sync-provider";
 import { localDeleteLoan } from "@/lib/sync/client";
+import { useModalHistory } from "@/hooks/use-modal-history";
 
 const getEntryEmi = (entry: LocalLoanScheduleEntry) =>
   entry.emiAmountMinor ?? (entry.principalComponentMinor + entry.interestComponentMinor);
@@ -18,6 +19,7 @@ interface LoanDetailModalProps {
 }
 
 export function LoanDetailModal({ loan, isOpen, onClose, accounts }: LoanDetailModalProps) {
+  useModalHistory(isOpen, onClose, "loan-detail-modal");
   const { sync, db } = useSync();
 
   const [schedule, setSchedule] = useState<LocalLoanScheduleEntry[]>([]);

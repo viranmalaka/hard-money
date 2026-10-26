@@ -7,6 +7,7 @@ import { useAccounts, useCategories, useTransactions, useSync } from "@/componen
 import { localUpdateTransaction, localDeleteTransaction, localCreateInstallmentPlan } from "@/lib/sync/client";
 import { LocalTransaction, LocalSplitItem } from "@/lib/db";
 import { formatMoney, parseMoneyToMinor } from "@/lib/finance-core/money";
+import { useModalHistory } from "@/hooks/use-modal-history";
 import {
   calculateConvertedMinor,
   calculateExchangeRateMicros,
@@ -47,6 +48,7 @@ function TransactionEditContent({
   onClose: () => void;
   onDeleted?: (tx: LocalTransaction) => void;
 }) {
+  useModalHistory(true, onClose, "transaction-edit");
   const { db } = useSync();
   const accounts = useAccounts();
   const categories = useCategories();

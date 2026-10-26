@@ -6,6 +6,7 @@ import { LocalAccount } from "@/lib/db";
 import { useSync } from "@/components/sync-provider";
 import { localCreateLoan } from "@/lib/sync/client";
 import { parseMoneyToMinor } from "@/lib/finance-core/money";
+import { useModalHistory } from "@/hooks/use-modal-history";
 
 interface LoanModalProps {
   isOpen: boolean;
@@ -14,6 +15,7 @@ interface LoanModalProps {
 }
 
 export function LoanModal({ isOpen, onClose, accounts }: LoanModalProps) {
+  useModalHistory(isOpen, onClose, "loan-modal");
   const { db, userId, sync } = useSync();
 
   const [kind, setKind] = useState<"LOAN" | "LEASE">("LOAN");

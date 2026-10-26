@@ -11,6 +11,7 @@ import {
   KeypadToken,
 } from "@/lib/finance-core/calculator";
 import { useQuickAdd, TransactionType } from "./quick-add-context";
+import { useModalHistory } from "@/hooks/use-modal-history";
 import { CategoryIcon } from "@/components/ui/category-icon";
 import { NumberKeypadPopup } from "@/components/ui/number-keypad-popup";
 import { MobileQuickAdd } from "./mobile-quick-add";
@@ -52,6 +53,7 @@ export function QuickAddModal() {
 
 function QuickAddModalContent() {
   const { closeQuickAdd, initialType, initialAccountId } = useQuickAdd();
+  useModalHistory(true, closeQuickAdd, "quick-add");
   const accounts = useAccounts();
   const categories = useCategories();
   const { db, userId } = useSync();

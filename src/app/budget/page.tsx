@@ -1,9 +1,10 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useCallback } from "react";
 import { Plus, Trash2, PieChart, AlertTriangle, ArrowUpRight, ArrowDownRight } from "lucide-react";
 import { MonthSwitcher } from "@/components/ui/month-switcher";
 import { EmptyState } from "@/components/ui/empty-state";
+import { useModalHistory } from "@/hooks/use-modal-history";
 import {
   useBudgets,
   useBudgetSnapshots,
@@ -200,11 +201,13 @@ export default function BudgetPage() {
     setModalOpen(true);
   }, []);
 
-  const closeModal = () => {
+  const closeModal = useCallback(() => {
     setModalOpen(false);
     setEditingBudget(null);
     setFormError(null);
-  };
+  }, []);
+
+  useModalHistory(modalOpen, closeModal, "budget-modal");
 
   const handleSaveBudget = async (e: React.FormEvent) => {
     e.preventDefault();

@@ -6,6 +6,7 @@ import { LocalInstallmentPlan } from "@/lib/db";
 import { useSync } from "@/components/sync-provider";
 import { localCreateTransaction, localUpdateInstallmentPlan } from "@/lib/sync/client";
 import { formatMoney } from "@/lib/finance-core/money";
+import { useModalHistory } from "@/hooks/use-modal-history";
 
 interface EarlyPayoffModalProps {
   plan: LocalInstallmentPlan | null;
@@ -20,6 +21,7 @@ export function EarlyPayoffModal({
   isOpen,
   onClose,
 }: EarlyPayoffModalProps) {
+  useModalHistory(isOpen, onClose, "early-payoff-modal");
   const { db, userId } = useSync();
   const [submitting, setSubmitting] = useState(false);
 

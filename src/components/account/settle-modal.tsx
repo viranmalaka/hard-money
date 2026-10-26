@@ -7,6 +7,7 @@ import { useAccounts, useSync } from "@/components/sync-provider";
 import { localCreateTransaction } from "@/lib/sync/client";
 import { formatMoney, parseMoneyToMinor } from "@/lib/finance-core/money";
 import { getColomboDateString } from "@/lib/jobs/cron-runner";
+import { useModalHistory } from "@/hooks/use-modal-history";
 
 interface SettleModalProps {
   card: LocalAccount;
@@ -23,6 +24,7 @@ export function SettleModal({
   isOpen,
   onClose,
 }: SettleModalProps) {
+  useModalHistory(isOpen, onClose, "settle-modal");
   const accounts = useAccounts();
   const { db, sync } = useSync();
 

@@ -7,6 +7,7 @@ import { useSync } from "@/components/sync-provider";
 import { localCreateFixedDeposit, localUpdateFixedDeposit } from "@/lib/sync/client";
 import { parseMoneyToMinor } from "@/lib/finance-core/money";
 import { addMonthsClamped } from "@/lib/finance-core/dates";
+import { useModalHistory } from "@/hooks/use-modal-history";
 
 interface FixedDepositModalProps {
   isOpen: boolean;
@@ -16,6 +17,7 @@ interface FixedDepositModalProps {
 }
 
 export function FixedDepositModal({ isOpen, onClose, accounts, fixedDeposit = null }: FixedDepositModalProps) {
+  useModalHistory(isOpen, onClose, "fixed-deposit-modal");
   const { db, userId } = useSync();
 
   const [bankName, setBankName] = useState("");
@@ -45,36 +47,38 @@ export function FixedDepositModal({ isOpen, onClose, accounts, fixedDeposit = nu
 
   useEffect(() => {
     if (!isOpen) return;
-    if (fixedDeposit) {
-      setBankName(fixedDeposit.bankName);
-      setAccountNumber(fixedDeposit.accountNumber || "");
-      setPrincipalStr((fixedDeposit.principalAmountMinor / 100).toFixed(2));
-      setAprStr((fixedDeposit.annualInterestRateBps / 100).toFixed(2));
-      setTenureMonthsStr(String(fixedDeposit.tenureMonths));
-      setStartDateStr(fixedDeposit.startDate.slice(0, 10));
-      setCompoundingFrequency(fixedDeposit.compoundingFrequency);
-      setPayoutMode(fixedDeposit.payoutMode);
-      setLinkedAccountId(fixedDeposit.linkedPayoutAccountId || "");
-      setFundingAccountId(fixedDeposit.fundingAccountId || "");
-      setWhtStr((fixedDeposit.withholdingTaxRateBps / 100).toFixed(1));
-      setAutoRenew(fixedDeposit.autoRenew);
-      isWhtDirtyRef.current = true;
-    } else {
-      setBankName("");
-      setAccountNumber("");
-      setPrincipalStr("1000000.00");
-      setAprStr("12.0");
-      setTenureMonthsStr("12");
-      setStartDateStr(new Date().toISOString().slice(0, 10));
-      setCompoundingFrequency("MONTHLY");
-      setPayoutMode("MONTHLY_PAYOUT_TO_ACCOUNT");
-      setLinkedAccountId("");
-      setFundingAccountId("");
-      setWhtStr("0.0");
-      setAutoRenew(false);
-      isWhtDirtyRef.current = false;
-    }
-    setErrors({});
+    queueMicrotask(() => {
+      if (fixedDeposit) {
+        setBankName(fixedDeposit.bankName);
+        setAccountNumber(fixedDeposit.accountNumber || "");
+        setPrincipalStr((fixedDeposit.principalAmountMinor / 100).toFixed(2));
+        setAprStr((fixedDeposit.annualInterestRateBps / 100).toFixed(2));
+        setTenureMonthsStr(String(fixedDeposit.tenureMonths));
+        setStartDateStr(fixedDeposit.startDate.slice(0, 10));
+        setCompoundingFrequency(fixedDeposit.compoundingFrequency);
+        setPayoutMode(fixedDeposit.payoutMode);
+        setLinkedAccountId(fixedDeposit.linkedPayoutAccountId || "");
+        setFundingAccountId(fixedDeposit.fundingAccountId || "");
+        setWhtStr((fixedDeposit.withholdingTaxRateBps / 100).toFixed(1));
+        setAutoRenew(fixedDeposit.autoRenew);
+        isWhtDirtyRef.current = true;
+      } else {
+        setBankName("");
+        setAccountNumber("");
+        setPrincipalStr("1000000.00");
+        setAprStr("12.0");
+        setTenureMonthsStr("12");
+        setStartDateStr(new Date().toISOString().slice(0, 10));
+        setCompoundingFrequency("MONTHLY");
+        setPayoutMode("MONTHLY_PAYOUT_TO_ACCOUNT");
+        setLinkedAccountId("");
+        setFundingAccountId("");
+        setWhtStr("0.0");
+        setAutoRenew(false);
+        isWhtDirtyRef.current = false;
+      }
+      setErrors({});
+    });
   }, [isOpen, fixedDeposit]);
 
   useEffect(() => {

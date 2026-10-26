@@ -1,6 +1,6 @@
 "use client";
 
-import React, { memo, useMemo, useState } from "react";
+import React, { memo, useMemo, useState, useCallback } from "react";
 import Link from "next/link";
 import { Wallet, Plus, CreditCard, Building2, Banknote, Edit2, Archive, Trash2, X, AlertTriangle, PiggyBank, Landmark } from "lucide-react";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -19,12 +19,20 @@ import { FdCloseModal } from "@/components/account/fd-close-modal";
 import { LoanModal } from "@/components/account/loan-modal";
 import { LoanDetailModal } from "@/components/account/loan-detail-modal";
 import { useAccountPortfolio } from "@/hooks/use-account-portfolio";
+import { useModalHistory } from "@/hooks/use-modal-history";
 
 export default function AccountsPage() {
   const [showArchived, setShowArchived] = useState(false);
   const [activeTab, setActiveTab] = useState<"cash_bank" | "liabilities" | "investments">("cash_bank");
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingAccount, setEditingAccount] = useState<LocalAccount | null>(null);
+
+  const closeForm = useCallback(() => {
+    setIsFormOpen(false);
+    setEditingAccount(null);
+  }, []);
+
+  useModalHistory(isFormOpen, closeForm, "account-form");
   const [settlingCard, setSettlingCard] = useState<LocalAccount | null>(null);
   const [isInstallmentModalOpen, setIsInstallmentModalOpen] = useState(false);
   const [editingInstallmentPlan, setEditingInstallmentPlan] = useState<LocalInstallmentPlan | null>(null);
