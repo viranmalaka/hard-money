@@ -683,4 +683,162 @@ Get protected -Do not Share OTP`;
     expect(smsRecord.status).toBe("PROCESSED");
     expect(smsRecord.parsedPayload?.balanceAfterText).toBe("138,783.04");
   });
+
+  test("S14-17: Inter-account transfer between DFCC and Sampath -> auto-merged as a single TRANSFER transaction", async ({ page }) => {
+    const app = new AppHelper(page);
+    await app.auth.register({ name: "User S1417", email: "s1417@example.com" });
+    await app.waitForSyncIdle();
+
+    const userId = await page.evaluate(() => localStorage.getItem("hardmoney_active_user") || "user-s1417");
+
+    await app.testApi.seed({
+      accounts: [
+        {
+          id: "acc-dfcc-0726",
+          userId,
+          name: "DFCC Account",
+          type: "BANK_SAVINGS",
+          openingBalanceMinor: 50000000,
+          accountNumberLast4: "0726",
+          bankSenderIds: ["DFCC"],
+        },
+        {
+          id: "acc-sampath-4681",
+          userId,
+          name: "Sampath Account",
+          type: "BANK_SAVINGS",
+          openingBalanceMinor: 1000000,
+          accountNumberLast4: "4681",
+          bankSenderIds: ["SAMPATH"],
+        },
+      ],
+    });
+
+    const genRes = await page.request.post("http://localhost:3000/api/user/webhook-key");
+    const { apiKey } = await genRes.json();
+
+    // 1. Post DFCC debit SMS
+    const dfccSms = "Your A/C No: ********0726 is debited with LKR1,000.00 on 27 OCT 2026 ref: Outward CEFT Transfer. Your bal is LKR495,975.39. If unauthorized call 0112350035";
+    const res1 = await page.request.post("http://localhost:3000/api/v1/webhooks/sms-ingress", {
+      headers: { "x-api-key": apiKey },
+      data: {
+        rawSms: dfccSms,
+        sender: "DFCC",
+        receivedAt: "2026-10-27T18:58:30.000Z",
+      },
+    });
+    expect(res1.status()).toBe(202);
+
+    // 2. Post Sampath credit SMS
+    const sampathSms = `LKR 1,000.00 credited to AC **4681 for test
+27/10/2026 18:58:50
+To Inq Call 0112303050
+Get protected -Do not Share OTP`;
+    const res2 = await page.request.post("http://localhost:3000/api/v1/webhooks/sms-ingress", {
+      headers: { "x-api-key": apiKey },
+      data: {
+        rawSms: sampathSms,
+        sender: "SAMPATH",
+        receivedAt: "2026-10-27T18:58:50.000Z",
+      },
+    });
+    expect(res2.status()).toBe(202);
+
+    await app.testApi.tick();
+
+    const snapshot = await app.testApi.getSnapshot();
+    // Reconciled into exactly 1 TRANSFER transaction!
+    expect(snapshot.transactions.length).toBe(1);
+    const tx = snapshot.transactions[0];
+    expect(tx.type).toBe("TRANSFER");
+    expect(tx.accountId).toBe("acc-dfcc-0726");
+    expect(tx.toAccountId).toBe("acc-sampath-4681");
+    expect(tx.amountMinor).toBe(100000);
+
+    // Both SMS records are marked PROCESSED and linked to this transaction
+    expect(snapshot.bankSms.length).toBe(2);
+    expect(snapshot.bankSms.every((s: { status: string; transactionId?: string }) => s.status === "PROCESSED" && s.transactionId === tx.id)).toBe(true);
+  });
+
+  test("S14-18: Inter-account transfer under ALWAYS_REVIEW_GEMINI -> flagged as POSSIBLE_TRANSFER and merged via Inbox API", async ({ page }) => {
+    const app = new AppHelper(page);
+    await app.auth.register({ name: "User S1418", email: "s1418@example.com" });
+    await app.waitForSyncIdle();
+
+    const userId = await page.evaluate(() => localStorage.getItem("hardmoney_active_user") || "user-s1418");
+
+    await app.testApi.seed({
+      accounts: [
+        {
+          id: "acc-dfcc-0726-rev",
+          userId,
+          name: "DFCC Account",
+          type: "BANK_SAVINGS",
+          openingBalanceMinor: 50000000,
+          accountNumberLast4: "0726",
+          bankSenderIds: ["DFCC"],
+        },
+        {
+          id: "acc-sampath-4681-rev",
+          userId,
+          name: "Sampath Account",
+          type: "BANK_SAVINGS",
+          openingBalanceMinor: 1000000,
+          accountNumberLast4: "4681",
+          bankSenderIds: ["SAMPATH"],
+        },
+      ],
+    });
+
+    // Set auto-post mode to ALWAYS_REVIEW_GEMINI so it stops at inbox
+    await page.request.patch("http://localhost:3000/api/user/gemini-settings", {
+      data: { smsAutoPostMode: "ALWAYS_REVIEW_GEMINI" },
+    });
+
+    const genRes = await page.request.post("http://localhost:3000/api/user/webhook-key");
+    const { apiKey } = await genRes.json();
+
+    // 1. Post DFCC debit
+    const dfccSms = "Your A/C No: ********0726 is debited with LKR1,000.00 on 27 OCT 2026 ref: Outward CEFT Transfer. Your bal is LKR495,975.39. If unauthorized call 0112350035";
+    await page.request.post("http://localhost:3000/api/v1/webhooks/sms-ingress", {
+      headers: { "x-api-key": apiKey },
+      data: {
+        rawSms: dfccSms,
+        sender: "DFCC",
+        receivedAt: "2026-10-27T18:58:30.000Z",
+      },
+    });
+
+    // 2. Post Sampath credit
+    const sampathSms = `LKR 1,000.00 credited to AC **4681 for test
+27/10/2026 18:58:50
+To Inq Call 0112303050
+Get protected -Do not Share OTP`;
+    await page.request.post("http://localhost:3000/api/v1/webhooks/sms-ingress", {
+      headers: { "x-api-key": apiKey },
+      data: {
+        rawSms: sampathSms,
+        sender: "SAMPATH",
+        receivedAt: "2026-10-27T18:58:50.000Z",
+      },
+    });
+
+    await app.testApi.tick();
+
+    const snapshot = await app.testApi.getSnapshot();
+    const reviewItem = snapshot.bankSms.find((s: { reviewReason?: string }) => s.reviewReason === "POSSIBLE_TRANSFER");
+    expect(reviewItem).toBeDefined();
+
+    // Call merge-transfer endpoint
+    const mergeRes = await page.request.post(`http://localhost:3000/api/sms/inbox/${reviewItem.id}/merge-transfer`);
+    expect(mergeRes.status()).toBe(200);
+
+    const afterMergeSnapshot = await app.testApi.getSnapshot();
+    expect(afterMergeSnapshot.transactions.length).toBe(1);
+    const tx = afterMergeSnapshot.transactions[0];
+    expect(tx.type).toBe("TRANSFER");
+    expect(tx.accountId).toBe("acc-dfcc-0726-rev");
+    expect(tx.toAccountId).toBe("acc-sampath-4681-rev");
+  });
 });
+

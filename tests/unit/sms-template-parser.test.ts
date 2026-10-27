@@ -250,4 +250,38 @@ AUTHCODE 090214 AVBAL LKR 1,567,769.48`,
       expect(res.payload?.isTransaction).toBe(false);
     }
   });
+
+  it("parses DFCC outward CEFT transfer SMS correctly", () => {
+    const msg =
+      "Your A/C No: ********0726 is debited with LKR1,000.00 on 27 OCT 2026 ref: Outward CEFT Transfer. Your bal is LKR495,975.39. If unauthorized call 0112350035";
+    const res = parseBankSmsTemplate("DFCC", msg);
+    expect(res.matched).toBe(true);
+    expect(res.bank).toBe("DFCC");
+    expect(res.payload?.isTransaction).toBe(true);
+    expect(res.payload?.transactionType).toBe("DEBIT");
+    expect(res.payload?.channel).toBe("ONLINE_TRANSFER");
+    expect(res.payload?.amountText).toBe("1,000.00");
+    expect(amountTextToMinor(res.payload?.amountText)).toBe(100000);
+    expect(res.payload?.accountLast4).toBe("0726");
+    expect(res.payload?.merchantOrEntity).toBe("Outward CEFT Transfer");
+    expect(res.payload?.balanceAfterText).toBe("495,975.39");
+  });
+
+  it("parses Sampath inward credit SMS with security footer correctly", () => {
+    const msg = `LKR 1,000.00 credited to AC **4681 for test
+27/10/2026 18:58:50
+To Inq Call 0112303050
+Get protected -Do not Share OTP`;
+    const res = parseBankSmsTemplate("SAMPATH", msg);
+    expect(res.matched).toBe(true);
+    expect(res.bank).toBe("SAMPATH");
+    expect(res.payload?.isTransaction).toBe(true);
+    expect(res.payload?.transactionType).toBe("CREDIT");
+    expect(res.payload?.channel).toBe("SALARY_OR_DEPOSIT");
+    expect(res.payload?.amountText).toBe("1,000.00");
+    expect(amountTextToMinor(res.payload?.amountText)).toBe(100000);
+    expect(res.payload?.accountLast4).toBe("4681");
+    expect(res.payload?.merchantOrEntity).toBe("test");
+  });
 });
+

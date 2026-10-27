@@ -20,6 +20,7 @@ export interface IngestionResult {
   reviewReason?: string;
   transactionId?: string;
   isMatchedManual?: boolean;
+  isTransferMerged?: boolean;
 }
 
 /**
@@ -164,6 +165,144 @@ export async function ingestParsedBankSms(
 
       await processBalanceMismatchHint(account, payload, receivedAt, smsTime);
       return { status: "PROCESSED", transactionId: existingFeeChild.id };
+    }
+  }
+
+  // 3b. Inter-Account Transfer Deduplication & Auto-Reconciliation
+  // When money is transferred between two user accounts (e.g. DFCC -> Sampath),
+  // two SMS arrive: one DEBIT and one CREDIT with matching amount within ±45 minutes.
+  const isExcludedFromTransfer =
+    payload.channel === "ATM_OWN" ||
+    payload.channel === "ATM_OTHER" ||
+    payload.channel === "BANK_CHARGE" ||
+    payload.channel === "CARD_PAYMENT" ||
+    (payload.channel as string) === "REFUND_REVERSAL" ||
+    payload.transactionType === "REFUND_REVERSAL";
+
+  if (!isExcludedFromTransfer) {
+    const isIncomingCredit =
+      payload.transactionType === "CREDIT" || payload.channel === "SALARY_OR_DEPOSIT";
+    const transferWindowMs = 45 * 60 * 1000; // 45 minutes
+    const minTransferTime = new Date(smsTime.getTime() - transferWindowMs);
+    const maxTransferTime = new Date(smsTime.getTime() + transferWindowMs);
+
+    // Look for an existing opposite transaction on another account of the same user
+    const targetType = isIncomingCredit ? "EXPENSE" : "INCOME";
+    const counterpartCandidates = await prisma.transaction.findMany({
+      where: {
+        userId,
+        accountId: { not: account.id },
+        toAccountId: null,
+        amountMinor,
+        type: targetType,
+        deletedAt: null,
+        transactionDate: { gte: minTransferTime, lte: maxTransferTime },
+      },
+      include: {
+        account: true,
+      },
+    });
+
+    if (counterpartCandidates.length > 0) {
+      // Pick nearest in time
+      counterpartCandidates.sort(
+        (a, b) =>
+          Math.abs(a.transactionDate.getTime() - smsTime.getTime()) -
+          Math.abs(b.transactionDate.getTime() - smsTime.getTime())
+      );
+      const matchedTx = counterpartCandidates[0];
+
+      // Check for transfer intent keywords
+      const TRANSFER_KEYWORDS =
+        /\b(?:ceft|transfer|transfers|outward|inward|fund\s*transfer|funds\s*transfer|slip|vsrpmt|credit\s*transfer)\b/i;
+
+      const incomingHasSignal =
+        payload.channel === "ONLINE_TRANSFER" ||
+        TRANSFER_KEYWORDS.test(rawMessage) ||
+        (payload.merchantOrEntity ? TRANSFER_KEYWORDS.test(payload.merchantOrEntity) : false);
+
+      const counterpartHasSignal =
+        matchedTx.subType === "ONLINE" ||
+        matchedTx.subType === "ONLINE_TRANSFER" ||
+        (matchedTx.note ? TRANSFER_KEYWORDS.test(matchedTx.note) : false);
+
+      const isHighConfidence = incomingHasSignal || counterpartHasSignal;
+
+      // Check user posting policy
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { smsAutoPostMode: true },
+      });
+      const autoPostMode = user?.smsAutoPostMode || "AUTO_VALIDATED";
+
+      const sourceAccount = isIncomingCredit ? matchedTx.account : account;
+      const destinationAccount = isIncomingCredit ? account : matchedTx.account;
+
+      if (isHighConfidence && autoPostMode === "AUTO_VALIDATED") {
+        // High confidence + auto-post enabled -> Merge directly into a single TRANSFER transaction
+        const nextSeq = await getNextServerSeq();
+        const transferNote =
+          (isIncomingCredit ? matchedTx.note : payload.merchantOrEntity) ||
+          `Transfer: ${sourceAccount.name} → ${destinationAccount.name}`;
+
+        await prisma.transaction.update({
+          where: { id: matchedTx.id },
+          data: {
+            accountId: sourceAccount.id,
+            toAccountId: destinationAccount.id,
+            type: "TRANSFER",
+            subType: "ONLINE_TRANSFER",
+            categoryId: null, // Transfers do not belong to expense/income categories
+            note: transferNote,
+            serverSeq: nextSeq,
+          },
+        });
+
+        await prisma.bankSms.update({
+          where: { id: smsId },
+          data: {
+            status: "PROCESSED",
+            parseMethod,
+            parsedPayload: payload as unknown as Prisma.InputJsonValue,
+            transactionId: matchedTx.id,
+          },
+        });
+
+        await processBalanceMismatchHint(account, payload, receivedAt, smsTime);
+
+        return {
+          status: "PROCESSED",
+          transactionId: matchedTx.id,
+          isTransferMerged: true,
+        };
+      } else {
+        // Moderate confidence OR user wants review -> Flag for manual validation in SMS Review Inbox
+        const enrichedPayload = {
+          ...payload,
+          suggestedTransfer: {
+            counterpartTransactionId: matchedTx.id,
+            fromAccountId: sourceAccount.id,
+            toAccountId: destinationAccount.id,
+            amountMinor,
+            counterpartNote: matchedTx.note,
+          },
+        };
+
+        await prisma.bankSms.update({
+          where: { id: smsId },
+          data: {
+            status: "NEEDS_REVIEW",
+            reviewReason: "POSSIBLE_TRANSFER",
+            parseMethod,
+            parsedPayload: enrichedPayload as unknown as Prisma.InputJsonValue,
+          },
+        });
+
+        return {
+          status: "NEEDS_REVIEW",
+          reviewReason: "POSSIBLE_TRANSFER",
+        };
+      }
     }
   }
 

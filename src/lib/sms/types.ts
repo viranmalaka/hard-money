@@ -49,6 +49,16 @@ export const BankSmsSchema = z.object({
     .describe("Remaining account balance if stated in SMS, exactly as printed"),
   transactionTimestamp: z.string().nullable(),
   confidence: z.enum(["HIGH", "LOW"]),
+  suggestedTransfer: z
+    .object({
+      counterpartTransactionId: z.string(),
+      fromAccountId: z.string(),
+      toAccountId: z.string(),
+      amountMinor: z.number(),
+      counterpartNote: z.string().nullable().optional(),
+    })
+    .nullable()
+    .optional(),
 });
 
 export type ParsedTransactionPayload = z.infer<typeof BankSmsSchema>;

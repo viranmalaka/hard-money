@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import {
   ArrowLeft,
+  ArrowRightLeft,
   CheckCircle2,
   RefreshCw,
   XCircle,
@@ -14,7 +15,7 @@ import {
 import { EmptyState } from "@/components/ui/empty-state";
 import { queryKeys } from "@/lib/api/query-keys";
 import { getAccounts, getCategories } from "@/services/user-service";
-import { ignoreInboxItem, listInbox, postInboxItem, retryInboxItem } from "@/services/inbox-service";
+import { ignoreInboxItem, listInbox, mergeTransferInboxItem, postInboxItem, retryInboxItem } from "@/services/inbox-service";
 import { InboxAccount, InboxCategory, InboxFormValues, MobileInboxItem, InboxMasterItem } from "@/components/inbox/inbox-items";
 
 export default function SmsReviewInboxPage() {
@@ -81,6 +82,12 @@ export default function SmsReviewInboxPage() {
   });
   const retryMutation = useMutation({
     mutationFn: retryInboxItem,
+    onSettled: () => queryClient.invalidateQueries({ queryKey: queryKeys.inbox.all() }),
+  });
+  const mergeTransferMutation = useMutation({
+    mutationFn: (itemId: string) => mergeTransferInboxItem(itemId),
+    onMutate: removeOptimistically,
+    onError: (_error, _itemId, previous) => queryClient.setQueryData(queryKeys.inbox.all(), previous),
     onSettled: () => queryClient.invalidateQueries({ queryKey: queryKeys.inbox.all() }),
   });
 
@@ -172,14 +179,32 @@ export default function SmsReviewInboxPage() {
     }
   }, [retryMutation]);
 
+  const handleMergeTransfer = useCallback(async (itemId: string) => {
+    setSubmitting(itemId);
+    setErrorMessage(null);
+
+    try {
+      await mergeTransferMutation.mutateAsync(itemId);
+      if (selectedId === itemId) {
+        const remaining = items.filter((it) => it.id !== itemId);
+        setSelectedId(remaining.length > 0 ? remaining[0].id : null);
+      }
+    } catch {
+      setErrorMessage("Failed to merge transfer");
+    } finally {
+      setSubmitting(null);
+    }
+  }, [items, mergeTransferMutation, selectedId]);
+
   const itemActions = useMemo(
     () => ({
       onPost: (id: string) => void handlePost(id),
       onIgnore: (id: string) => void handleIgnore(id),
       onRetry: (id: string) => void handleRetry(id),
+      onMergeTransfer: (id: string) => void handleMergeTransfer(id),
       onFieldChange: handleFieldChange,
     }),
-    [handleFieldChange, handleIgnore, handlePost, handleRetry]
+    [handleFieldChange, handleIgnore, handleMergeTransfer, handlePost, handleRetry]
   );
 
   const formatReviewReason = (reason: string | null) => {
@@ -196,6 +221,8 @@ export default function SmsReviewInboxPage() {
         return "Always review";
       case "POSSIBLE_DUPLICATE":
         return "Possible duplicate";
+      case "POSSIBLE_TRANSFER":
+        return "Possible transfer";
       default:
         return reason || "Needs Review";
     }
@@ -335,6 +362,30 @@ export default function SmsReviewInboxPage() {
                 >
                   <ShieldAlert size={14} className="flex-shrink-0" />
                   <span>{selectedItem.failureReason}</span>
+                </div>
+              )}
+
+              {selectedItem.reviewReason === "POSSIBLE_TRANSFER" && (
+                <div className="p-3.5 rounded bg-[var(--accent)]/10 border border-[var(--accent)]/30 space-y-2">
+                  <div className="flex items-center gap-2 text-xs font-semibold text-[var(--accent)]">
+                    <ArrowRightLeft size={15} />
+                    <span>Possible Inter-Account Transfer Detected</span>
+                  </div>
+                  <p className="text-xs text-[var(--text-muted)] leading-relaxed">
+                    This SMS matches a recent counterpart transaction on another account. You can merge both into a single verified Transfer, or edit and post as a separate transaction below.
+                  </p>
+                  <div className="pt-1">
+                    <button
+                      type="button"
+                      data-testid="inbox-merge-transfer-btn"
+                      disabled={submitting === selectedItem.id}
+                      onClick={() => handleMergeTransfer(selectedItem.id)}
+                      className="flex items-center justify-center gap-2 px-4 py-2 rounded bg-[var(--accent)] text-white text-xs font-semibold hover:opacity-90 active:scale-95 transition-all disabled:opacity-50"
+                    >
+                      <ArrowRightLeft size={14} />
+                      <span>Merge as Transfer</span>
+                    </button>
+                  </div>
                 </div>
               )}
 

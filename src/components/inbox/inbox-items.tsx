@@ -1,7 +1,7 @@
 "use client";
 
 import { memo } from "react";
-import { CheckCircle2, RefreshCw, ShieldAlert, XCircle } from "lucide-react";
+import { ArrowRightLeft, CheckCircle2, RefreshCw, ShieldAlert, XCircle } from "lucide-react";
 import type { BankSmsItem } from "@/services/inbox-service";
 
 export interface InboxAccount {
@@ -33,6 +33,7 @@ interface InboxActions {
   onPost: (itemId: string) => void;
   onIgnore: (itemId: string) => void;
   onRetry: (itemId: string) => void;
+  onMergeTransfer?: (itemId: string) => void;
   onFieldChange: (itemId: string, field: Field, value: string) => void;
 }
 
@@ -44,6 +45,7 @@ function reviewReason(reason: string | null) {
     case "ACCOUNT_UNMATCHED": return "Account unmatched";
     case "ALWAYS_REVIEW": return "Always review";
     case "POSSIBLE_DUPLICATE": return "Possible duplicate";
+    case "POSSIBLE_TRANSFER": return "Possible transfer";
     default: return reason || "Needs Review";
   }
 }
@@ -137,6 +139,27 @@ export const MobileInboxItem = memo(function MobileInboxItem({
       </div>
       <div data-testid="inbox-item-raw" className="p-2.5 rounded bg-[var(--bg)] border border-hairline font-mono text-[11px] text-[var(--text-muted)] whitespace-pre-wrap leading-relaxed select-all">{item.rawMessage}</div>
       {item.failureReason && <div data-testid="inbox-failure-info" className="text-[11px] text-[var(--expense)] flex items-center gap-1.5"><ShieldAlert size={13} /><span>{item.failureReason}</span></div>}
+      {item.reviewReason === "POSSIBLE_TRANSFER" && actions.onMergeTransfer && (
+        <div className="p-2.5 rounded bg-[var(--accent)]/10 border border-[var(--accent)]/30 space-y-1.5">
+          <div className="flex items-center gap-1.5 text-xs font-semibold text-[var(--accent)]">
+            <ArrowRightLeft size={13} />
+            <span>Possible Transfer Counterpart Found</span>
+          </div>
+          <p className="text-[10px] text-[var(--text-muted)]">
+            Matches a counterpart transaction on another account. Merge both into a single Transfer or post separately.
+          </p>
+          <button
+            type="button"
+            data-testid="inbox-merge-transfer-btn"
+            disabled={submitting}
+            onClick={() => actions.onMergeTransfer!(item.id)}
+            className="flex items-center justify-center gap-1.5 w-full h-7 rounded bg-[var(--accent)] text-white text-xs font-semibold hover:opacity-90 active:scale-95 transition-all disabled:opacity-50"
+          >
+            <ArrowRightLeft size={13} />
+            <span>Merge as Transfer</span>
+          </button>
+        </div>
+      )}
       <div className="space-y-2 pt-2 border-t border-hairline">
         <FormFields item={item} form={form} accounts={accounts} categories={categories} onFieldChange={actions.onFieldChange} />
         <div className="flex items-center gap-2 pt-2">

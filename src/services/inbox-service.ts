@@ -44,3 +44,17 @@ export async function retryInboxItem(itemId: string) {
   const { data } = await apiClient.post(`/sms/inbox/${itemId}/retry`);
   return data;
 }
+
+export async function mergeTransferInboxItem(
+  itemId: string,
+  input?: {
+    counterpartTransactionId?: string;
+    fromAccountId?: string;
+    toAccountId?: string;
+    note?: string;
+  }
+) {
+  const { data } = await apiClient.post(`/sms/inbox/${itemId}/merge-transfer`, input || {});
+  return data;
+}
+
