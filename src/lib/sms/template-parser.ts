@@ -9,7 +9,9 @@ export function isNonTransactionalMessage(rawMessage: string): boolean {
   // If the message contains financial debit/credit action AND an amount, it is a real transaction
   // (e.g. security footers like "Do not Share OTP" or "Call 0112303050" should NOT cause it to be marked as OTP)
   const hasFinancialAction =
-    /\b(?:debited|credited|withdrawn|spent|paid|used for|transaction of|txn of|auth pmt)\b/i.test(text);
+    /\b(?:debited|credited|withdrawn|spent|paid|used for|transaction of|txn of|auth pmt)\b/i.test(
+      text,
+    );
   const hasAmount = /(?:lkr|usd|rs\.?)\s*[\d,]+(?:\.\d{1,2})?/i.test(text);
 
   if (hasFinancialAction && hasAmount) {
@@ -70,7 +72,9 @@ export function isNonTransactionalMessage(rawMessage: string): boolean {
 /**
  * Helper to clean and parse amount text to minor units (cents)
  */
-export function amountTextToMinor(amountText: string | null | undefined): number {
+export function amountTextToMinor(
+  amountText: string | null | undefined,
+): number {
   if (!amountText) return 0;
   const cleaned = amountText.replace(/,/g, "").trim();
   const num = parseFloat(cleaned);
@@ -83,15 +87,16 @@ export function amountTextToMinor(amountText: string | null | undefined): number
  */
 export function parseBankSmsTemplate(
   sender: string,
-  rawMessage: string
+  rawMessage: string,
 ): TemplateParseResult {
   const normSender = (sender || "").toUpperCase().trim();
   const text = rawMessage.trim();
 
   const KNOWN_TEMPLATE_BANKS = [
+    "SAMPATH",
+    "SAMPCC",
     "COMBANK",
     "COMMERCIAL",
-    "SAMPATH",
     "DFCC",
     "HNB",
     "NTB",
@@ -101,7 +106,7 @@ export function parseBankSmsTemplate(
   ];
 
   const isKnownBank = KNOWN_TEMPLATE_BANKS.some(
-    (b) => normSender.includes(b) || text.toUpperCase().includes(b)
+    (b) => normSender.includes(b) || text.toUpperCase().includes(b),
   );
 
   if (!isKnownBank) {
@@ -131,30 +136,40 @@ export function parseBankSmsTemplate(
   }
 
   // Helper regex matchers
-  const extractAmount = (str: string): { amountText: string; currency: string } | null => {
-    const match = str.match(/(LKR|USD|Rs\.?)\s*((?:[\d,]+|\.\d{1,2})(?:\.\d{1,2})?)/i);
+  const extractAmount = (
+    str: string,
+  ): { amountText: string; currency: string } | null => {
+    const match = str.match(
+      /(LKR|USD|Rs\.?)\s*((?:[\d,]+|\.\d{1,2})(?:\.\d{1,2})?)/i,
+    );
     if (!match) return null;
     return {
       amountText: match[2],
-      currency: match[1].toUpperCase() === "RS." ? "LKR" : match[1].toUpperCase(),
+      currency:
+        match[1].toUpperCase() === "RS." ? "LKR" : match[1].toUpperCase(),
     };
   };
 
   const extractLast4 = (str: string): string | null => {
     const match = str.match(
-      /(?:ac|a\/c(?:\s*no)?|card|crd(?:\s*no)?|account|ending|no\.?)\s*(?::|\.\.)?\s*[\*\.#:]*\s*(\d{3,4})\b/i
+      /(?:ac|a\/c(?:\s*no)?|card|crd(?:\s*no)?|account|ending|no\.?)\s*(?::|\.\.)?\s*[\*\.#:]*\s*(\d{3,4})\b/i,
     );
     return match ? match[1] : null;
   };
 
-  const extractBalanceAfter = (str: string): { amountText: string; currency: string } | null => {
+  const extractBalanceAfter = (
+    str: string,
+  ): { amountText: string; currency: string } | null => {
     const match = str.match(
-      /(?:Your bal is|Avl Bal|AVBAL|Avail(?:able)?(?:\s+bal(?:ance)?)?|bal(?:ance)?)\s*(?:is|:)?\s*(LKR|USD|Rs\.?)?\s*((?:[\d,]+|\.\d{1,2})(?:\.\d{1,2})?)/i
+      /(?:Your bal is|Avl Bal|AVBAL|Avail(?:able)?(?:\s+bal(?:ance)?)?|bal(?:ance)?)\s*(?:is|:)?\s*(LKR|USD|Rs\.?)?\s*((?:[\d,]+|\.\d{1,2})(?:\.\d{1,2})?)/i,
     );
     if (!match) return null;
     return {
       amountText: match[2],
-      currency: match[1]?.toUpperCase() === "RS." ? "LKR" : match[1]?.toUpperCase() || "LKR",
+      currency:
+        match[1]?.toUpperCase() === "RS."
+          ? "LKR"
+          : match[1]?.toUpperCase() || "LKR",
     };
   };
 
@@ -167,14 +182,18 @@ export function parseBankSmsTemplate(
   const balanceAfter = extractBalanceAfter(text);
   const destinationAmountText =
     amount.currency === "USD"
-      ? text.match(/(?:LKR|Rs\.?)\s*((?:[\d,]+|\.\d{1,2})(?:\.\d{1,2})?)/i)?.[1] || null
+      ? text.match(
+          /(?:LKR|Rs\.?)\s*((?:[\d,]+|\.\d{1,2})(?:\.\d{1,2})?)/i,
+        )?.[1] || null
       : null;
 
   // Extract merchant / reference / entity
   let merchant: string | null = null;
 
   // Pattern 1: ref: <MERCHANT>.
-  const refMatch = text.match(/ref:\s*([^.\n]+?)(?:\.\s*(?:Your bal|If unauthorized)|$|\n)/i);
+  const refMatch = text.match(
+    /ref:\s*([^.\n]+?)(?:\.\s*(?:Your bal|If unauthorized)|$|\n)/i,
+  );
   if (refMatch) {
     merchant = refMatch[1].trim();
   }
@@ -189,7 +208,9 @@ export function parseBankSmsTemplate(
 
   // Pattern 2: at <MERCHANT> (before Avl Bal / on / Enq / .)
   if (!merchant) {
-    const atMatch = text.match(/(?:at)\s+([A-Za-z0-9\s\.\-_&'/]+?)(?:\s+(?:on|Avl|Avail|ref|bal|Enq)|\.|$|\n)/i);
+    const atMatch = text.match(
+      /(?:at)\s+([A-Za-z0-9\s\.\-_&'/]+?)(?:\s+(?:on|Avl|Avail|ref|bal|Enq)|\.|$|\n)/i,
+    );
     if (atMatch) {
       merchant = atMatch[1].trim();
     }
@@ -197,7 +218,9 @@ export function parseBankSmsTemplate(
 
   // Pattern 3: for <ENTITY>
   if (!merchant) {
-    const forMatch = text.match(/(?:for)\s+([A-Za-z0-9\s\.\-_&'/]+?)(?:\s+(?:on|\d{1,2}\/\d{1,2}\/|To Inq|Get protected)|\.|$|\n)/i);
+    const forMatch = text.match(
+      /(?:for)\s+([A-Za-z0-9\s\.\-_&'/]+?)(?:\s+(?:on|\d{1,2}\/\d{1,2}\/|To Inq|Get protected)|\.|$|\n)/i,
+    );
     if (forMatch) {
       merchant = forMatch[1].trim();
     }
@@ -222,10 +245,12 @@ export function parseBankSmsTemplate(
     ) ||
       /\bfee:\s*sms[_ -]?alerts/i.test(text)) &&
     !/\bvia atm\b/i.test(text);
-  const isAtmOther = /\batm\b/i.test(text) && /\b(?:other bank|other-bank|other)\b/i.test(text);
+  const isAtmOther =
+    /\batm\b/i.test(text) && /\b(?:other bank|other-bank|other)\b/i.test(text);
   const isAtm = /\batm\b/i.test(text) || /\bwithdrawn\b/i.test(text);
   const isCredit = /\b(?:credited|deposit|inward|salary)\b/i.test(text);
-  const isTransfer = /\b(?:ceft|transfer|donation|vsrpmt|funding\s+a\/c)\b/i.test(text);
+  const isTransfer =
+    /\b(?:ceft|transfer|donation|vsrpmt|funding\s+a\/c)\b/i.test(text);
 
   let transactionType: ParsedTransactionPayload["transactionType"] = "DEBIT";
   let channel: ParsedTransactionPayload["channel"] = "POS";
@@ -258,10 +283,14 @@ export function parseBankSmsTemplate(
 
   // Bank name normalization
   let bankName = normSender || "BANK";
-  if (normSender.includes("SAMPATH") || text.includes("Sampath")) bankName = "SAMPATH";
-  else if (normSender.includes("DFCC") || text.includes("DFCC")) bankName = "DFCC";
-  else if (normSender.includes("COMBANK") || normSender.includes("COMMERCIAL")) bankName = "COMBANK";
-  else if (normSender.includes("HNB") || normSender.includes("HATTON")) bankName = "HNB";
+  if (normSender.includes("SAMPATH") || text.includes("Sampath"))
+    bankName = "SAMPATH";
+  else if (normSender.includes("DFCC") || text.includes("DFCC"))
+    bankName = "DFCC";
+  else if (normSender.includes("COMBANK") || normSender.includes("COMMERCIAL"))
+    bankName = "COMBANK";
+  else if (normSender.includes("HNB") || normSender.includes("HATTON"))
+    bankName = "HNB";
 
   return {
     matched: true,
@@ -274,7 +303,8 @@ export function parseBankSmsTemplate(
       destinationAmountText,
       currency: amount.currency,
       accountLast4: last4,
-      merchantOrEntity: merchant || (isAtm ? "ATM Withdrawal" : `${bankName} Merchant`),
+      merchantOrEntity:
+        merchant || (isAtm ? "ATM Withdrawal" : `${bankName} Merchant`),
       inferredCategory: isAtm ? "Cash Withdrawal" : null,
       balanceAfterText: balanceAfter?.amountText || null,
       transactionTimestamp: null,
