@@ -1,7 +1,12 @@
 import { prisma } from "@/lib/prisma";
-import { HardMoneyBackupPayload } from "./types";
+import { HardMoneyBackupPayload, ExportOptions, DEFAULT_EXPORT_OPTIONS } from "./types";
 
-export async function exportUserData(userId: string): Promise<HardMoneyBackupPayload> {
+export async function exportUserData(
+  userId: string,
+  options?: ExportOptions
+): Promise<HardMoneyBackupPayload> {
+  const opts: Required<ExportOptions> = { ...DEFAULT_EXPORT_OPTIONS, ...options };
+
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: {
@@ -26,120 +31,171 @@ export async function exportUserData(userId: string): Promise<HardMoneyBackupPay
     throw new Error("User not found");
   }
 
-  // 1. Households owned by the user
-  const ownedHouseholds = await prisma.household.findMany({
-    where: { ownerId: userId },
-    include: {
-      members: true,
-      shoppingListItems: true,
-    },
-  });
+  // 1. Households owned by the user (or needed for scoping other entities)
+  const needsHouseholdIds =
+    opts.categories || opts.accounts || opts.transactions || opts.loans || opts.fixedDeposits;
 
-  const ownedHouseholdIds = ownedHouseholds.map((h) => h.id);
+  let ownedHouseholds: Array<{
+    id: string;
+    name: string;
+    createdAt: Date;
+    members: Array<{ id: string; householdId: string; userId: string; role: string; createdAt: Date }>;
+    shoppingListItems: Array<{
+      id: string;
+      householdId: string;
+      name: string;
+      quantity: string | null;
+      isCompleted: boolean;
+      position: number;
+      completedAt: Date | null;
+      createdAt: Date;
+      updatedAt: Date;
+      deletedAt: Date | null;
+    }>;
+  }> = [];
+
+  let ownedHouseholdIds: string[] = [];
+
+  if (opts.households) {
+    ownedHouseholds = await prisma.household.findMany({
+      where: { ownerId: userId },
+      include: {
+        members: true,
+        shoppingListItems: true,
+      },
+    });
+    ownedHouseholdIds = ownedHouseholds.map((h) => h.id);
+  } else if (needsHouseholdIds) {
+    const hh = await prisma.household.findMany({
+      where: { ownerId: userId },
+      select: { id: true },
+    });
+    ownedHouseholdIds = Array.isArray(hh) ? hh.map((h) => h.id) : [];
+  }
 
   // 2. Categories
-  const categories = await prisma.category.findMany({
-    where: {
-      OR: [
-        { userId },
-        ...(ownedHouseholdIds.length > 0 ? [{ householdId: { in: ownedHouseholdIds } }] : []),
-      ],
-    },
-    orderBy: { createdAt: "asc" },
-  });
+  const categories = opts.categories
+    ? await prisma.category.findMany({
+        where: {
+          OR: [
+            { userId },
+            ...(ownedHouseholdIds.length > 0 ? [{ householdId: { in: ownedHouseholdIds } }] : []),
+          ],
+        },
+        orderBy: { createdAt: "asc" },
+      })
+    : [];
 
   // 3. Accounts
-  const accounts = await prisma.account.findMany({
-    where: {
-      OR: [
-        { userId },
-        ...(ownedHouseholdIds.length > 0 ? [{ householdId: { in: ownedHouseholdIds } }] : []),
-      ],
-    },
-    orderBy: { createdAt: "asc" },
-  });
+  const accounts = opts.accounts
+    ? await prisma.account.findMany({
+        where: {
+          OR: [
+            { userId },
+            ...(ownedHouseholdIds.length > 0 ? [{ householdId: { in: ownedHouseholdIds } }] : []),
+          ],
+        },
+        orderBy: { createdAt: "asc" },
+      })
+    : [];
 
   // 4. Transaction Templates
-  const templates = await prisma.transactionTemplate.findMany({
-    where: { userId },
-    orderBy: { createdAt: "asc" },
-  });
+  const templates = opts.templates
+    ? await prisma.transactionTemplate.findMany({
+        where: { userId },
+        orderBy: { createdAt: "asc" },
+      })
+    : [];
 
   // 5. Budgets & Month Snapshots
-  const budgets = await prisma.budget.findMany({
-    where: { userId },
-    include: {
-      snapshots: true,
-    },
-    orderBy: { createdAt: "asc" },
-  });
+  const budgets = opts.budgets
+    ? await prisma.budget.findMany({
+        where: { userId },
+        include: {
+          snapshots: true,
+        },
+        orderBy: { createdAt: "asc" },
+      })
+    : [];
 
   // 6. Credit Card Statements
-  const creditCardStatements = await prisma.creditCardStatement.findMany({
-    where: { userId },
-    orderBy: { cycleCutoffDate: "asc" },
-  });
+  const creditCardStatements = opts.creditCards
+    ? await prisma.creditCardStatement.findMany({
+        where: { userId },
+        orderBy: { cycleCutoffDate: "asc" },
+      })
+    : [];
 
   // 7. Credit Card Installment Plans
-  const installmentPlans = await prisma.creditCardInstallmentPlan.findMany({
-    where: { userId },
-    orderBy: { startDate: "asc" },
-  });
+  const installmentPlans = opts.creditCards
+    ? await prisma.creditCardInstallmentPlan.findMany({
+        where: { userId },
+        orderBy: { startDate: "asc" },
+      })
+    : [];
 
   // 8. Fixed Deposits & Payouts
-  const fixedDeposits = await prisma.fixedDeposit.findMany({
-    where: {
-      OR: [
-        { userId },
-        ...(ownedHouseholdIds.length > 0 ? [{ householdId: { in: ownedHouseholdIds } }] : []),
-      ],
-    },
-    include: {
-      payouts: {
-        orderBy: { periodEnd: "asc" },
-      },
-    },
-    orderBy: { startDate: "asc" },
-  });
+  const fixedDeposits = opts.fixedDeposits
+    ? await prisma.fixedDeposit.findMany({
+        where: {
+          OR: [
+            { userId },
+            ...(ownedHouseholdIds.length > 0 ? [{ householdId: { in: ownedHouseholdIds } }] : []),
+          ],
+        },
+        include: {
+          payouts: {
+            orderBy: { periodEnd: "asc" },
+          },
+        },
+        orderBy: { startDate: "asc" },
+      })
+    : [];
 
   // 9. Loans, Schedules & Payments
-  const loans = await prisma.loan.findMany({
-    where: {
-      OR: [
-        { userId },
-        ...(ownedHouseholdIds.length > 0 ? [{ householdId: { in: ownedHouseholdIds } }] : []),
-      ],
-    },
-    include: {
-      scheduleEntries: {
-        orderBy: { installmentNumber: "asc" },
-      },
-      payments: {
-        orderBy: { paymentDate: "asc" },
-      },
-    },
-    orderBy: { startDate: "asc" },
-  });
+  const loans = opts.loans
+    ? await prisma.loan.findMany({
+        where: {
+          OR: [
+            { userId },
+            ...(ownedHouseholdIds.length > 0 ? [{ householdId: { in: ownedHouseholdIds } }] : []),
+          ],
+        },
+        include: {
+          scheduleEntries: {
+            orderBy: { installmentNumber: "asc" },
+          },
+          payments: {
+            orderBy: { paymentDate: "asc" },
+          },
+        },
+        orderBy: { startDate: "asc" },
+      })
+    : [];
 
   // 10. Transactions & Splits
-  const transactions = await prisma.transaction.findMany({
-    where: {
-      OR: [
-        { userId },
-        ...(ownedHouseholdIds.length > 0 ? [{ householdId: { in: ownedHouseholdIds } }] : []),
-      ],
-    },
-    include: {
-      splitItems: true,
-    },
-    orderBy: { transactionDate: "asc" },
-  });
+  const transactions = opts.transactions
+    ? await prisma.transaction.findMany({
+        where: {
+          OR: [
+            { userId },
+            ...(ownedHouseholdIds.length > 0 ? [{ householdId: { in: ownedHouseholdIds } }] : []),
+          ],
+        },
+        include: {
+          splitItems: true,
+        },
+        orderBy: { transactionDate: "asc" },
+      })
+    : [];
 
   // 11. Bank SMS records
-  const bankSmsList = await prisma.bankSms.findMany({
-    where: { userId },
-    orderBy: { receivedAt: "asc" },
-  });
+  const bankSmsList = opts.bankSms
+    ? await prisma.bankSms.findMany({
+        where: { userId },
+        orderBy: { receivedAt: "asc" },
+      })
+    : [];
 
   const payload: HardMoneyBackupPayload = {
     version: 1,
@@ -150,15 +206,15 @@ export async function exportUserData(userId: string): Promise<HardMoneyBackupPay
       email: user.email,
       defaultCurrency: user.defaultCurrency,
       timezone: user.timezone,
-      countryCode: user.countryCode,
-      defaultWithholdingTaxRateBps: user.defaultWithholdingTaxRateBps,
-      geminiApiKeyEncrypted: user.geminiApiKeyEncrypted,
-      geminiModel: user.geminiModel,
-      smsAutoPostMode: user.smsAutoPostMode,
-      apiKeyHash: user.apiKeyHash,
-      apiKeyPrefix: user.apiKeyPrefix,
-      pushRemindersEnabled: user.pushRemindersEnabled,
-      dailyReminderTime: user.dailyReminderTime,
+      countryCode: opts.settings ? user.countryCode : null,
+      defaultWithholdingTaxRateBps: opts.settings ? user.defaultWithholdingTaxRateBps : 0,
+      geminiApiKeyEncrypted: opts.settings ? user.geminiApiKeyEncrypted : null,
+      geminiModel: opts.settings ? user.geminiModel : null,
+      smsAutoPostMode: opts.settings ? user.smsAutoPostMode : "DISABLED",
+      apiKeyHash: opts.settings ? user.apiKeyHash : null,
+      apiKeyPrefix: opts.settings ? user.apiKeyPrefix : null,
+      pushRemindersEnabled: opts.settings ? user.pushRemindersEnabled : false,
+      dailyReminderTime: opts.settings ? user.dailyReminderTime : "20:00",
     },
     households: ownedHouseholds.map((h) => ({
       id: h.id,

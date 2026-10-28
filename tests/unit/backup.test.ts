@@ -290,6 +290,74 @@ describe("HardMoney Backup & Restore", () => {
       mockPrisma.user.findUnique.mockResolvedValue(null);
       await expect(exportUserData("non-existent")).rejects.toThrow("User not found");
     });
+
+    it("should export only selected entities when ExportOptions are specified", async () => {
+      mockPrisma.user.findUnique.mockResolvedValue({
+        id: "user-123",
+        name: "Test User",
+        email: "test@example.com",
+        defaultCurrency: "LKR",
+        timezone: "Asia/Colombo",
+        countryCode: "LK",
+        defaultWithholdingTaxRateBps: 1000,
+        geminiApiKeyEncrypted: "enc-key",
+        geminiModel: "gemini-2.5-flash",
+        smsAutoPostMode: "AUTO_VALIDATED",
+        apiKeyHash: "hash123",
+        apiKeyPrefix: "pfx",
+        pushRemindersEnabled: true,
+        dailyReminderTime: "20:00",
+      });
+
+      mockPrisma.household.findMany.mockResolvedValue([]);
+      mockPrisma.account.findMany.mockResolvedValue([
+        {
+          id: "acc-1",
+          householdId: null,
+          name: "Main",
+          type: "CASH",
+          openingBalanceMinor: 100,
+          currency: "LKR",
+          accountNumberLast4: null,
+          bankSenderIds: [],
+          accessScope: "PRIVATE",
+          feeRules: null,
+          ownAtmFeeMinor: null,
+          otherAtmFeeMinor: null,
+          balanceMismatchHint: null,
+          creditLimitMinor: null,
+          cutoffDay: null,
+          paymentDueDay: null,
+          settlementAccountId: null,
+          isArchived: false,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          deletedAt: null,
+        },
+      ]);
+
+      const result = await exportUserData("user-123", {
+        accounts: true,
+        transactions: false,
+        categories: false,
+        budgets: false,
+        loans: false,
+        fixedDeposits: false,
+        creditCards: false,
+        templates: false,
+        households: false,
+        bankSms: false,
+        settings: false,
+      });
+
+      expect(result.accounts).toHaveLength(1);
+      expect(result.transactions).toHaveLength(0);
+      expect(result.categories).toHaveLength(0);
+      expect(result.budgets).toHaveLength(0);
+      expect(result.households).toHaveLength(0);
+      expect(mockPrisma.transaction.findMany).not.toHaveBeenCalled();
+      expect(mockPrisma.category.findMany).not.toHaveBeenCalled();
+    });
   });
 
   describe("importUserData", () => {

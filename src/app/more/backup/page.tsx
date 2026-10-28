@@ -21,11 +21,96 @@ import {
   FileText,
   Home,
   CheckSquare,
+  Bookmark,
+  MessageSquare,
+  Settings,
+  X,
 } from "lucide-react";
 import { ConfirmationModal } from "@/components/ui/confirmation-modal";
 import { downloadBackup, importBackup } from "@/services/backup-service";
-import { HardMoneyBackupPayload, BackupEntityCounts, extractBackupCounts } from "@/lib/backup/types";
+import {
+  HardMoneyBackupPayload,
+  BackupEntityCounts,
+  extractBackupCounts,
+  ExportOptions,
+  DEFAULT_EXPORT_OPTIONS,
+} from "@/lib/backup/types";
 import { ImportResult } from "@/lib/backup/import";
+import { useModalHistory } from "@/hooks/use-modal-history";
+
+const EXPORT_CATEGORY_ITEMS: Array<{
+  key: keyof ExportOptions;
+  label: string;
+  description: string;
+  icon: React.ComponentType<{ size?: number; className?: string }>;
+}> = [
+  {
+    key: "accounts",
+    label: "Accounts",
+    description: "Bank savings, checking, cash, and asset accounts",
+    icon: CreditCard,
+  },
+  {
+    key: "transactions",
+    label: "Transactions & Splits",
+    description: "Income, expense, transfer records, and split breakdowns",
+    icon: Receipt,
+  },
+  {
+    key: "categories",
+    label: "Categories",
+    description: "Custom and system transaction category hierarchies",
+    icon: Layers,
+  },
+  {
+    key: "budgets",
+    label: "Budgets & Snapshots",
+    description: "Monthly budget allocations, rollovers, and history",
+    icon: FolderArchive,
+  },
+  {
+    key: "fixedDeposits",
+    label: "Fixed Deposits",
+    description: "Deposit contracts, compounding schedules, and payout settings",
+    icon: Database,
+  },
+  {
+    key: "loans",
+    label: "Loans & Leases",
+    description: "Loan terms, amortization schedule entries, and payments",
+    icon: FileText,
+  },
+  {
+    key: "creditCards",
+    label: "Credit Cards & Plans",
+    description: "Statements, statement cycles, and active installment plans",
+    icon: CreditCard,
+  },
+  {
+    key: "templates",
+    label: "Transaction Templates",
+    description: "Quick Add bookmarks, favorites, and shortcuts",
+    icon: Bookmark,
+  },
+  {
+    key: "households",
+    label: "Households & Shopping Lists",
+    description: "Shared households, members, and shopping checklist items",
+    icon: Home,
+  },
+  {
+    key: "bankSms",
+    label: "Bank SMS Records",
+    description: "Financial SMS audit trail and review inbox logs",
+    icon: MessageSquare,
+  },
+  {
+    key: "settings",
+    label: "Settings & Preferences",
+    description: "User profile, default currency, tax rates, and AI model configs",
+    icon: Settings,
+  },
+];
 
 export default function BackupPage() {
   const queryClient = useQueryClient();
@@ -33,9 +118,10 @@ export default function BackupPage() {
 
   // Export State
   const [isExporting, setIsExporting] = useState(false);
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+  const [exportOptions, setExportOptions] = useState<Required<ExportOptions>>(DEFAULT_EXPORT_OPTIONS);
   const [exportError, setExportError] = useState<string | null>(null);
   const [exportSuccess, setExportSuccess] = useState(false);
-
   // Import State
   const [isDragging, setIsDragging] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -47,15 +133,40 @@ export default function BackupPage() {
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
 
+  useModalHistory(isExportModalOpen, () => setIsExportModalOpen(false), "export-modal");
+
+  const totalOptionsCount = EXPORT_CATEGORY_ITEMS.length;
+  const selectedOptionsCount = Object.values(exportOptions).filter(Boolean).length;
+  const isAllSelected = selectedOptionsCount === totalOptionsCount;
+
+  const handleToggleOption = (key: keyof ExportOptions) => {
+    setExportOptions((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const handleSelectAll = () => {
+    setExportOptions(DEFAULT_EXPORT_OPTIONS);
+  };
+
+  const handleDeselectAll = () => {
+    const empty = Object.keys(DEFAULT_EXPORT_OPTIONS).reduce(
+      (acc, k) => ({ ...acc, [k]: false }),
+      {} as Required<ExportOptions>
+    );
+    setExportOptions(empty);
+  };
+
   // Handle Export
   const handleExport = async () => {
+    if (selectedOptionsCount === 0) return;
+
     setIsExporting(true);
     setExportError(null);
     setExportSuccess(false);
 
     try {
-      await downloadBackup();
+      await downloadBackup(isAllSelected ? undefined : exportOptions);
       setExportSuccess(true);
+      setIsExportModalOpen(false);
       setTimeout(() => setExportSuccess(false), 5000);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Failed to download backup";
@@ -206,20 +317,11 @@ export default function BackupPage() {
               type="button"
               data-testid="export-json-btn"
               disabled={isExporting}
-              onClick={handleExport}
+              onClick={() => setIsExportModalOpen(true)}
               className="flex items-center gap-2 px-4 py-2 rounded text-xs font-semibold bg-[var(--accent)] text-white hover:opacity-90 active:scale-95 transition-all shadow-xs shrink-0 disabled:opacity-50"
             >
-              {isExporting ? (
-                <>
-                  <Loader2 size={14} className="animate-spin" />
-                  <span>Exporting...</span>
-                </>
-              ) : (
-                <>
-                  <Download size={14} />
-                  <span>Export Data</span>
-                </>
-              )}
+              <Download size={14} />
+              <span>Export Data</span>
             </button>
           </div>
 
@@ -499,6 +601,171 @@ export default function BackupPage() {
       )}
     </div>
   </div>
+
+  {/* Export Window Modal */}
+  {isExportModalOpen && (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="export-modal-title"
+      data-testid="export-modal"
+      className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-3 sm:p-4 backdrop-blur-xs select-none overflow-y-auto animate-in fade-in duration-150"
+      onClick={(e) => {
+        if (e.target === e.currentTarget && !isExporting) setIsExportModalOpen(false);
+      }}
+    >
+      <div className="w-full max-w-lg bg-[var(--surface)] border border-hairline rounded-2xl shadow-2xl p-4 sm:p-5 space-y-4 my-auto animate-in zoom-in-95 duration-150 flex flex-col max-h-[90vh]">
+        {/* Modal Header */}
+        <div className="flex items-start justify-between pb-3 border-b border-hairline shrink-0">
+          <div>
+            <div className="flex items-center gap-2">
+              <Database size={18} className="text-[var(--accent)]" />
+              <h2 id="export-modal-title" className="text-sm sm:text-base font-semibold text-[var(--text)]">
+                Export Treasury Data
+              </h2>
+            </div>
+            <p className="text-xs text-[var(--text-muted)] mt-1">
+              Select the data categories you want to include in this JSON export. All categories are selected by default.
+            </p>
+          </div>
+          <button
+            type="button"
+            disabled={isExporting}
+            onClick={() => setIsExportModalOpen(false)}
+            className="p-1 rounded text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--border)] transition-colors disabled:opacity-50"
+            aria-label="Close export window"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        {/* Toolbar: Counter & Quick Selection */}
+        <div className="flex items-center justify-between gap-2 px-1 shrink-0">
+          <div className="flex items-center gap-2">
+            <span
+              className={`px-2 py-0.5 rounded text-[11px] font-medium border ${
+                isAllSelected
+                  ? "bg-[var(--accent)]/15 text-[var(--accent)] border-[var(--accent)]/30"
+                  : selectedOptionsCount > 0
+                  ? "bg-amber-500/15 text-amber-500 border-amber-500/30"
+                  : "bg-red-500/15 text-red-500 border-red-500/30"
+              }`}
+            >
+              {isAllSelected
+                ? `All Categories (${totalOptionsCount})`
+                : `${selectedOptionsCount} of ${totalOptionsCount} selected`}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2 text-xs">
+            <button
+              type="button"
+              disabled={isExporting || isAllSelected}
+              onClick={handleSelectAll}
+              className="text-[var(--accent)] hover:underline disabled:opacity-40 disabled:no-underline font-medium"
+            >
+              Select All
+            </button>
+            <span className="text-[var(--text-muted)]">•</span>
+            <button
+              type="button"
+              disabled={isExporting || selectedOptionsCount === 0}
+              onClick={handleDeselectAll}
+              className="text-[var(--text-muted)] hover:text-[var(--text)] disabled:opacity-40 font-medium"
+            >
+              Deselect All
+            </button>
+          </div>
+        </div>
+
+        {/* Categories List */}
+        <div className="space-y-1.5 overflow-y-auto flex-1 pr-1 border border-hairline rounded-xl p-2 bg-[var(--bg)]/50 divide-y divide-hairline/40">
+          {EXPORT_CATEGORY_ITEMS.map((item) => {
+            const isChecked = exportOptions[item.key];
+            const Icon = item.icon;
+
+            return (
+              <label
+                key={item.key}
+                data-testid={`export-item-${item.key}`}
+                className={`flex items-start gap-3 p-2.5 rounded-lg cursor-pointer transition-all ${
+                  isChecked
+                    ? "bg-[var(--surface)] hover:bg-[var(--surface-hover)]"
+                    : "opacity-60 hover:opacity-100 hover:bg-[var(--surface)]"
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  checked={isChecked}
+                  disabled={isExporting}
+                  onChange={() => handleToggleOption(item.key)}
+                  className="mt-0.5 rounded border-hairline bg-[var(--bg)] text-[var(--accent)] focus:ring-0 cursor-pointer"
+                />
+                <div className="w-7 h-7 rounded-lg bg-[var(--surface-hover)] border border-hairline flex items-center justify-center text-[var(--accent)] shrink-0">
+                  <Icon size={14} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-semibold text-[var(--text)] block truncate">
+                      {item.label}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-[var(--text-muted)] leading-tight mt-0.5">
+                    {item.description}
+                  </p>
+                </div>
+              </label>
+            );
+          })}
+        </div>
+
+        {/* Warning if 0 selected */}
+        {selectedOptionsCount === 0 && (
+          <div role="alert" className="p-2.5 rounded-lg bg-red-500/10 border border-red-500/20 text-red-500 text-xs">
+            Please select at least one data category to generate an export.
+          </div>
+        )}
+
+        {/* Modal Footer */}
+        <div className="flex items-center justify-between gap-2 pt-3 border-t border-hairline shrink-0">
+          <p className="text-[11px] text-[var(--text-muted)] hidden sm:block">
+            {isAllSelected ? "Full snapshot of your treasury data" : "Custom partial snapshot"}
+          </p>
+          <div className="flex items-center gap-2 ml-auto">
+            <button
+              type="button"
+              disabled={isExporting}
+              onClick={() => setIsExportModalOpen(false)}
+              className="px-3.5 py-1.5 rounded border border-hairline text-xs font-medium text-[var(--text)] hover:bg-[var(--border)] transition-colors disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              data-testid="confirm-export-btn"
+              disabled={isExporting || selectedOptionsCount === 0}
+              onClick={handleExport}
+              className="flex items-center gap-2 px-4 py-1.5 rounded text-xs font-semibold bg-[var(--accent)] text-white hover:opacity-90 active:scale-95 transition-all shadow-xs disabled:opacity-50 disabled:pointer-events-none"
+            >
+              {isExporting ? (
+                <>
+                  <Loader2 size={14} className="animate-spin" />
+                  <span>Exporting...</span>
+                </>
+              ) : (
+                <>
+                  <Download size={14} />
+                  <span>
+                    {isAllSelected ? "Download All Data" : `Download Selected (${selectedOptionsCount})`}
+                  </span>
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )}
 
   {/* Confirmation Modal */}
   <ConfirmationModal

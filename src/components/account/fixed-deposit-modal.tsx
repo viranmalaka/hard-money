@@ -356,7 +356,7 @@ export function FixedDepositModal({ isOpen, onClose, accounts, fixedDeposit = nu
 
           {/* Linked Savings Account */}
           <div className="space-y-1">
-            <label className="block text-xs font-medium text-[var(--text-muted)]">Linked Savings Account</label>
+            <label className="block text-xs font-medium text-[var(--text-muted)]">Interest Payout Account (Linked Savings)</label>
             <select
               data-testid="fd-form-linked-account"
               value={linkedAccountId}
@@ -370,19 +370,25 @@ export function FixedDepositModal({ isOpen, onClose, accounts, fixedDeposit = nu
                 </option>
               ))}
             </select>
-            {errors.linkedAccount && <p className="text-[11px] text-[var(--expense)]">{errors.linkedAccount}</p>}
+            {errors.linkedAccount ? (
+              <p className="text-[11px] text-[var(--expense)]">{errors.linkedAccount}</p>
+            ) : (
+              <span className="text-[10px] text-[var(--text-muted)]">
+                Where monthly interest payouts are deposited. Does NOT deduct any funds.
+              </span>
+            )}
           </div>
 
           {/* Funding Account */}
           <div className="space-y-1">
-            <label className="block text-xs font-medium text-[var(--text-muted)]">Funding Account (Optional)</label>
+            <label className="block text-xs font-medium text-[var(--text-muted)]">Funding Account (Deduct Principal)</label>
             <select
               data-testid="fd-form-funding-account"
               value={fundingAccountId}
               onChange={(e) => setFundingAccountId(e.target.value)}
               className="w-full h-8 px-2 rounded bg-[var(--bg)] border border-hairline text-xs text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
             >
-              <option value="">No funding account (open directly)</option>
+              <option value="">None — Already started / Track only (No deduction)</option>
               {eligibleSavings.map((acc) => (
                 <option key={acc.id} value={acc.id}>
                   {acc.name} ({acc.type})
@@ -390,7 +396,7 @@ export function FixedDepositModal({ isOpen, onClose, accounts, fixedDeposit = nu
               ))}
             </select>
             <span className="text-[10px] text-[var(--text-muted)]">
-              If selected, creates an FD placement expense reducing this account. Net worth stays unchanged.
+              Choose &quot;None&quot; for already-started FDs to keep current account balances unchanged. Select an account only if you want to record an initial placement expense.
             </span>
           </div>
 

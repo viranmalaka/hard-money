@@ -362,3 +362,32 @@ export function extractBackupCounts(payload: Partial<HardMoneyBackupPayload>): B
     shoppingListItems: shoppingListCount,
   };
 }
+
+export interface ExportOptions {
+  accounts?: boolean;
+  transactions?: boolean;
+  categories?: boolean;
+  budgets?: boolean;
+  fixedDeposits?: boolean;
+  loans?: boolean;
+  creditCards?: boolean;
+  templates?: boolean;
+  households?: boolean;
+  bankSms?: boolean;
+  settings?: boolean;
+}
+
+export const DEFAULT_EXPORT_OPTIONS: Required<ExportOptions> = {
+  accounts: true,
+  transactions: true,
+  categories: true,
+  budgets: true,
+  fixedDeposits: true,
+  loans: true,
+  creditCards: true,
+  templates: true,
+  households: true,
+  bankSms: true,
+  settings: true,
+};
+

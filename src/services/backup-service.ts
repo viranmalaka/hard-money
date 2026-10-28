@@ -1,10 +1,13 @@
 import { apiClient } from "@/lib/api/client";
-import { HardMoneyBackupPayload } from "@/lib/backup/types";
+import { HardMoneyBackupPayload, ExportOptions } from "@/lib/backup/types";
 import { ImportResult } from "@/lib/backup/import";
 
-export async function downloadBackup(): Promise<void> {
+export async function downloadBackup(options?: ExportOptions): Promise<void> {
+  const isPost = !!options;
   const response = await fetch("/api/backup/export", {
-    method: "GET",
+    method: isPost ? "POST" : "GET",
+    headers: isPost ? { "Content-Type": "application/json" } : undefined,
+    body: isPost ? JSON.stringify({ options }) : undefined,
     credentials: "include",
   });
 
