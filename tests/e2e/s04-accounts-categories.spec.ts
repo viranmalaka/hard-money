@@ -176,6 +176,7 @@ test.describe("Step 4 — Accounts & Categories Management UI @s04", () => {
 
     // Archive
     await page.click('[data-testid="account-archive-btn"]');
+    await page.click('[data-testid="confirm-action-btn"]');
     await expect(page.getByText("Temporary Stash")).not.toBeVisible();
 
     // Toggle Show Archived

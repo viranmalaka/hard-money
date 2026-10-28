@@ -774,6 +774,7 @@ test.describe("Step 13 — 0% Installment Plans @s13", () => {
 
     const cancelBtn = page.locator('[data-testid="cancel-plan-btn"]');
     await cancelBtn.click();
+    await page.click('[data-testid="confirm-action-btn"]');
 
     // Go back to transactions
     await app.go("trans");

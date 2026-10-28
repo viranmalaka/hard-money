@@ -18,6 +18,7 @@ import { FixedDepositModal } from "@/components/account/fixed-deposit-modal";
 import { FdCloseModal } from "@/components/account/fd-close-modal";
 import { LoanModal } from "@/components/account/loan-modal";
 import { LoanDetailModal } from "@/components/account/loan-detail-modal";
+import { ConfirmationModal } from "@/components/ui/confirmation-modal";
 import { useAccountPortfolio } from "@/hooks/use-account-portfolio";
 import { useModalHistory } from "@/hooks/use-modal-history";
 
@@ -149,12 +150,74 @@ export default function AccountsPage() {
     setIsFormOpen(true);
   };
 
-  const handleArchiveToggle = async (acc: LocalAccount) => {
-    await localUpdateAccount(db, acc.id, { isArchived: !acc.isArchived });
+  // Confirmation modal state
+  const [confirmModal, setConfirmModal] = useState<{
+    title: string;
+    message: string;
+    confirmText?: string;
+    cancelText?: string;
+    variant?: "danger" | "warning" | "default";
+    icon?: "trash" | "archive" | "alert";
+    action: () => Promise<void>;
+  } | null>(null);
+
+  const handleArchiveToggle = (acc: LocalAccount) => {
+    if (acc.isArchived) {
+      setConfirmModal({
+        title: "Unarchive Account",
+        message: `Are you sure you want to unarchive "${acc.name}"? It will become active and visible in your accounts list.`,
+        confirmText: "Unarchive",
+        variant: "default",
+        icon: "archive",
+        action: async () => {
+          await localUpdateAccount(db, acc.id, { isArchived: false });
+        },
+      });
+    } else {
+      setConfirmModal({
+        title: "Archive Account",
+        message: `Are you sure you want to archive "${acc.name}"? It will be hidden from your active list unless "Show archived" is enabled.`,
+        confirmText: "Archive",
+        variant: "warning",
+        icon: "archive",
+        action: async () => {
+          await localUpdateAccount(db, acc.id, { isArchived: true });
+        },
+      });
+    }
   };
 
-  const handleDelete = async (acc: LocalAccount) => {
-    await localDeleteAccount(db, acc.id);
+  const handleDelete = (acc: LocalAccount) => {
+    setConfirmModal({
+      title: "Delete Account",
+      message: `Are you sure you want to delete "${acc.name}"? This action cannot be undone and will permanently remove this account from your device.`,
+      confirmText: "Delete",
+      variant: "danger",
+      icon: "trash",
+      action: async () => {
+        await localDeleteAccount(db, acc.id);
+      },
+    });
+  };
+
+  const handleCancelPlan = (plan: LocalInstallmentPlan) => {
+    setConfirmModal({
+      title: "Cancel Installment Plan",
+      message: `Are you sure you want to cancel the installment plan for "${plan.merchantName}"? Remaining installments will be cancelled and the original transaction will be restored to your active ledger.`,
+      confirmText: "Cancel Plan",
+      variant: "danger",
+      icon: "alert",
+      action: async () => {
+        if (plan.originalTransactionId) {
+          await localUpdateTransaction(db, plan.originalTransactionId, {
+            excludeFromBalance: false,
+            excludeFromStats: false,
+            installmentPlanId: null,
+          });
+        }
+        await localDeleteInstallmentPlan(db, plan.id);
+      },
+    });
   };
 
   const handleFormSubmit = async (e: React.FormEvent) => {
@@ -544,16 +607,7 @@ export default function AccountsPage() {
                               <button
                                 type="button"
                                 data-testid="cancel-plan-btn"
-                                onClick={async () => {
-                                  if (plan.originalTransactionId) {
-                                    await localUpdateTransaction(db, plan.originalTransactionId, {
-                                      excludeFromBalance: false,
-                                      excludeFromStats: false,
-                                      installmentPlanId: null,
-                                    });
-                                  }
-                                  await localDeleteInstallmentPlan(db, plan.id);
-                                }}
+                                onClick={() => handleCancelPlan(plan)}
                                 className="px-2 py-0.5 rounded border border-hairline text-[11px] font-medium text-red-500 hover:bg-red-500/10 transition-colors"
                               >
                                 Cancel Plan
@@ -1215,6 +1269,21 @@ export default function AccountsPage() {
           isOpen={!!selectedLoan}
           onClose={() => setSelectedLoan(null)}
           accounts={accounts}
+        />
+      )}
+
+      {/* Confirmation Modal */}
+      {confirmModal && (
+        <ConfirmationModal
+          isOpen={!!confirmModal}
+          onClose={() => setConfirmModal(null)}
+          onConfirm={confirmModal.action}
+          title={confirmModal.title}
+          message={confirmModal.message}
+          confirmText={confirmModal.confirmText}
+          cancelText={confirmModal.cancelText}
+          variant={confirmModal.variant}
+          icon={confirmModal.icon}
         />
       )}
     </main>

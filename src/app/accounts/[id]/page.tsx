@@ -14,6 +14,7 @@ import { TransactionEditModal } from "@/components/transaction/transaction-edit-
 import { SettleModal } from "@/components/account/settle-modal";
 import { EarlyPayoffModal } from "@/components/account/early-payoff-modal";
 import { InstallmentPlanModal } from "@/components/account/installment-plan-modal";
+import { ConfirmationModal } from "@/components/ui/confirmation-modal";
 import { LocalTransaction, LocalInstallmentPlan } from "@/lib/db";
 import { localUpdateTransaction, localDeleteInstallmentPlan } from "@/lib/sync/client";
 
@@ -49,6 +50,7 @@ function AccountDetailContent() {
   const [payoffPlan, setPayoffPlan] = useState<LocalInstallmentPlan | null>(null);
   const [payoffRemainingMinor, setPayoffRemainingMinor] = useState(0);
   const [editingPlan, setEditingPlan] = useState<LocalInstallmentPlan | null>(null);
+  const [cancellingPlan, setCancellingPlan] = useState<LocalInstallmentPlan | null>(null);
 
   const account = useMemo(() => {
     return accounts.find((a) => a.id === accountId);
@@ -537,16 +539,7 @@ function AccountDetailContent() {
                           <button
                             type="button"
                             data-testid="cancel-plan-btn"
-                            onClick={async () => {
-                              if (plan.originalTransactionId) {
-                                await localUpdateTransaction(db, plan.originalTransactionId, {
-                                  excludeFromBalance: false,
-                                  excludeFromStats: false,
-                                  installmentPlanId: null,
-                                });
-                              }
-                              await localDeleteInstallmentPlan(db, plan.id);
-                            }}
+                            onClick={() => setCancellingPlan(plan)}
                             className="px-2 py-0.5 rounded border border-hairline text-[11px] font-medium text-red-500 hover:bg-red-500/10 transition-colors"
                           >
                             Cancel Plan
@@ -636,6 +629,29 @@ function AccountDetailContent() {
           transaction={selectedTxForEdit}
           isOpen={!!selectedTxForEdit}
           onClose={() => setSelectedTxForEdit(null)}
+        />
+      )}
+
+      {/* Confirmation Modal */}
+      {cancellingPlan && (
+        <ConfirmationModal
+          isOpen={!!cancellingPlan}
+          onClose={() => setCancellingPlan(null)}
+          onConfirm={async () => {
+            if (cancellingPlan.originalTransactionId) {
+              await localUpdateTransaction(db, cancellingPlan.originalTransactionId, {
+                excludeFromBalance: false,
+                excludeFromStats: false,
+                installmentPlanId: null,
+              });
+            }
+            await localDeleteInstallmentPlan(db, cancellingPlan.id);
+          }}
+          title="Cancel Installment Plan"
+          message={`Are you sure you want to cancel the installment plan for "${cancellingPlan.merchantName}"? Remaining installments will be cancelled and the original transaction will be restored to your active ledger.`}
+          confirmText="Cancel Plan"
+          variant="danger"
+          icon="alert"
         />
       )}
     </main>

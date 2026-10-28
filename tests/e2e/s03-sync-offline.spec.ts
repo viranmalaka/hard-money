@@ -131,6 +131,7 @@ test.describe("Step 3: Offline Data Layer & Sync Engine @s03", () => {
 
     // Delete on Device 1
     await page.click('[data-testid="account-delete-btn"]');
+    await page.click('[data-testid="confirm-action-btn"]');
     await app1.waitForSyncIdle();
 
     // Sync Device 2
