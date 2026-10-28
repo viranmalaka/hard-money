@@ -15,6 +15,7 @@ export interface ConfirmationModalProps {
   variant?: "danger" | "warning" | "default";
   icon?: "trash" | "archive" | "alert";
   testId?: string;
+  placement?: "center" | "bottom";
 }
 
 export function ConfirmationModal({
@@ -28,6 +29,7 @@ export function ConfirmationModal({
   variant = "danger",
   icon = "alert",
   testId = "confirmation-modal",
+  placement = "center",
 }: ConfirmationModalProps) {
   useModalHistory(isOpen, onClose, "confirmation-modal");
   const [submitting, setSubmitting] = useState(false);
@@ -102,10 +104,14 @@ export function ConfirmationModal({
       ? "bg-amber-600 hover:bg-amber-700 text-white"
       : "bg-[var(--accent)] hover:opacity-90 text-white";
 
+  const isBottom = placement === "bottom";
+
   return (
     <div
       data-testid={testId}
-      className="fixed inset-0 z-50 bg-black/50 flex items-end md:items-center justify-center p-0 md:p-4 backdrop-blur-xs select-none overflow-y-auto"
+      className={`fixed inset-0 z-50 bg-black/60 flex justify-center backdrop-blur-xs select-none overflow-y-auto animate-in fade-in duration-150 ${
+        isBottom ? "items-end md:items-center p-0 md:p-4" : "items-center p-4"
+      }`}
       onClick={(e) => {
         if (e.target === e.currentTarget && !submitting) onClose();
       }}
@@ -114,7 +120,11 @@ export function ConfirmationModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="confirmation-modal-title"
-        className="w-full md:max-w-md bg-[var(--surface)] border border-hairline rounded-t-xl md:rounded-lg shadow-xl p-5 pb-sheet-safe md:pb-5 space-y-4 modal-sheet-dialog"
+        className={`w-full max-w-sm md:max-w-md bg-[var(--surface)] border border-hairline shadow-2xl p-5 space-y-4 animate-in zoom-in-95 duration-150 ${
+          isBottom
+            ? "rounded-t-xl md:rounded-lg pb-sheet-safe md:pb-5 modal-sheet-dialog"
+            : "rounded-2xl md:rounded-xl my-auto"
+        }`}
       >
         <div className="flex items-start gap-3.5">
           {renderIcon()}
