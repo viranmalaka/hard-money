@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo } from "react";
 import {
   useAccounts,
   useFixedDeposits,
@@ -18,6 +18,10 @@ import { calculateLedgerBalance, LedgerTransaction } from "@/lib/finance-core/le
 import { calculateStatementCycle, calculateInstallmentProgress } from "@/lib/finance-core/credit-card";
 import { calculateAccruedFdValue } from "@/lib/finance-core/investments";
 
+import { useQuery } from "@tanstack/react-query";
+import { queryKeys } from "@/lib/api/query-keys";
+import { listHouseholds } from "@/services/household-service";
+
 export function useAccountPortfolio(showArchived: boolean, settlingCard: LocalAccount | null) {
   const accounts = useAccounts();
   const transactions = useTransactions();
@@ -26,26 +30,25 @@ export function useAccountPortfolio(showArchived: boolean, settlingCard: LocalAc
   const loans = useLoans();
   const loanPayments = useLoanPayments();
   const loanScheduleEntries = useLoanScheduleEntries();
-  const { db } = useSync();
-  const [householdRoleMap, setHouseholdRoleMap] = useState<Map<string, string>>(new Map());
-  const [activeHouseholdId, setActiveHouseholdId] = useState<string | null>(null);
+  const { db, sync } = useSync();
 
-  useEffect(() => {
-    fetch("/api/households", { cache: "no-store" })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (!data?.households) return;
-        const map = new Map<string, string>();
-        for (const household of data.households) {
-          map.set(household.id, household.myRole);
-        }
-        setHouseholdRoleMap(map);
-        setActiveHouseholdId(data.households[0]?.id ?? null);
-      })
-      .catch((error) => {
-        console.error("Failed to load household roles:", error);
-      });
-  }, []);
+  const householdsQuery = useQuery({
+    queryKey: queryKeys.households.all(),
+    queryFn: listHouseholds,
+    staleTime: 60_000,
+  });
+
+  const { householdRoleMap, activeHouseholdId } = useMemo(() => {
+    const map = new Map<string, string>();
+    const list = householdsQuery.data ?? [];
+    for (const h of list) {
+      map.set(h.id, h.myRole);
+    }
+    return {
+      householdRoleMap: map,
+      activeHouseholdId: list[0]?.id ?? null,
+    };
+  }, [householdsQuery.data]);
 
   const ledgerTxList: LedgerTransaction[] = useMemo(
     () =>
@@ -255,6 +258,7 @@ export function useAccountPortfolio(showArchived: boolean, settlingCard: LocalAc
     loans,
     loanPayments,
     db,
+    sync,
     ledgerTxList,
     planProgressMap,
     accountBlockedPrincipalMap,

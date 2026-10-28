@@ -18,7 +18,7 @@ interface FixedDepositModalProps {
 
 export function FixedDepositModal({ isOpen, onClose, accounts, fixedDeposit = null }: FixedDepositModalProps) {
   useModalHistory(isOpen, onClose, "fixed-deposit-modal");
-  const { db, userId } = useSync();
+  const { db, userId, sync } = useSync();
 
   const [bankName, setBankName] = useState("");
   const [accountNumber, setAccountNumber] = useState("");
@@ -193,6 +193,7 @@ export function FixedDepositModal({ isOpen, onClose, accounts, fixedDeposit = nu
         await localCreateFixedDeposit(db, values);
       }
 
+      void sync();
       onClose();
     } catch (err) {
       console.error("Failed to create fixed deposit:", err);

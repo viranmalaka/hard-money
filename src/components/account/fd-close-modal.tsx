@@ -19,7 +19,7 @@ interface FdCloseModalProps {
 
 export function FdCloseModal({ fd, isOpen, onClose, accounts }: FdCloseModalProps) {
   useModalHistory(isOpen, onClose, "fd-close-modal");
-  const { db } = useSync();
+  const { db, sync } = useSync();
 
   const [proceedsStr, setProceedsStr] = useState("");
   const [targetAccountId, setTargetAccountId] = useState("");
@@ -68,6 +68,7 @@ export function FdCloseModal({ fd, isOpen, onClose, accounts }: FdCloseModalProp
         prematureClosure: true,
       });
 
+      await sync();
       onClose();
     } catch (err) {
       console.error("Failed to close fixed deposit:", err);

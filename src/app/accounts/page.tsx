@@ -55,6 +55,7 @@ export default function AccountsPage() {
     fixedDeposits,
     loans,
     db,
+    sync,
     ledgerTxList,
     planProgressMap,
     accountBlockedPrincipalMap,
@@ -111,6 +112,7 @@ export default function AccountsPage() {
         status: "CLOSED",
         closedAt: new Date().toISOString(),
       });
+      await sync();
     } catch (error) {
       console.error("Failed to deposit fixed-deposit proceeds:", error);
     }

@@ -18,6 +18,8 @@ import {
   LocalTransaction,
   OutboxMutation,
 } from "../db";
+import { queryKeys } from "../api/query-keys";
+import { updateQueryCacheOptimistic, syncDbToQueryCache } from "./cache-sync";
 
 export type SyncState = "idle" | "syncing" | "offline" | "error";
 
@@ -279,6 +281,7 @@ export async function syncNow(
         await db.syncMeta.put({ key: "lastSyncedAt", value: new Date().toISOString() });
       }
     );
+    await syncDbToQueryCache(db);
   } catch (err) {
     console.warn("Sync pull failed:", err);
     onStateChange("offline");
@@ -324,6 +327,7 @@ export async function localCreateAccount(
     await db.accounts.put(fullAccount);
     await db.outbox.add(mutation);
   });
+  updateQueryCacheOptimistic(queryKeys.accounts.all(), "CREATE", fullAccount);
 
   return fullAccount;
 }
@@ -353,6 +357,7 @@ export async function localUpdateAccount(
     await db.accounts.put(updated);
     await db.outbox.add(mutation);
   });
+  updateQueryCacheOptimistic(queryKeys.accounts.all(), "UPDATE", updated);
 }
 
 export async function localDeleteAccount(db: HardMoneyDB, id: string): Promise<void> {
@@ -370,6 +375,7 @@ export async function localDeleteAccount(db: HardMoneyDB, id: string): Promise<v
     await db.accounts.delete(id);
     await db.outbox.add(mutation);
   });
+  updateQueryCacheOptimistic(queryKeys.accounts.all(), "DELETE", { id });
 }
 
 export async function localCreateCategory(
@@ -400,6 +406,7 @@ export async function localCreateCategory(
     await db.categories.put(fullCategory);
     await db.outbox.add(mutation);
   });
+  updateQueryCacheOptimistic(queryKeys.categories.all(), "CREATE", fullCategory);
 
   return fullCategory;
 }
@@ -429,6 +436,7 @@ export async function localUpdateCategory(
     await db.categories.put(updated);
     await db.outbox.add(mutation);
   });
+  updateQueryCacheOptimistic(queryKeys.categories.all(), "UPDATE", updated);
 }
 
 export async function localDeleteCategory(db: HardMoneyDB, id: string): Promise<void> {
@@ -446,6 +454,7 @@ export async function localDeleteCategory(db: HardMoneyDB, id: string): Promise<
     await db.categories.delete(id);
     await db.outbox.add(mutation);
   });
+  updateQueryCacheOptimistic(queryKeys.categories.all(), "DELETE", { id });
 }
 
 export async function localCreateTransaction(
@@ -486,6 +495,7 @@ export async function localCreateTransaction(
     await db.transactions.put(fullTx);
     await db.outbox.add(mutation);
   });
+  updateQueryCacheOptimistic(queryKeys.transactions.all(), "CREATE", fullTx);
 
   return fullTx;
 }
@@ -515,6 +525,7 @@ export async function localUpdateTransaction(
     await db.transactions.put(updated);
     await db.outbox.add(mutation);
   });
+  updateQueryCacheOptimistic(queryKeys.transactions.all(), "UPDATE", updated);
 }
 
 export async function localDeleteTransaction(db: HardMoneyDB, id: string): Promise<void> {
@@ -536,6 +547,7 @@ export async function localDeleteTransaction(db: HardMoneyDB, id: string): Promi
     }
     await db.outbox.add(mutation);
   });
+  updateQueryCacheOptimistic(queryKeys.transactions.all(), "DELETE", { id });
 }
 
 export async function localRestoreTransaction(db: HardMoneyDB, tx: LocalTransaction): Promise<void> {
@@ -556,6 +568,7 @@ export async function localRestoreTransaction(db: HardMoneyDB, tx: LocalTransact
     await db.transactions.put(restoredTx);
     await db.outbox.add(mutation);
   });
+  updateQueryCacheOptimistic(queryKeys.transactions.all(), "CREATE", restoredTx);
 }
 
 export async function localCreateTemplate(
@@ -669,6 +682,7 @@ export async function localCreateBudget(
     await db.budgets.put(fullBudget);
     await db.outbox.add(mutation);
   });
+  updateQueryCacheOptimistic(queryKeys.budgets.all(), "CREATE", fullBudget);
 
   return fullBudget;
 }
@@ -698,6 +712,7 @@ export async function localUpdateBudget(
     await db.budgets.put(updated);
     await db.outbox.add(mutation);
   });
+  updateQueryCacheOptimistic(queryKeys.budgets.all(), "UPDATE", updated);
 }
 
 export async function localDeleteBudget(db: HardMoneyDB, id: string): Promise<void> {
@@ -715,6 +730,7 @@ export async function localDeleteBudget(db: HardMoneyDB, id: string): Promise<vo
     await db.budgets.delete(id);
     await db.outbox.add(mutation);
   });
+  updateQueryCacheOptimistic(queryKeys.budgets.all(), "DELETE", { id });
 }
 
 export async function localCreateInstallmentPlan(
@@ -745,6 +761,7 @@ export async function localCreateInstallmentPlan(
     await db.installmentPlans.put(fullPlan);
     await db.outbox.add(mutation);
   });
+  updateQueryCacheOptimistic(queryKeys.installmentPlans.all(), "CREATE", fullPlan);
 
   return fullPlan;
 }
@@ -774,6 +791,7 @@ export async function localUpdateInstallmentPlan(
     await db.installmentPlans.put(updated);
     await db.outbox.add(mutation);
   });
+  updateQueryCacheOptimistic(queryKeys.installmentPlans.all(), "UPDATE", updated);
 }
 
 export async function localDeleteInstallmentPlan(db: HardMoneyDB, id: string): Promise<void> {
@@ -791,6 +809,7 @@ export async function localDeleteInstallmentPlan(db: HardMoneyDB, id: string): P
     await db.installmentPlans.delete(id);
     await db.outbox.add(mutation);
   });
+  updateQueryCacheOptimistic(queryKeys.installmentPlans.all(), "DELETE", { id });
 }
 
 export async function localCreateFixedDeposit(
@@ -845,6 +864,7 @@ export async function localCreateFixedDeposit(
     }
     await db.outbox.add(mutation);
   });
+  updateQueryCacheOptimistic(queryKeys.fixedDeposits.all(), "CREATE", fullFd);
 
   return fullFd;
 }
@@ -874,6 +894,7 @@ export async function localUpdateFixedDeposit(
     await db.fixedDeposits.put(updated);
     await db.outbox.add(mutation);
   });
+  updateQueryCacheOptimistic(queryKeys.fixedDeposits.all(), "UPDATE", updated);
 }
 
 export async function localDeleteFixedDeposit(db: HardMoneyDB, id: string): Promise<void> {
@@ -891,6 +912,7 @@ export async function localDeleteFixedDeposit(db: HardMoneyDB, id: string): Prom
     await db.fixedDeposits.delete(id);
     await db.outbox.add(mutation);
   });
+  updateQueryCacheOptimistic(queryKeys.fixedDeposits.all(), "DELETE", { id });
 }
 
 export async function localCreateLoan(
