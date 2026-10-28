@@ -17,7 +17,10 @@ function getMonthString(d: Date): string {
 }
 
 export default function StatsPage() {
-  const [currentDate, setCurrentDate] = useState(() => new Date(2026, 9, 1)); // Oct 2026 default
+  const [currentDate, setCurrentDate] = useState(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1);
+  });
   const [activeTab, setActiveTab] = useState<"expense" | "income" | "trend">("expense");
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
 
@@ -139,10 +142,16 @@ export default function StatsPage() {
     if (!selectedCategoryId) return [];
     return monthTransactions.filter((t) => {
       if (t.type === "TRANSFER" || t.type === "ADJUSTMENT" || t.source === "CALIBRATION") return false;
-      if (t.isSplit && t.splitItems) {
-        return t.splitItems.some((s) => s.categoryId === selectedCategoryId);
+      if (t.isSplit && t.splitItems && t.splitItems.length > 0) {
+        return t.splitItems.some((s) =>
+          selectedCategoryId === "uncategorized"
+            ? !s.categoryId || s.categoryId === "uncategorized"
+            : s.categoryId === selectedCategoryId
+        );
       }
-      return t.categoryId === selectedCategoryId;
+      return selectedCategoryId === "uncategorized"
+        ? !t.categoryId || t.categoryId === "uncategorized"
+        : t.categoryId === selectedCategoryId;
     });
   }, [monthTransactions, selectedCategoryId]);
 
@@ -422,7 +431,7 @@ export default function StatsPage() {
       {selectedCategoryId && selectedCategoryTransactions.length > 0 && (
         <CategoryTransactions
           category={{
-            name: categoryMap.get(selectedCategoryId)?.name || "Category",
+            name: categoryMap.get(selectedCategoryId)?.name || (selectedCategoryId === "uncategorized" ? "Uncategorized" : "Category"),
             color: categoryMap.get(selectedCategoryId)?.color || "#64748b",
           }}
           transactions={selectedCategoryTransactions}

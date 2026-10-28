@@ -22,9 +22,9 @@ export function FixedDepositModal({ isOpen, onClose, accounts, fixedDeposit = nu
 
   const [bankName, setBankName] = useState("");
   const [accountNumber, setAccountNumber] = useState("");
-  const [principalStr, setPrincipalStr] = useState("1000000.00");
-  const [aprStr, setAprStr] = useState("12.0");
-  const [tenureMonthsStr, setTenureMonthsStr] = useState("12");
+  const [principalStr, setPrincipalStr] = useState("");
+  const [aprStr, setAprStr] = useState("");
+  const [tenureMonthsStr, setTenureMonthsStr] = useState("");
   const [startDateStr, setStartDateStr] = useState(new Date().toISOString().slice(0, 10));
   const [compoundingFrequency, setCompoundingFrequency] = useState<
     "MONTHLY" | "QUARTERLY" | "ANNUALLY" | "AT_MATURITY"

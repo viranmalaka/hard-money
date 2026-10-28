@@ -73,11 +73,14 @@ export const CategoryList = memo(function CategoryList({
         {categories.map((category) => {
           const isSelected = selectedId === category.id;
           return (
-            <div
+            <button
+              type="button"
               key={category.id}
               data-testid={`category-stat-row-${category.id}`}
               onClick={() => onSelect(isSelected ? "" : category.id)}
-              className={`flex items-center justify-between p-2 rounded-lg cursor-pointer transition-all ${
+              aria-expanded={isSelected}
+              aria-label={`${category.name}, ${category.percent} percent, ${formatMoney(category.amount)}`}
+              className={`w-full text-left flex items-center justify-between p-2 rounded-lg cursor-pointer transition-all ${
                 isSelected ? "bg-[var(--border)] border border-hairline" : "hover:bg-[var(--bg)] border border-transparent"
               }`}
             >
@@ -94,7 +97,7 @@ export const CategoryList = memo(function CategoryList({
                 </span>
                 <ChevronRight size={14} className={`text-[var(--text-muted)] transition-transform ${isSelected ? "rotate-90 text-[var(--text)]" : ""}`} />
               </div>
-            </div>
+            </button>
           );
         })}
       </div>

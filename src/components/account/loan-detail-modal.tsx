@@ -7,6 +7,7 @@ import { formatMoney, parseMoneyToMinor } from "@/lib/finance-core/money";
 import { useSync } from "@/components/sync-provider";
 import { localDeleteLoan } from "@/lib/sync/client";
 import { useModalHistory } from "@/hooks/use-modal-history";
+import { ConfirmationModal } from "@/components/ui/confirmation-modal";
 
 const getEntryEmi = (entry: LocalLoanScheduleEntry) =>
   entry.emiAmountMinor ?? (entry.principalComponentMinor + entry.interestComponentMinor);
@@ -33,12 +34,16 @@ export function LoanDetailModal({ loan, isOpen, onClose, accounts }: LoanDetailM
   const [isExtraPrincipal, setIsExtraPrincipal] = useState(false);
   const [recalcMode, setRecalcMode] = useState<"LOWER_EMI" | "SHORTER_TENURE">("LOWER_EMI");
   const [submittingEmi, setSubmittingEmi] = useState(false);
+  const [emiError, setEmiError] = useState<string | null>(null);
 
   // Inline Override State
   const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
   const [overrideInterestStr, setOverrideInterestStr] = useState("");
   const [overridePrincipalStr, setOverridePrincipalStr] = useState("");
   const [savingOverride, setSavingOverride] = useState(false);
+  const [overrideError, setOverrideError] = useState<string | null>(null);
+
+  // Edit Loan State
   const [isLoanEditOpen, setIsLoanEditOpen] = useState(false);
   const [editPrincipal, setEditPrincipal] = useState("");
   const [editRate, setEditRate] = useState("");
@@ -47,15 +52,22 @@ export function LoanDetailModal({ loan, isOpen, onClose, accounts }: LoanDetailM
   const [editPaymentDueDay, setEditPaymentDueDay] = useState("");
   const [editPaidInstallments, setEditPaidInstallments] = useState("");
   const [editCalculationType, setEditCalculationType] = useState<"REDUCING_BALANCE" | "FLAT_RATE">("REDUCING_BALANCE");
+  const [loanEditError, setLoanEditError] = useState<string | null>(null);
+
+  // Confirmation Modals State
+  const [isEarlyPayoffConfirmOpen, setIsEarlyPayoffConfirmOpen] = useState(false);
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+  const [generalError, setGeneralError] = useState<string | null>(null);
 
   const eligibleAccounts = accounts.filter(
     (a) => !a.isArchived && (a.type === "BANK_SAVINGS" || a.type === "CASH")
   );
 
-  const fetchDetails = async () => {
+  const effectivePayAccountId = payAccountId || (eligibleAccounts[0]?.id ?? "");
+
+  const reloadDetails = async () => {
     if (!loan) return;
     setLoading(true);
-
     try {
       if (db) {
         const localEntries = await db.loanScheduleEntries
@@ -93,13 +105,50 @@ export function LoanDetailModal({ loan, isOpen, onClose, accounts }: LoanDetailM
   };
 
   useEffect(() => {
-    if (isOpen && loan) {
-      fetchDetails();
-      if (eligibleAccounts.length > 0 && !payAccountId) {
-        setPayAccountId(eligibleAccounts[0].id);
+    if (!isOpen || !loan) return;
+    let active = true;
+
+    void (async () => {
+      try {
+        if (db) {
+          const localEntries = await db.loanScheduleEntries
+            .where("loanId")
+            .equals(loan.id)
+            .sortBy("installmentNumber");
+          const localPayments = await db.loanPayments
+            .where("loanId")
+            .equals(loan.id)
+            .toArray();
+
+          if (active) {
+            if (localEntries.length > 0) {
+              setSchedule(localEntries.filter((e) => !e.deletedAt));
+            }
+            if (localPayments.length > 0) {
+              setPayments(localPayments);
+            }
+          }
+        }
+
+        const res = await fetch(`/api/loans/${loan.id}`);
+        if (res.ok && active) {
+          const data = await res.json();
+          if (data.loan?.scheduleEntries?.length > 0) {
+            setSchedule(data.loan.scheduleEntries);
+          }
+          if (data.loan?.payments) {
+            setPayments(data.loan.payments);
+          }
+        }
+      } catch {
+        // ignore
       }
-    }
-  }, [isOpen, loan]);
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [isOpen, loan, db]);
 
   if (!isOpen || !loan) return null;
 
@@ -116,6 +165,7 @@ export function LoanDetailModal({ loan, isOpen, onClose, accounts }: LoanDetailM
       setPayAmountStr((loan.monthlyEmiAmountMinor / 100).toFixed(2));
     }
     setIsExtraPrincipal(false);
+    setEmiError(null);
     setIsEmiDialogOpen(true);
   };
 
@@ -127,34 +177,49 @@ export function LoanDetailModal({ loan, isOpen, onClose, accounts }: LoanDetailM
     setEditPaymentDueDay(String(loan.paymentDueDay || new Date(loan.startDate).getUTCDate()));
     setEditPaidInstallments(String(loan.paidInstallments || 0));
     setEditCalculationType(loan.calculationType);
+    setLoanEditError(null);
     setIsLoanEditOpen(true);
   };
 
   const handleLoanEdit = async (event: React.FormEvent) => {
     event.preventDefault();
-    const response = await fetch(`/api/loans/${loan.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        originalPrincipalMinor: parseMoneyToMinor(editPrincipal),
-        annualInterestRateBps: Math.round(Number(editRate) * 100),
-        tenureMonths: Number(editTenure),
-        startDate: editStartDate,
-        paymentDueDay: Number(editPaymentDueDay),
-        paidInstallments: Number(editPaidInstallments),
-        calculationType: editCalculationType,
-      }),
-    });
-    if (!response.ok) return;
-    setIsLoanEditOpen(false);
-    await sync();
-    await fetchDetails();
+    setLoanEditError(null);
+    try {
+      const response = await fetch(`/api/loans/${loan.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          originalPrincipalMinor: parseMoneyToMinor(editPrincipal),
+          annualInterestRateBps: Math.round(Number(editRate) * 100),
+          tenureMonths: Number(editTenure),
+          startDate: editStartDate,
+          paymentDueDay: Number(editPaymentDueDay),
+          paidInstallments: Number(editPaidInstallments),
+          calculationType: editCalculationType,
+        }),
+      });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        setLoanEditError(data.error || "Failed to update loan");
+        return;
+      }
+      setIsLoanEditOpen(false);
+      await sync();
+      await reloadDetails();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to update loan";
+      setLoanEditError(msg);
+    }
   };
 
   const handlePayEmi = async (e: React.FormEvent) => {
     e.preventDefault();
+    setEmiError(null);
     const amountMinor = parseMoneyToMinor(payAmountStr);
-    if (!payAccountId || amountMinor <= 0) return;
+    if (!effectivePayAccountId || amountMinor <= 0) {
+      setEmiError("Please select an account and valid payment amount");
+      return;
+    }
 
     setSubmittingEmi(true);
     try {
@@ -162,7 +227,7 @@ export function LoanDetailModal({ loan, isOpen, onClose, accounts }: LoanDetailM
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          accountId: payAccountId,
+          accountId: effectivePayAccountId,
           scheduleEntryId: isExtraPrincipal ? null : nextScheduled?.id,
           amountMinor,
           isExtraPrincipal,
@@ -170,48 +235,54 @@ export function LoanDetailModal({ loan, isOpen, onClose, accounts }: LoanDetailM
         }),
       });
 
-      if (res.ok) {
-        setIsEmiDialogOpen(false);
-        await sync();
-        await fetchDetails();
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setEmiError(data.error || "Failed to log EMI payment");
+        return;
       }
-    } catch (err) {
+
+      setIsEmiDialogOpen(false);
+      await sync();
+      await reloadDetails();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to log EMI payment";
       console.error("Failed to pay EMI:", err);
+      setEmiError(msg);
     } finally {
       setSubmittingEmi(false);
     }
   };
 
-  const handleEarlyPayoff = async () => {
-    if (!confirm("Are you sure you want to close this loan? All remaining schedule will be cleared.")) {
-      return;
+  const executeEarlyPayoff = async () => {
+    setGeneralError(null);
+    const res = await fetch(`/api/loans/${loan.id}/close`, { method: "POST" });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || "Failed to close loan");
     }
-
-    try {
-      const res = await fetch(`/api/loans/${loan.id}/close`, { method: "POST" });
-      if (res.ok) {
-        if (typeof window !== "undefined") {
-          await db.loans.update(loan.id, {
-            status: "CLOSED",
-            closedAt: new Date().toISOString(),
-          });
-        }
-        await sync();
-        onClose();
-      }
-    } catch {
-      // ignore
+    if (typeof window !== "undefined") {
+      await db?.loans.update(loan.id, {
+        status: "CLOSED",
+        closedAt: new Date().toISOString(),
+      });
     }
+    await sync();
+    setIsEarlyPayoffConfirmOpen(false);
+    onClose();
   };
 
-  const handleDeleteLoan = async () => {
-    if (!confirm("Delete this loan and its schedule? This cannot be undone.")) return;
-    await localDeleteLoan(db, loan.id);
+  const executeDeleteLoan = async () => {
+    setGeneralError(null);
+    if (db) {
+      await localDeleteLoan(db, loan.id);
+    }
+    setIsDeleteConfirmOpen(false);
     onClose();
   };
 
   const handleSaveOverride = async (entryId: string) => {
     setSavingOverride(true);
+    setOverrideError(null);
     try {
       const payload: { interestComponentMinor?: number; principalComponentMinor?: number } = {};
       if (overrideInterestStr.trim()) {
@@ -227,13 +298,19 @@ export function LoanDetailModal({ loan, isOpen, onClose, accounts }: LoanDetailM
         body: JSON.stringify(payload),
       });
 
-      if (res.ok) {
-        setEditingEntryId(null);
-        await sync();
-        await fetchDetails();
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setOverrideError(data.error || "Failed to override schedule entry");
+        return;
       }
-    } catch (err) {
+
+      setEditingEntryId(null);
+      await sync();
+      await reloadDetails();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to override schedule entry";
       console.error("Failed to override entry:", err);
+      setOverrideError(msg);
     } finally {
       setSavingOverride(false);
     }
@@ -242,6 +319,9 @@ export function LoanDetailModal({ loan, isOpen, onClose, accounts }: LoanDetailM
   return (
     <div
       data-testid="loan-detail-backdrop"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="loan-detail-title"
       className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-2 md:p-4 overflow-y-auto"
     >
       <div className="w-full max-w-3xl bg-[var(--surface)] border border-hairline rounded-xl shadow-2xl p-4 md:p-6 space-y-4 my-auto modal-sheet-dialog flex flex-col overflow-hidden">
@@ -249,7 +329,7 @@ export function LoanDetailModal({ loan, isOpen, onClose, accounts }: LoanDetailM
         <div className="flex items-start justify-between pb-3 border-b border-hairline shrink-0">
           <div>
             <div className="flex items-center gap-2">
-              <h2 className="text-base font-semibold text-[var(--text)]">{loan.lenderName}</h2>
+              <h2 id="loan-detail-title" className="text-base font-semibold text-[var(--text)]">{loan.lenderName}</h2>
               <span
                 className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${
                   loan.kind === "LEASE"
@@ -277,23 +357,36 @@ export function LoanDetailModal({ loan, isOpen, onClose, accounts }: LoanDetailM
             </p>
           </div>
 
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-1 rounded text-[var(--text-muted)] hover:text-[var(--text)]"
-          >
-            <X size={18} />
-          </button>
-          <button type="button" onClick={openLoanEdit} className="px-2 py-1 rounded border border-hairline text-xs font-medium">
-            Edit loan
-          </button>
-          <button type="button" onClick={handleDeleteLoan} className="px-2 py-1 rounded border border-red-500/50 text-red-500 text-xs font-medium">
-            Delete loan
-          </button>
+          <div className="flex items-center gap-2">
+            <button type="button" onClick={openLoanEdit} className="px-2 py-1 rounded border border-hairline text-xs font-medium">
+              Edit loan
+            </button>
+            <button type="button" onClick={() => setIsDeleteConfirmOpen(true)} className="px-2 py-1 rounded border border-red-500/50 text-red-500 text-xs font-medium">
+              Delete loan
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-1 rounded text-[var(--text-muted)] hover:text-[var(--text)]"
+            >
+              <X size={18} />
+            </button>
+          </div>
         </div>
+
+        {generalError && (
+          <div role="alert" className="p-2.5 rounded-lg bg-red-500/10 border border-red-500/30 text-xs text-red-400">
+            {generalError}
+          </div>
+        )}
 
         {isLoanEditOpen && (
           <form onSubmit={handleLoanEdit} className="grid grid-cols-2 gap-2 p-3 rounded border border-hairline bg-[var(--bg)] text-xs">
+            {loanEditError && (
+              <div role="alert" className="col-span-2 p-2 rounded bg-red-500/10 border border-red-500/30 text-xs text-red-400">
+                {loanEditError}
+              </div>
+            )}
             <label>Principal<input value={editPrincipal} onChange={(e) => setEditPrincipal(e.target.value)} className="w-full mt-1 px-2 py-1 rounded border border-hairline bg-[var(--surface)]" /></label>
             <label>APR %<input type="number" step="0.01" value={editRate} onChange={(e) => setEditRate(e.target.value)} className="w-full mt-1 px-2 py-1 rounded border border-hairline bg-[var(--surface)]" /></label>
             <label>Tenure months<input type="number" value={editTenure} onChange={(e) => setEditTenure(e.target.value)} className="w-full mt-1 px-2 py-1 rounded border border-hairline bg-[var(--surface)]" /></label>
@@ -380,7 +473,7 @@ export function LoanDetailModal({ loan, isOpen, onClose, accounts }: LoanDetailM
                 <button
                   type="button"
                   data-testid="loan-early-payoff-btn"
-                  onClick={handleEarlyPayoff}
+                  onClick={() => setIsEarlyPayoffConfirmOpen(true)}
                   className="px-2.5 py-1.5 rounded border border-hairline text-xs font-medium text-[var(--expense)] hover:bg-[var(--border)] transition-colors"
                 >
                   Early Payoff
@@ -389,6 +482,12 @@ export function LoanDetailModal({ loan, isOpen, onClose, accounts }: LoanDetailM
             )}
           </div>
         </div>
+
+        {overrideError && (
+          <div role="alert" className="p-2.5 rounded-lg bg-red-500/10 border border-red-500/30 text-xs text-red-400">
+            {overrideError}
+          </div>
+        )}
 
         {/* Schedule Table (Desktop) / Cards (Mobile) */}
         <div className="flex-1 min-h-0 overflow-y-auto min-h-[220px] border border-hairline rounded-lg">
@@ -638,6 +737,11 @@ export function LoanDetailModal({ loan, isOpen, onClose, accounts }: LoanDetailM
               </div>
 
               <form onSubmit={handlePayEmi} className="space-y-3 text-xs">
+                {emiError && (
+                  <div role="alert" className="p-2 rounded bg-red-500/10 border border-red-500/30 text-xs text-red-400">
+                    {emiError}
+                  </div>
+                )}
                 {/* Account Selection */}
                 <div className="space-y-1">
                   <label className="block text-xs font-medium text-[var(--text-muted)]">
@@ -731,6 +835,26 @@ export function LoanDetailModal({ loan, isOpen, onClose, accounts }: LoanDetailM
             </div>
           </div>
         )}
+        {/* Confirmation Modals */}
+        <ConfirmationModal
+          isOpen={isEarlyPayoffConfirmOpen}
+          onClose={() => setIsEarlyPayoffConfirmOpen(false)}
+          onConfirm={executeEarlyPayoff}
+          title="Early Payoff Loan"
+          message="Are you sure you want to close this loan early? All remaining scheduled installments will be cleared."
+          confirmText="Close Loan"
+          variant="danger"
+        />
+
+        <ConfirmationModal
+          isOpen={isDeleteConfirmOpen}
+          onClose={() => setIsDeleteConfirmOpen(false)}
+          onConfirm={executeDeleteLoan}
+          title="Delete Loan"
+          message="Are you sure you want to delete this loan and its schedule? This cannot be undone."
+          confirmText="Delete Loan"
+          variant="danger"
+        />
       </div>
     </div>
   );

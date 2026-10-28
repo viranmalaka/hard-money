@@ -51,6 +51,20 @@ export function QuickAddModal() {
   return <QuickAddModalContent />;
 }
 
+function getInitialDraft() {
+  if (typeof window === "undefined") return null;
+  try {
+    const saved = sessionStorage.getItem("hardmoney_quick_add_draft");
+    if (saved) {
+      sessionStorage.removeItem("hardmoney_quick_add_draft");
+      return JSON.parse(saved);
+    }
+  } catch {
+    // ignore
+  }
+  return null;
+}
+
 function QuickAddModalContent() {
   const { closeQuickAdd, initialType, initialAccountId } = useQuickAdd();
   useModalHistory(true, closeQuickAdd, "quick-add");
@@ -60,17 +74,18 @@ function QuickAddModalContent() {
 
   const activeAccounts = useMemo(() => accounts.filter((a) => !a.isArchived), [accounts]);
 
+  const [initialDraft] = useState(() => getInitialDraft());
   const templates = useTemplates();
-  const [type, setType] = useState<TransactionType>(initialType || "EXPENSE");
-  const [date, setDate] = useState<string>(getTodayDateString());
-  const [expression, setExpression] = useState<string>("");
-  const [rawAccountId, setAccountId] = useState<string>(initialAccountId || "");
-  const [rawToAccountId, setToAccountId] = useState<string>("");
-  const [rawCategoryId, setCategoryId] = useState<string>("");
+  const [type, setType] = useState<TransactionType>(initialDraft?.type || initialType || "EXPENSE");
+  const [date, setDate] = useState<string>(initialDraft?.date || getTodayDateString());
+  const [expression, setExpression] = useState<string>(initialDraft?.expression || "");
+  const [rawAccountId, setAccountId] = useState<string>(initialDraft?.accountId || initialAccountId || "");
+  const [rawToAccountId, setToAccountId] = useState<string>(initialDraft?.toAccountId || "");
+  const [rawCategoryId, setCategoryId] = useState<string>(initialDraft?.categoryId || "");
   const [destinationAmountStr, setDestinationAmountStr] = useState("");
   const [exchangeRateStr, setExchangeRateStr] = useState("");
-  const [note, setNote] = useState<string>("");
-  const [excludeFromBudget, setExcludeFromBudget] = useState(false);
+  const [note, setNote] = useState<string>(initialDraft?.note || "");
+  const [excludeFromBudget, setExcludeFromBudget] = useState(Boolean(initialDraft?.excludeFromBudget));
   const [errorMsg, setErrorMsg] = useState<string>("");
   // Desktop has a physical keyboard: on-screen keypad is opt-in via the calculator toggle
   const [isKeypadOpen, setIsKeypadOpen] = useState(false);

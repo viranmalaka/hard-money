@@ -14,6 +14,7 @@ import {
   transferOwnership,
   updateMemberRole,
 } from "@/services/household-service";
+import { ConfirmationModal } from "@/components/ui/confirmation-modal";
 
 type Member = import("@/services/household-service").HouseholdMember;
 type Household = import("@/services/household-service").Household;
@@ -22,6 +23,23 @@ export default function HouseholdPage() {
   const { sync, userId } = useSync();
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+
+  // Confirmation modal state
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    confirmText: string;
+    variant: "danger" | "warning";
+    onConfirm: () => Promise<void>;
+  }>({
+    isOpen: false,
+    title: "",
+    message: "",
+    confirmText: "Confirm",
+    variant: "danger",
+    onConfirm: async () => {},
+  });
 
   // Create household state
   const [newHouseholdName, setNewHouseholdName] = useState("");
@@ -194,6 +212,52 @@ export default function HouseholdPage() {
     }
   };
 
+  const promptTransferOwnership = (householdId: string, targetUserId: string) => {
+    setConfirmModal({
+      isOpen: true,
+      title: "Transfer Household Ownership",
+      message:
+        "Are you sure you want to transfer ownership to this member? You will lose Owner privileges and will no longer be able to manage household settings or delete the household.",
+      confirmText: "Transfer Ownership",
+      variant: "warning",
+      onConfirm: async () => {
+        await handleTransferOwnership(householdId, targetUserId);
+      },
+    });
+  };
+
+  const promptRemoveMember = (householdId: string, memberId: string) => {
+    setConfirmModal({
+      isOpen: true,
+      title: "Remove Member",
+      message:
+        "Are you sure you want to remove this member from the household? They will immediately lose access to shared accounts and transactions.",
+      confirmText: "Remove Member",
+      variant: "danger",
+      onConfirm: async () => {
+        await handleRemoveMember(householdId, memberId);
+      },
+    });
+  };
+
+  const promptLeaveHousehold = (household: Household) => {
+    if (household.isOwner && household.members.length > 1) {
+      setError("Owner cannot leave without transferring ownership first");
+      return;
+    }
+    setConfirmModal({
+      isOpen: true,
+      title: "Leave Household",
+      message:
+        "Are you sure you want to leave this household? You will lose access to all shared household transactions and accounts.",
+      confirmText: "Leave Household",
+      variant: "danger",
+      onConfirm: async () => {
+        await handleLeaveHousehold(household);
+      },
+    });
+  };
+
   const activeHousehold = households[0] || null;
 
   return (
@@ -291,7 +355,7 @@ export default function HouseholdPage() {
             <button
               type="button"
               data-testid="household-leave-btn"
-              onClick={() => handleLeaveHousehold(activeHousehold)}
+              onClick={() => promptLeaveHousehold(activeHousehold)}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded border border-hairline hover:bg-[var(--expense)]/10 text-[var(--expense)] text-xs font-medium transition-colors self-start sm:self-auto"
             >
               <LogOut size={13} />
@@ -389,7 +453,7 @@ export default function HouseholdPage() {
                           data-testid="member-transfer-btn"
                           title="Transfer Ownership"
                           onClick={() =>
-                            handleTransferOwnership(activeHousehold.id, member.userId)
+                            promptTransferOwnership(activeHousehold.id, member.userId)
                           }
                           className="h-7 px-2 rounded border border-hairline hover:bg-surface text-xs font-medium text-[var(--text)] flex items-center gap-1"
                         >
@@ -404,7 +468,7 @@ export default function HouseholdPage() {
                           type="button"
                           data-testid="member-remove-btn"
                           title="Remove Member"
-                          onClick={() => handleRemoveMember(activeHousehold.id, member.id)}
+                          onClick={() => promptRemoveMember(activeHousehold.id, member.id)}
                           className="h-7 px-2 rounded border border-hairline hover:bg-[var(--expense)]/10 text-xs font-medium text-[var(--expense)] flex items-center gap-1"
                         >
                           <Trash2 size={12} />
@@ -562,6 +626,16 @@ export default function HouseholdPage() {
           </div>
         </div>
       )}
+      {/* Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={confirmModal.isOpen}
+        onClose={() => setConfirmModal((prev) => ({ ...prev, isOpen: false }))}
+        onConfirm={confirmModal.onConfirm}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        confirmText={confirmModal.confirmText}
+        variant={confirmModal.variant}
+      />
     </main>
   );
 }

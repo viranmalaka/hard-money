@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -21,6 +21,7 @@ import {
   ShoppingBasket,
 } from "lucide-react";
 import { EmptyState } from "@/components/ui/empty-state";
+import { ConfirmationModal } from "@/components/ui/confirmation-modal";
 import { queryKeys } from "@/lib/api/query-keys";
 import { logout } from "@/services/auth-service";
 import { getSettings } from "@/services/user-service";
@@ -36,6 +37,7 @@ interface UserProfile {
 export default function MorePage() {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const settingsQuery = useQuery({ queryKey: queryKeys.settings.user(), queryFn: getSettings });
   const inboxQuery = useQuery({ queryKey: queryKeys.inbox.all(), queryFn: listInbox });
   const shoppingCountQuery = useQuery({
@@ -197,7 +199,7 @@ export default function MorePage() {
         <button
           type="button"
           data-testid="logout-button"
-          onClick={handleLogout}
+          onClick={() => setShowLogoutConfirm(true)}
           className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-[var(--expense)] border border-hairline rounded hover:bg-[var(--expense)]/10 transition-colors"
         >
           <LogOut size={14} />
@@ -261,6 +263,16 @@ export default function MorePage() {
       <EmptyState
         title="Settings & Tools"
         description="All system configurations, backup tools, and household settings are available here."
+      />
+
+      <ConfirmationModal
+        isOpen={showLogoutConfirm}
+        onClose={() => setShowLogoutConfirm(false)}
+        onConfirm={handleLogout}
+        title="Log Out"
+        message="Are you sure you want to log out? Any pending local changes will be preserved on this device, but you will need to log back in to sync."
+        confirmText="Log Out"
+        variant="danger"
       />
     </main>
   );

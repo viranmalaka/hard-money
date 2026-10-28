@@ -36,7 +36,10 @@ export default function BudgetPage() {
   const categories = useCategories();
   const transactions = useTransactions();
 
-  const [currentDate, setCurrentDate] = useState<Date>(() => new Date(2026, 9, 1));
+  const [currentDate, setCurrentDate] = useState<Date>(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1);
+  });
   const [modalOpen, setModalOpen] = useState(false);
   const [editingBudget, setEditingBudget] = useState<LocalBudget | null>(null);
 
@@ -63,7 +66,9 @@ export default function BudgetPage() {
       budgets.filter((b) => !editingBudget || b.id !== editingBudget.id).map((b) => b.categoryId)
     );
     return categories.filter(
-      (c) => !budgetedCatIds.has(c.id) || (editingBudget && editingBudget.categoryId === c.id)
+      (c) =>
+        c.type !== "INCOME" &&
+        (!budgetedCatIds.has(c.id) || (editingBudget && editingBudget.categoryId === c.id))
     );
   }, [categories, budgets, editingBudget]);
 

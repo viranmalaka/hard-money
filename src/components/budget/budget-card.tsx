@@ -4,6 +4,7 @@ import { memo, type ReactNode } from "react";
 import { AlertTriangle, ArrowDownRight, ArrowUpRight } from "lucide-react";
 import { formatMoney } from "@/lib/finance-core/money";
 import type { LocalBudget } from "@/lib/db";
+import { CategoryIcon } from "@/components/ui/category-icon";
 
 export interface BudgetViewModel {
   budget: LocalBudget;
@@ -29,13 +30,24 @@ interface BudgetCardProps {
 }
 
 export const BudgetCard = memo(function BudgetCard({ item, onEdit, children }: BudgetCardProps) {
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      onEdit(item.budget);
+    }
+  };
+
   if (children) {
     return (
       <div
+        role="button"
+        tabIndex={0}
+        aria-label={`Edit budget for ${item.categoryName}`}
         data-testid={`budget-row-${item.budget.id}`}
         data-budget-id={item.budget.id}
         data-budget-status={item.status}
         onClick={() => onEdit(item.budget)}
+        onKeyDown={handleKeyDown}
         className="flat-panel p-3.5 space-y-2.5 cursor-pointer hover:bg-surface/50 transition-colors select-none"
       >
         {children}
@@ -45,15 +57,21 @@ export const BudgetCard = memo(function BudgetCard({ item, onEdit, children }: B
 
   return (
     <div
+      role="button"
+      tabIndex={0}
+      aria-label={`Edit budget for ${item.categoryName}`}
       data-testid={`budget-row-${item.budget.id}`}
       data-budget-id={item.budget.id}
       data-budget-status={item.status}
       onClick={() => onEdit(item.budget)}
+      onKeyDown={handleKeyDown}
       className="flat-panel p-3.5 space-y-2.5 cursor-pointer hover:bg-surface/50 transition-colors select-none"
     >
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <span className="text-base">{item.categoryIcon}</span>
+          <span className="flex items-center justify-center w-6 h-6 rounded-full bg-[var(--surface)] text-[var(--text)]">
+            <CategoryIcon name={item.categoryIcon} size={15} />
+          </span>
           <div>
             <span data-testid="budget-category-name" className="text-sm font-semibold text-[var(--text)]">
               {item.categoryName}
@@ -74,7 +92,7 @@ export const BudgetCard = memo(function BudgetCard({ item, onEdit, children }: B
           </div>
         </div>
         <span data-testid="budget-daily-safe-to-spend" className="text-xs font-medium text-[var(--text-muted)]">
-          {item.isOverBudget ? "Rs. 0.00 / day" : `${formatMoney(item.dailySafeToSpendMinor)} / day`}
+          {item.isOverBudget ? `${formatMoney(0)} / day` : `${formatMoney(item.dailySafeToSpendMinor)} / day`}
         </span>
       </div>
 

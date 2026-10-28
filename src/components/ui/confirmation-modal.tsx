@@ -31,6 +31,7 @@ export function ConfirmationModal({
 }: ConfirmationModalProps) {
   useModalHistory(isOpen, onClose, "confirmation-modal");
   const [submitting, setSubmitting] = useState(false);
+  const [confirmError, setConfirmError] = useState<string | null>(null);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -46,11 +47,13 @@ export function ConfirmationModal({
 
   const handleConfirm = async () => {
     setSubmitting(true);
+    setConfirmError(null);
     try {
       await onConfirm();
       onClose();
-    } catch (err) {
+    } catch (err: unknown) {
       console.error("Confirmation action failed:", err);
+      setConfirmError(err instanceof Error ? err.message : "Action failed. Please try again.");
     } finally {
       setSubmitting(false);
     }
@@ -107,12 +110,17 @@ export function ConfirmationModal({
         if (e.target === e.currentTarget && !submitting) onClose();
       }}
     >
-      <div className="w-full md:max-w-md bg-[var(--surface)] border border-hairline rounded-t-xl md:rounded-lg shadow-xl p-5 pb-sheet-safe md:pb-5 space-y-4 modal-sheet-dialog">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="confirmation-modal-title"
+        className="w-full md:max-w-md bg-[var(--surface)] border border-hairline rounded-t-xl md:rounded-lg shadow-xl p-5 pb-sheet-safe md:pb-5 space-y-4 modal-sheet-dialog"
+      >
         <div className="flex items-start gap-3.5">
           {renderIcon()}
           <div className="flex-1 space-y-1">
             <div className="flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-[var(--text)]">{title}</h2>
+              <h2 id="confirmation-modal-title" className="text-sm font-semibold text-[var(--text)]">{title}</h2>
               <button
                 type="button"
                 data-testid="confirm-close-btn"
@@ -128,6 +136,12 @@ export function ConfirmationModal({
             </p>
           </div>
         </div>
+
+        {confirmError && (
+          <div role="alert" className="p-2.5 rounded bg-red-500/10 border border-red-500/30 text-xs text-red-500 font-medium">
+            {confirmError}
+          </div>
+        )}
 
         <div className="flex items-center justify-end gap-2 pt-2 border-t border-hairline">
           <button

@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { parseBankSmsTemplate } from "@/lib/sms/template-parser";
 import type { TemplateParseResult } from "@/lib/sms/types";
+import { ConfirmationModal } from "@/components/ui/confirmation-modal";
 
 export default function DeveloperPage() {
   // Webhook Key state
@@ -21,6 +22,7 @@ export default function DeveloperPage() {
   const [apiKeyPrefix, setApiKeyPrefix] = useState<string | null>(null);
   const [justGeneratedKey, setJustGeneratedKey] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [showRegenerateConfirm, setShowRegenerateConfirm] = useState(false);
 
   // Gemini Settings state
   const [hasGeminiKey, setHasGeminiKey] = useState(false);
@@ -79,6 +81,14 @@ export default function DeveloperPage() {
       }
     } catch {
       // ignore
+    }
+  };
+
+  const promptGenerateKey = () => {
+    if (hasKey) {
+      setShowRegenerateConfirm(true);
+    } else {
+      handleGenerateKey();
     }
   };
 
@@ -212,7 +222,7 @@ export default function DeveloperPage() {
                 <button
                   type="button"
                   data-testid="regenerate-webhook-key-btn"
-                  onClick={handleGenerateKey}
+                  onClick={promptGenerateKey}
                   className="px-3 py-1.5 rounded border border-hairline hover:bg-surface text-xs font-medium text-[var(--text)] transition-colors"
                 >
                   Regenerate Key
@@ -555,6 +565,16 @@ export default function DeveloperPage() {
           )}
         </form>
       </div>
+
+      <ConfirmationModal
+        isOpen={showRegenerateConfirm}
+        onClose={() => setShowRegenerateConfirm(false)}
+        onConfirm={handleGenerateKey}
+        title="Regenerate Webhook Key"
+        message="Generating a new webhook key will immediately invalidate your previous key. Any Apple Shortcuts, scripts, or automated webhooks using the old key will stop working until updated."
+        confirmText="Regenerate Key"
+        variant="warning"
+      />
     </main>
   );
 }

@@ -135,12 +135,28 @@ export function DailyView({
                 const isCalibration = tx.source === "CALIBRATION" || tx.type === "ADJUSTMENT";
                 const isExpense = tx.type === "EXPENSE";
                 const isIncome = tx.type === "INCOME" || tx.type === "REFUND";
+                const isExcluded = Boolean(tx.excludeFromStats || tx.subType === "LOAN_DISBURSEMENT");
 
                 return (
                   <div
                     key={tx.id}
                     data-testid={`transaction-row-${tx.id}`}
+                    role="button"
+                    tabIndex={0}
                     onClick={() => onSelectTransaction?.(tx)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        onSelectTransaction?.(tx);
+                      }
+                    }}
+                    aria-label={`${
+                      isCalibration
+                        ? "Balance Calibration"
+                        : isTransfer
+                        ? `Transfer from ${fromAccount} to ${toAccount || "Account"}`
+                        : `${tx.type} ${category?.name || ""}`
+                    }, ${fromAccount}, ${formatMoney(tx.amountMinor)}`}
                     className="p-3 hover:bg-[var(--border)]/30 active:bg-[var(--border)]/50 transition-colors cursor-pointer"
                   >
                     <div className="flex items-center justify-between">
@@ -168,6 +184,8 @@ export function DailyView({
                               ? "Balance Calibration"
                               : isTransfer
                               ? `${fromAccount} → ${toAccount || "Account"}`
+                              : tx.subType === "LOAN_DISBURSEMENT"
+                              ? "Loan Disbursement"
                               : category?.name || tx.type}
                           </span>
 
@@ -220,6 +238,25 @@ export function DailyView({
                               converted
                             </span>
                           )}
+
+                          {/* Excluded from totals badge */}
+                          {tx.subType === "LOAN_DISBURSEMENT" ? (
+                            <span
+                              data-testid="badge-loan-disbursement"
+                              className="inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.2 rounded bg-amber-500/10 text-amber-500 font-medium"
+                              title="Loan disbursement: not counted in income totals"
+                            >
+                              Excluded from totals
+                            </span>
+                          ) : tx.excludeFromStats && !tx.excludeFromBalance ? (
+                            <span
+                              data-testid="badge-exclude-stats"
+                              className="inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.2 rounded bg-[var(--border)] text-[var(--text-muted)] font-medium"
+                              title="Excluded from totals"
+                            >
+                              Excluded from totals
+                            </span>
+                          ) : null}
                         </div>
 
                         <div className="text-[11px] text-[var(--text-muted)] flex items-center gap-1.5 truncate">
@@ -240,7 +277,9 @@ export function DailyView({
                         {isExpense && (
                           <span
                             data-testid="transaction-amount"
-                            className="font-mono font-semibold text-xs tabular-nums text-expense"
+                            className={`font-mono font-semibold text-xs tabular-nums ${
+                              isExcluded ? "text-[var(--text-muted)]" : "text-expense"
+                            }`}
                           >
                             - {formatMoney(tx.amountMinor)}
                           </span>
@@ -248,7 +287,9 @@ export function DailyView({
                         {isIncome && (
                           <span
                             data-testid="transaction-amount"
-                            className="font-mono font-semibold text-xs tabular-nums text-income"
+                            className={`font-mono font-semibold text-xs tabular-nums ${
+                              isExcluded ? "text-[var(--text-muted)]" : "text-income"
+                            }`}
                           >
                             + {formatMoney(tx.amountMinor)}
                           </span>

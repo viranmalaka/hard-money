@@ -22,7 +22,8 @@ export async function authorizeLoan(actor: Actor, id: string, mode: "read" | "wr
   const member = await prisma.householdMember.findUnique({
     where: { householdId_userId: { householdId, userId: actor.userId } },
   });
-  if (!member || (mode === "write" && member.role === "VIEWER")) return null;
+  if (!member) return null;
+  if (mode === "write" && member.role !== "OWNER" && member.role !== "CO_OWNER") return null;
   return loan;
 }
 
@@ -34,6 +35,7 @@ export async function authorizeFixedDeposit(actor: Actor, id: string, mode: "rea
   const member = await prisma.householdMember.findUnique({
     where: { householdId_userId: { householdId: fd.householdId, userId: actor.userId } },
   });
-  if (!member || (mode === "write" && member.role === "VIEWER")) return null;
+  if (!member) return null;
+  if (mode === "write" && member.role !== "OWNER" && member.role !== "CO_OWNER") return null;
   return fd;
 }

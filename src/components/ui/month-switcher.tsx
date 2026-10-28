@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useRef } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
 interface MonthSwitcherProps {
@@ -9,7 +9,11 @@ interface MonthSwitcherProps {
 }
 
 export function MonthSwitcher({ currentDate, onChange }: MonthSwitcherProps) {
-  const [internalDate, setInternalDate] = useState(() => currentDate || new Date(2026, 9, 1));
+  const [internalDate, setInternalDate] = useState(() => {
+    if (currentDate) return currentDate;
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1);
+  });
   const date = currentDate || internalDate;
 
   const monthNames = [

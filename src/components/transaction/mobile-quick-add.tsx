@@ -205,15 +205,23 @@ export function MobileQuickAdd({
     setActiveField(firstMissingField(overrides) ?? "note");
   };
 
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   /** Save if complete, otherwise jump to the first missing required field. */
-  const submitOrFocusMissing = () => {
+  const submitOrFocusMissing = async () => {
+    if (isSubmitting) return;
     const missing = firstMissingField();
     if (missing) {
       setActiveField(missing);
       if (missing === "amount") setErrorMsg("Please enter a valid amount");
       return;
     }
-    validateAndSubmit();
+    setIsSubmitting(true);
+    try {
+      await validateAndSubmit();
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // Keypad OK: amount must be valid, then go to the next required field
@@ -263,25 +271,29 @@ export function MobileQuickAdd({
 
   return (
     <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="New Transaction"
       data-testid="quick-add-mobile"
-      className="flex md:hidden flex-col fixed inset-0 z-50 bg-[#12161A] text-white select-none overflow-hidden"
+      className="flex md:hidden flex-col fixed inset-0 z-50 bg-[var(--bg)] text-[var(--text)] select-none overflow-hidden"
     >
       {/* 1. Mobile Header with Safe Area Inset Top */}
       <div
-        className="shrink-0 flex items-center justify-between px-3 pb-2.5 border-b border-[#222831]"
+        className="shrink-0 flex items-center justify-between px-3 pb-2.5 border-b border-hairline"
         style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 7px)" }}
       >
         <button
           type="button"
           data-testid="quick-add-mobile-back"
+          aria-label="Back to Transactions"
           onClick={closeQuickAdd}
-          className="flex items-center gap-0.5 text-sm font-medium text-slate-300 hover:text-white active:opacity-75 py-1 px-1.5 -ml-1 rounded transition-colors"
+          className="flex items-center gap-0.5 text-sm font-medium text-[var(--text-muted)] hover:text-[var(--text)] active:opacity-75 py-1 px-1.5 -ml-1 rounded transition-colors"
         >
           <ChevronLeft size={20} />
           <span>Trans.</span>
         </button>
 
-        <span className="text-base font-semibold tracking-wide text-white">
+        <span className="text-base font-semibold tracking-wide text-[var(--text)]">
           {themeStyles.title}
         </span>
 
@@ -294,7 +306,7 @@ export function MobileQuickAdd({
               className={`p-1.5 rounded-full transition-colors ${
                 showBookmarks
                   ? "bg-amber-400/20 text-amber-300"
-                  : "text-slate-400 hover:text-white"
+                  : "text-[var(--text-muted)] hover:text-[var(--text)]"
               }`}
               title="Templates"
             >
@@ -305,11 +317,11 @@ export function MobileQuickAdd({
           <button
             type="button"
             data-testid="quick-add-mobile-save"
-            disabled={isDivisionByZero}
+            disabled={isDivisionByZero || isSubmitting}
             onClick={submitOrFocusMissing}
-            className="px-3.5 py-1.5 rounded-md text-xs font-semibold bg-white text-black hover:bg-slate-200 active:scale-95 disabled:opacity-40 disabled:pointer-events-none transition-all shadow-xs"
+            className="px-3.5 py-1.5 rounded-md text-xs font-semibold bg-[var(--accent)] text-white hover:opacity-90 active:scale-95 disabled:opacity-40 disabled:pointer-events-none transition-all shadow-xs"
           >
-            Save
+            {isSubmitting ? "Saving..." : "Save"}
           </button>
         </div>
       </div>
@@ -318,7 +330,7 @@ export function MobileQuickAdd({
       {showBookmarks && templates.length > 0 && (
         <div
           data-testid="quick-add-mobile-bookmarks"
-          className="flex items-center gap-1.5 overflow-x-auto px-4 py-2 border-b border-[#222831] bg-[#181D24] no-scrollbar shrink-0"
+          className="flex items-center gap-1.5 overflow-x-auto px-4 py-2 border-b border-hairline bg-[var(--surface)] no-scrollbar shrink-0"
         >
           {templates.map((tmpl) => (
             <button
@@ -328,11 +340,11 @@ export function MobileQuickAdd({
                 handleApplyTemplate(tmpl);
                 setShowBookmarks(false);
               }}
-              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full border border-slate-700 bg-[#202630] text-xs text-white whitespace-nowrap shrink-0 hover:bg-slate-700 active:scale-95 transition-all"
+              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full border border-hairline bg-[var(--surface-hover)] text-xs text-[var(--text)] whitespace-nowrap shrink-0 hover:opacity-90 active:scale-95 transition-all"
             >
               <span>{tmpl.name}</span>
               {tmpl.defaultAmountMinor && (
-                <span className="text-[10px] text-slate-400 font-mono">
+                <span className="text-[10px] text-[var(--text-muted)] font-mono">
                   {(tmpl.defaultAmountMinor / 100).toFixed(0)}
                 </span>
               )}
@@ -342,11 +354,17 @@ export function MobileQuickAdd({
       )}
 
       {/* 2. Top Half: Form Fields */}
-      <div className="shrink-0 px-4 pt-3.5 pb-3 bg-[#12161A] space-y-2.5">
+      <div className="shrink-0 px-4 pt-3.5 pb-3 bg-[var(--bg)] space-y-2.5">
         {/* Type Switcher: Income | Expense | Transfer */}
-        <div className="grid grid-cols-3 gap-2 p-1 bg-[#1A1F26] rounded-xl text-xs font-semibold border border-hairline/30 mb-3">
+        <div
+          role="radiogroup"
+          aria-label="Transaction type"
+          className="grid grid-cols-3 gap-2 p-1 bg-[var(--surface)] rounded-xl text-xs font-semibold border border-hairline mb-3"
+        >
           <button
             type="button"
+            role="radio"
+            aria-checked={type === "INCOME"}
             data-testid="quick-add-mobile-type-income"
             onClick={() => {
               setType("INCOME");
@@ -355,13 +373,15 @@ export function MobileQuickAdd({
             className={`py-2 rounded-lg transition-all text-center ${
               type === "INCOME"
                 ? "bg-[#2563EB]/20 text-[#3B82F6] border border-[#3B82F6] shadow-xs"
-                : "text-slate-400 hover:text-white"
+                : "text-[var(--text-muted)] hover:text-[var(--text)]"
             }`}
           >
             Income
           </button>
           <button
             type="button"
+            role="radio"
+            aria-checked={type === "EXPENSE"}
             data-testid="quick-add-mobile-type-expense"
             onClick={() => {
               setType("EXPENSE");
@@ -370,13 +390,15 @@ export function MobileQuickAdd({
             className={`py-2 rounded-lg transition-all text-center ${
               type === "EXPENSE"
                 ? "bg-[#EF4444]/20 text-[#EF4444] border border-[#EF4444] shadow-xs"
-                : "text-slate-400 hover:text-white"
+                : "text-[var(--text-muted)] hover:text-[var(--text)]"
             }`}
           >
             Expense
           </button>
           <button
             type="button"
+            role="radio"
+            aria-checked={type === "TRANSFER"}
             data-testid="quick-add-mobile-type-transfer"
             onClick={() => {
               setType("TRANSFER");
@@ -384,8 +406,8 @@ export function MobileQuickAdd({
             }}
             className={`py-2 rounded-lg transition-all text-center ${
               type === "TRANSFER"
-                ? "bg-slate-700/50 text-white border border-slate-300 shadow-xs"
-                : "text-slate-400 hover:text-white"
+                ? "bg-[var(--border)] text-[var(--text)] border border-[var(--border)] shadow-xs"
+                : "text-[var(--text-muted)] hover:text-[var(--text)]"
             }`}
           >
             Transfer
@@ -395,58 +417,67 @@ export function MobileQuickAdd({
         {/* Form Rows */}
         <div className="space-y-2 text-sm">
           {/* Row: Date */}
-          <div
+          <button
+            type="button"
             onClick={() => setActiveField("date")}
-            className={`flex items-center justify-between py-3 min-h-[46px] cursor-pointer transition-colors ${
+            aria-expanded={activeField === "date"}
+            aria-label={`Date: ${formatDisplayDate(date)}`}
+            className={`w-full flex items-center justify-between py-3 min-h-[46px] cursor-pointer transition-colors text-left ${
               activeField === "date"
                 ? `border-b-2 ${themeStyles.borderActive}`
-                : "border-b border-[#222831]"
+                : "border-b border-hairline"
             }`}
           >
-            <span className="text-xs font-medium text-slate-400 w-24 tracking-wide">Date</span>
+            <span className="text-xs font-medium text-[var(--text-muted)] w-24 tracking-wide">Date</span>
             <div className="flex-1 flex items-center justify-between pl-2">
-              <span className="text-slate-200 font-mono text-xs">
+              <span className="text-[var(--text)] font-mono text-xs">
                 {formatDisplayDate(date)}
               </span>
-              <Calendar size={15} className="text-slate-500" />
+              <Calendar size={15} className="text-[var(--text-muted)]" />
             </div>
-          </div>
+          </button>
 
           {/* Row: Amount */}
-          <div
+          <button
+            type="button"
             onClick={() => setActiveField("amount")}
-            className={`flex items-center justify-between py-3 min-h-[50px] cursor-pointer transition-colors ${
+            aria-expanded={activeField === "amount"}
+            aria-label={`Amount: ${expression || "0"}`}
+            className={`w-full flex items-center justify-between py-3 min-h-[50px] cursor-pointer transition-colors text-left ${
               activeField === "amount"
                 ? `border-b-2 ${themeStyles.borderActive}`
-                : "border-b border-[#222831]"
+                : "border-b border-hairline"
             }`}
           >
-            <span className="text-xs font-medium text-slate-400 w-24 tracking-wide">Amount</span>
+            <span className="text-xs font-medium text-[var(--text-muted)] w-24 tracking-wide">Amount</span>
             <div className="flex-1 flex items-center justify-end pl-2">
               <div className="text-right">
-                <span className="text-xl font-bold font-mono tracking-tight text-white">
+                <span className="text-xl font-bold font-mono tracking-tight text-[var(--text)]">
                   {expression || "0"}
                 </span>
                 {expression && evalResult.isValid && evalResult.value !== null && (
-                  <span className="ml-2.5 text-xs font-mono text-slate-400">
+                  <span className="ml-2.5 text-xs font-mono text-[var(--text-muted)]">
                     ≈ {evalResult.displayValue}
                   </span>
                 )}
               </div>
             </div>
-          </div>
+          </button>
 
           {/* Row: Category (Only for Expense & Income) */}
           {type !== "TRANSFER" && (
-            <div
+            <button
+              type="button"
               onClick={() => setActiveField("category")}
-              className={`flex items-center justify-between py-3 min-h-[46px] cursor-pointer transition-colors ${
+              aria-expanded={activeField === "category"}
+              aria-label={`Category: ${selectedCategory?.name || "Select category"}`}
+              className={`w-full flex items-center justify-between py-3 min-h-[46px] cursor-pointer transition-colors text-left ${
                 activeField === "category"
                   ? `border-b-2 ${themeStyles.borderActive}`
-                  : "border-b border-[#222831]"
+                  : "border-b border-hairline"
               }`}
             >
-              <span className="text-xs font-medium text-slate-400 w-24 tracking-wide">Category</span>
+              <span className="text-xs font-medium text-[var(--text-muted)] w-24 tracking-wide">Category</span>
               <div className="flex-1 flex items-center justify-between pl-2">
                 {selectedCategory ? (
                   <div className="flex items-center gap-2">
@@ -456,31 +487,34 @@ export function MobileQuickAdd({
                     >
                       <CategoryIcon name={selectedCategory.icon} size={12} className="text-white" />
                     </span>
-                    <span className="text-xs font-medium text-white truncate">
+                    <span className="text-xs font-medium text-[var(--text)] truncate">
                       {selectedCategory.name}
                     </span>
                   </div>
                 ) : (
-                  <span className="text-xs text-slate-500 italic">Select category</span>
+                  <span className="text-xs text-[var(--text-muted)] italic">Select category</span>
                 )}
               </div>
-            </div>
+            </button>
           )}
 
           {/* Row: Account (for Expense/Income) OR From/To (for Transfer) */}
           {type !== "TRANSFER" ? (
-            <div
+            <button
+              type="button"
               onClick={() => setActiveField("account")}
-              className={`flex items-center justify-between py-3 min-h-[46px] cursor-pointer transition-colors ${
+              aria-expanded={activeField === "account"}
+              aria-label={`Account: ${selectedAccount?.name || "Select account"}`}
+              className={`w-full flex items-center justify-between py-3 min-h-[46px] cursor-pointer transition-colors text-left ${
                 activeField === "account"
                   ? `border-b-2 ${themeStyles.borderActive}`
-                  : "border-b border-[#222831]"
+                  : "border-b border-hairline"
               }`}
             >
-              <span className="text-xs font-medium text-slate-400 w-24 tracking-wide">Account</span>
+              <span className="text-xs font-medium text-[var(--text-muted)] w-24 tracking-wide">Account</span>
               <div className="flex-1 flex items-center justify-between pl-2">
                 {selectedAccount ? (
-                  <div className="flex items-center gap-2 text-xs font-medium text-white">
+                  <div className="flex items-center gap-2 text-xs font-medium text-[var(--text)]">
                     {selectedAccount.type === "CASH" && <Wallet size={14} className="text-emerald-400" />}
                     {selectedAccount.type === "BANK_SAVINGS" && (
                       <Building2 size={14} className="text-blue-400" />
@@ -491,78 +525,95 @@ export function MobileQuickAdd({
                     <span>{selectedAccount.name}</span>
                   </div>
                 ) : (
-                  <span className="text-xs text-slate-500 italic">Select account</span>
+                  <span className="text-xs text-[var(--text-muted)] italic">Select account</span>
                 )}
               </div>
-            </div>
+            </button>
           ) : (
             <>
               {/* Transfer: From Account */}
-              <div
+              <button
+                type="button"
                 onClick={() => setActiveField("account")}
-                className={`flex items-center justify-between py-3 min-h-[46px] cursor-pointer transition-colors ${
+                aria-expanded={activeField === "account"}
+                aria-label={`From Account: ${selectedAccount?.name || "Select source"}`}
+                className={`w-full flex items-center justify-between py-3 min-h-[46px] cursor-pointer transition-colors text-left ${
                   activeField === "account"
                     ? `border-b-2 ${themeStyles.borderActive}`
-                    : "border-b border-[#222831]"
+                    : "border-b border-hairline"
                 }`}
               >
-                <span className="text-xs font-medium text-slate-400 w-24 tracking-wide">From</span>
+                <span className="text-xs font-medium text-[var(--text-muted)] w-24 tracking-wide">From</span>
                 <div className="flex-1 flex items-center justify-between pl-2">
-                  <span className="text-xs font-medium text-white">
+                  <span className="text-xs font-medium text-[var(--text)]">
                     {selectedAccount?.name || "Select source"}
                   </span>
-                  <button
-                    type="button"
+                  <div
+                    role="button"
+                    tabIndex={0}
                     onClick={handleSwapTransferAccounts}
-                    className="p-1 rounded text-slate-400 hover:text-white"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.stopPropagation();
+                        handleSwapTransferAccounts(e as unknown as React.MouseEvent);
+                      }
+                    }}
+                    className="p-1 rounded text-[var(--text-muted)] hover:text-[var(--text)] cursor-pointer"
                     title="Swap From and To"
+                    aria-label="Swap From and To accounts"
                   >
                     <ArrowUpDown size={15} />
-                  </button>
+                  </div>
                 </div>
-              </div>
+              </button>
 
               {/* Transfer: To Account */}
-              <div
+              <button
+                type="button"
                 onClick={() => setActiveField("toAccount")}
-                className={`flex items-center justify-between py-3 min-h-[46px] cursor-pointer transition-colors ${
+                aria-expanded={activeField === "toAccount"}
+                aria-label={`To Account: ${selectedToAccount?.name || "Select destination"}`}
+                className={`w-full flex items-center justify-between py-3 min-h-[46px] cursor-pointer transition-colors text-left ${
                   activeField === "toAccount"
                     ? `border-b-2 ${themeStyles.borderActive}`
-                    : "border-b border-[#222831]"
+                    : "border-b border-hairline"
                 }`}
               >
-                <span className="text-xs font-medium text-slate-400 w-24 tracking-wide">To</span>
+                <span className="text-xs font-medium text-[var(--text-muted)] w-24 tracking-wide">To</span>
                 <div className="flex-1 flex items-center justify-between pl-2">
-                  <span className="text-xs font-medium text-white">
+                  <span className="text-xs font-medium text-[var(--text)]">
                     {selectedToAccount?.name || "Select destination"}
                   </span>
                 </div>
-              </div>
+              </button>
             </>
           )}
 
           {/* Row: Note */}
-          <div
+          <button
+            type="button"
             onClick={() => setActiveField("note")}
-            className={`flex items-center justify-between py-3 min-h-[46px] cursor-pointer transition-colors ${
+            aria-expanded={activeField === "note"}
+            aria-label={`Note: ${note.trim() ? note : "None"}`}
+            className={`w-full flex items-center justify-between py-3 min-h-[46px] cursor-pointer transition-colors text-left ${
               activeField === "note"
                 ? `border-b-2 ${themeStyles.borderActive}`
-                : "border-b border-[#222831]"
+                : "border-b border-hairline"
             }`}
           >
-            <span className="text-xs font-medium text-slate-400 w-24 tracking-wide">Note</span>
+            <span className="text-xs font-medium text-[var(--text-muted)] w-24 tracking-wide">Note</span>
             <div className="flex-1 flex items-center justify-between pl-2">
-              <span className="text-xs text-slate-300 truncate max-w-[200px]">
-                {note.trim() ? note : <span className="text-slate-600 italic">Add note...</span>}
+              <span className="text-xs text-[var(--text)] truncate max-w-[200px]">
+                {note.trim() ? note : <span className="text-[var(--text-muted)] italic">Add note...</span>}
               </span>
-              <Tag size={14} className="text-slate-500" />
+              <Tag size={14} className="text-[var(--text-muted)]" />
             </div>
-          </div>
+          </button>
         </div>
 
         {/* Inline Error Message */}
         {errorMsg && (
-          <div className="flex items-center gap-1.5 text-xs text-rose-400 font-medium py-1">
+          <div role="alert" className="flex items-center gap-1.5 text-xs text-rose-500 font-medium py-1">
             <AlertCircle size={14} className="shrink-0" />
             <span>{errorMsg}</span>
           </div>
@@ -570,10 +621,10 @@ export function MobileQuickAdd({
       </div>
 
       {/* 3. Bottom Half: Dedicated Contextual Input Surface */}
-      <div className="flex-1 flex flex-col bg-[#161B22] border-t border-[#262D37] min-h-0 overflow-hidden">
+      <div className="flex-1 flex flex-col bg-[var(--surface)] border-t border-hairline min-h-0 overflow-hidden">
         {/* Panel Header */}
-        <div className="shrink-0 flex items-center justify-between px-4 py-2 border-b border-[#222831] bg-[#1A2029]">
-          <span className="text-xs font-semibold uppercase tracking-wider text-slate-300">
+        <div className="shrink-0 flex items-center justify-between px-4 py-2 border-b border-hairline bg-[var(--surface-hover)]">
+          <span className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
             {activeField === "amount" && "Amount Keypad"}
             {activeField === "category" && "Select Category"}
             {activeField === "account" && (type === "TRANSFER" ? "Select Source Account" : "Select Account")}
@@ -584,14 +635,15 @@ export function MobileQuickAdd({
 
           <div className="flex items-center gap-2">
             {activeField === "amount" && (
-              <span className="text-xs font-mono text-slate-400">
+              <span aria-live="polite" className="text-xs font-mono text-[var(--text-muted)]">
                 {evalResult.isValid ? evalResult.displayValue : "Error"}
               </span>
             )}
             <button
               type="button"
               onClick={() => setActiveField("amount")}
-              className="p-1 rounded text-slate-400 hover:text-white transition-colors"
+              aria-label="Close panel"
+              className="p-1 rounded text-[var(--text-muted)] hover:text-[var(--text)] transition-colors"
             >
               <X size={15} />
             </button>
@@ -603,35 +655,39 @@ export function MobileQuickAdd({
           {/* A. Amount Keypad */}
           {activeField === "amount" && (
             <div
-              className="h-full grid grid-cols-4 grid-rows-5 gap-1.5 p-2 bg-[#14181F]"
+              className="h-full grid grid-cols-4 grid-rows-5 gap-1.5 p-2 bg-[var(--bg)]"
               style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 8px)" }}
             >
               {/* Row 1: Operators */}
               <button
                 type="button"
+                aria-label="Add"
                 onClick={() => onKeypadClick("+")}
-                className="rounded-lg bg-[#222834] text-slate-200 text-lg font-semibold active:bg-slate-700 hover:bg-[#2A3240] transition-colors flex items-center justify-center"
+                className="rounded-lg bg-[var(--surface-hover)] text-[var(--text)] text-lg font-semibold active:opacity-75 hover:bg-[var(--border)] transition-colors flex items-center justify-center"
               >
                 +
               </button>
               <button
                 type="button"
+                aria-label="Subtract"
                 onClick={() => onKeypadClick("-")}
-                className="rounded-lg bg-[#222834] text-slate-200 text-lg font-semibold active:bg-slate-700 hover:bg-[#2A3240] transition-colors flex items-center justify-center"
+                className="rounded-lg bg-[var(--surface-hover)] text-[var(--text)] text-lg font-semibold active:opacity-75 hover:bg-[var(--border)] transition-colors flex items-center justify-center"
               >
                 -
               </button>
               <button
                 type="button"
+                aria-label="Multiply"
                 onClick={() => onKeypadClick("×")}
-                className="rounded-lg bg-[#222834] text-slate-200 text-lg font-semibold active:bg-slate-700 hover:bg-[#2A3240] transition-colors flex items-center justify-center"
+                className="rounded-lg bg-[var(--surface-hover)] text-[var(--text)] text-lg font-semibold active:opacity-75 hover:bg-[var(--border)] transition-colors flex items-center justify-center"
               >
                 ×
               </button>
               <button
                 type="button"
+                aria-label="Divide"
                 onClick={() => onKeypadClick("÷")}
-                className="rounded-lg bg-[#222834] text-slate-200 text-lg font-semibold active:bg-slate-700 hover:bg-[#2A3240] transition-colors flex items-center justify-center"
+                className="rounded-lg bg-[var(--surface-hover)] text-[var(--text)] text-lg font-semibold active:opacity-75 hover:bg-[var(--border)] transition-colors flex items-center justify-center"
               >
                 ÷
               </button>
@@ -639,29 +695,33 @@ export function MobileQuickAdd({
               {/* Row 2: 7, 8, 9, = */}
               <button
                 type="button"
+                aria-label="7"
                 onClick={() => onKeypadClick("7")}
-                className="rounded-lg bg-[#1B212A] text-white text-xl font-medium active:bg-[#252D3A] hover:bg-[#222834] transition-colors flex items-center justify-center"
+                className="rounded-lg bg-[var(--surface)] text-[var(--text)] text-xl font-medium active:opacity-75 hover:bg-[var(--surface-hover)] transition-colors flex items-center justify-center"
               >
                 7
               </button>
               <button
                 type="button"
+                aria-label="8"
                 onClick={() => onKeypadClick("8")}
-                className="rounded-lg bg-[#1B212A] text-white text-xl font-medium active:bg-[#252D3A] hover:bg-[#222834] transition-colors flex items-center justify-center"
+                className="rounded-lg bg-[var(--surface)] text-[var(--text)] text-xl font-medium active:opacity-75 hover:bg-[var(--surface-hover)] transition-colors flex items-center justify-center"
               >
                 8
               </button>
               <button
                 type="button"
+                aria-label="9"
                 onClick={() => onKeypadClick("9")}
-                className="rounded-lg bg-[#1B212A] text-white text-xl font-medium active:bg-[#252D3A] hover:bg-[#222834] transition-colors flex items-center justify-center"
+                className="rounded-lg bg-[var(--surface)] text-[var(--text)] text-xl font-medium active:opacity-75 hover:bg-[var(--surface-hover)] transition-colors flex items-center justify-center"
               >
                 9
               </button>
               <button
                 type="button"
+                aria-label="Equals"
                 onClick={() => onKeypadClick("=")}
-                className="rounded-lg bg-[#222834] text-slate-200 text-lg font-semibold active:bg-slate-700 hover:bg-[#2A3240] transition-colors flex items-center justify-center"
+                className="rounded-lg bg-[var(--surface-hover)] text-[var(--text)] text-lg font-semibold active:opacity-75 hover:bg-[var(--border)] transition-colors flex items-center justify-center"
               >
                 =
               </button>
@@ -669,29 +729,33 @@ export function MobileQuickAdd({
               {/* Row 3: 4, 5, 6, . */}
               <button
                 type="button"
+                aria-label="4"
                 onClick={() => onKeypadClick("4")}
-                className="rounded-lg bg-[#1B212A] text-white text-xl font-medium active:bg-[#252D3A] hover:bg-[#222834] transition-colors flex items-center justify-center"
+                className="rounded-lg bg-[var(--surface)] text-[var(--text)] text-xl font-medium active:opacity-75 hover:bg-[var(--surface-hover)] transition-colors flex items-center justify-center"
               >
                 4
               </button>
               <button
                 type="button"
+                aria-label="5"
                 onClick={() => onKeypadClick("5")}
-                className="rounded-lg bg-[#1B212A] text-white text-xl font-medium active:bg-[#252D3A] hover:bg-[#222834] transition-colors flex items-center justify-center"
+                className="rounded-lg bg-[var(--surface)] text-[var(--text)] text-xl font-medium active:opacity-75 hover:bg-[var(--surface-hover)] transition-colors flex items-center justify-center"
               >
                 5
               </button>
               <button
                 type="button"
+                aria-label="6"
                 onClick={() => onKeypadClick("6")}
-                className="rounded-lg bg-[#1B212A] text-white text-xl font-medium active:bg-[#252D3A] hover:bg-[#222834] transition-colors flex items-center justify-center"
+                className="rounded-lg bg-[var(--surface)] text-[var(--text)] text-xl font-medium active:opacity-75 hover:bg-[var(--surface-hover)] transition-colors flex items-center justify-center"
               >
                 6
               </button>
               <button
                 type="button"
+                aria-label="Decimal point"
                 onClick={() => onKeypadClick(".")}
-                className="rounded-lg bg-[#1B212A] text-white text-xl font-semibold active:bg-[#252D3A] hover:bg-[#222834] transition-colors flex items-center justify-center"
+                className="rounded-lg bg-[var(--surface)] text-[var(--text)] text-xl font-semibold active:opacity-75 hover:bg-[var(--surface-hover)] transition-colors flex items-center justify-center"
               >
                 .
               </button>
@@ -699,29 +763,33 @@ export function MobileQuickAdd({
               {/* Row 4: 1, 2, 3, Backspace */}
               <button
                 type="button"
+                aria-label="1"
                 onClick={() => onKeypadClick("1")}
-                className="rounded-lg bg-[#1B212A] text-white text-xl font-medium active:bg-[#252D3A] hover:bg-[#222834] transition-colors flex items-center justify-center"
+                className="rounded-lg bg-[var(--surface)] text-[var(--text)] text-xl font-medium active:opacity-75 hover:bg-[var(--surface-hover)] transition-colors flex items-center justify-center"
               >
                 1
               </button>
               <button
                 type="button"
+                aria-label="2"
                 onClick={() => onKeypadClick("2")}
-                className="rounded-lg bg-[#1B212A] text-white text-xl font-medium active:bg-[#252D3A] hover:bg-[#222834] transition-colors flex items-center justify-center"
+                className="rounded-lg bg-[var(--surface)] text-[var(--text)] text-xl font-medium active:opacity-75 hover:bg-[var(--surface-hover)] transition-colors flex items-center justify-center"
               >
                 2
               </button>
               <button
                 type="button"
+                aria-label="3"
                 onClick={() => onKeypadClick("3")}
-                className="rounded-lg bg-[#1B212A] text-white text-xl font-medium active:bg-[#252D3A] hover:bg-[#222834] transition-colors flex items-center justify-center"
+                className="rounded-lg bg-[var(--surface)] text-[var(--text)] text-xl font-medium active:opacity-75 hover:bg-[var(--surface-hover)] transition-colors flex items-center justify-center"
               >
                 3
               </button>
               <button
                 type="button"
+                aria-label="Backspace"
                 onClick={() => onKeypadClick("⌫")}
-                className="rounded-lg bg-[#222834] text-slate-200 text-lg font-semibold active:bg-slate-700 hover:bg-[#2A3240] transition-colors flex items-center justify-center"
+                className="rounded-lg bg-[var(--surface-hover)] text-[var(--text)] text-lg font-semibold active:opacity-75 hover:bg-[var(--border)] transition-colors flex items-center justify-center"
               >
                 ⌫
               </button>
@@ -729,30 +797,34 @@ export function MobileQuickAdd({
               {/* Row 5: Clear (C), 0, 00, OK */}
               <button
                 type="button"
+                aria-label="Clear"
                 onClick={() => onKeypadClick("C")}
-                className="rounded-lg bg-[#222834] text-rose-300 text-base font-semibold active:bg-slate-700 hover:bg-[#2A3240] transition-colors flex items-center justify-center"
+                className="rounded-lg bg-[var(--surface-hover)] text-rose-400 text-base font-semibold active:opacity-75 hover:bg-[var(--border)] transition-colors flex items-center justify-center"
               >
                 C
               </button>
               <button
                 type="button"
+                aria-label="0"
                 onClick={() => onKeypadClick("0")}
-                className="rounded-lg bg-[#1B212A] text-white text-xl font-medium active:bg-[#252D3A] hover:bg-[#222834] transition-colors flex items-center justify-center"
+                className="rounded-lg bg-[var(--surface)] text-[var(--text)] text-xl font-medium active:opacity-75 hover:bg-[var(--surface-hover)] transition-colors flex items-center justify-center"
               >
                 0
               </button>
               <button
                 type="button"
+                aria-label="Double zero"
                 onClick={() => {
                   onKeypadClick("0");
                   onKeypadClick("0");
                 }}
-                className="rounded-lg bg-[#1B212A] text-slate-300 text-base font-medium active:bg-[#252D3A] hover:bg-[#222834] transition-colors flex items-center justify-center"
+                className="rounded-lg bg-[var(--surface)] text-[var(--text)] text-base font-medium active:opacity-75 hover:bg-[var(--surface-hover)] transition-colors flex items-center justify-center"
               >
                 00
               </button>
               <button
                 type="button"
+                aria-label="Confirm amount"
                 onClick={handleKeypadOk}
                 className={`rounded-lg font-bold text-base shadow-md active:scale-95 transition-all flex items-center justify-center ${themeStyles.okBtnBg}`}
               >
@@ -811,6 +883,25 @@ export function MobileQuickAdd({
               <button
                 type="button"
                 onClick={() => {
+                  if (typeof window !== "undefined") {
+                    try {
+                      sessionStorage.setItem(
+                        "hardmoney_quick_add_draft",
+                        JSON.stringify({
+                          type,
+                          date,
+                          expression,
+                          accountId,
+                          toAccountId,
+                          categoryId,
+                          note,
+                          excludeFromBudget,
+                        })
+                      );
+                    } catch {
+                      // ignore
+                    }
+                  }
                   closeQuickAdd();
                   router.push("/more/categories", { transitionTypes: ["nav-forward"] });
                 }}
@@ -1096,13 +1187,16 @@ export function MobileQuickAdd({
               </div>
 
               {/* Exclude from Budget Toggle */}
-              <div className="flex items-center justify-between py-2 border-t border-slate-800">
-                <span className="text-xs text-slate-300">Exclude from budget</span>
+              <div className="flex items-center justify-between py-2 border-t border-hairline">
+                <span className="text-xs text-[var(--text)]">Exclude from budget</span>
                 <button
                   type="button"
+                  role="switch"
+                  aria-checked={excludeFromBudget}
+                  aria-label="Exclude from budget"
                   onClick={() => setExcludeFromBudget(!excludeFromBudget)}
                   className={`w-10 h-6 rounded-full transition-colors relative ${
-                    excludeFromBudget ? "bg-[#3B82F6]" : "bg-slate-700"
+                    excludeFromBudget ? "bg-[var(--accent)]" : "bg-[var(--surface-hover)] border border-hairline"
                   }`}
                 >
                   <span
@@ -1117,11 +1211,11 @@ export function MobileQuickAdd({
               <button
                 type="button"
                 data-testid="quick-add-mobile-note-save"
-                disabled={isDivisionByZero}
+                disabled={isDivisionByZero || isSubmitting}
                 onClick={submitOrFocusMissing}
-                className={`w-full py-3 rounded-xl font-bold text-sm shadow-md active:scale-98 transition-all disabled:opacity-40 ${themeStyles.okBtnBg}`}
+                className={`w-full py-3 rounded-xl font-bold text-sm shadow-md active:scale-98 transition-all disabled:opacity-40 disabled:pointer-events-none ${themeStyles.okBtnBg}`}
               >
-                Save Transaction
+                {isSubmitting ? "Saving..." : "Save Transaction"}
               </button>
             </div>
           )}

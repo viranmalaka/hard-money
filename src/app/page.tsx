@@ -20,7 +20,10 @@ import { LocalTransaction } from "@/lib/db";
 import { localRestoreTransaction } from "@/lib/sync/client";
 
 export default function TransactionsPage() {
-  const [currentDate, setCurrentDate] = useState(() => new Date(2026, 9, 1));
+  const [currentDate, setCurrentDate] = useState(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1);
+  });
   const [activeTab, setActiveTab] = useState<string>(() => {
     if (typeof window !== "undefined") {
       try {

@@ -20,10 +20,10 @@ export function LoanModal({ isOpen, onClose, accounts }: LoanModalProps) {
 
   const [kind, setKind] = useState<"LOAN" | "LEASE">("LOAN");
   const [lenderName, setLenderName] = useState("");
-  const [principalStr, setPrincipalStr] = useState("1200000.00");
-  const [residualStr, setResidualStr] = useState("0.00");
-  const [aprStr, setAprStr] = useState("12.0");
-  const [tenureMonthsStr, setTenureMonthsStr] = useState("12");
+  const [principalStr, setPrincipalStr] = useState("");
+  const [residualStr, setResidualStr] = useState("");
+  const [aprStr, setAprStr] = useState("");
+  const [tenureMonthsStr, setTenureMonthsStr] = useState("");
   const [startDateStr, setStartDateStr] = useState(new Date().toISOString().slice(0, 10));
   const [paymentDueDayStr, setPaymentDueDayStr] = useState(String(new Date().getDate()));
   const [calculationType, setCalculationType] = useState<"REDUCING_BALANCE" | "FLAT_RATE">(

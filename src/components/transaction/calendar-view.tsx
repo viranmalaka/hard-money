@@ -3,7 +3,7 @@
 import React, { useState, useMemo } from "react";
 import { formatMoney } from "@/lib/finance-core/money";
 import { LocalTransaction } from "@/lib/db";
-import { Scale, Split, Tag } from "lucide-react";
+import { Scale, Tag } from "lucide-react";
 
 interface CalendarViewProps {
   currentDate: Date;
@@ -45,10 +45,12 @@ export function CalendarView({
     for (const tx of transactions) {
       const dateKey = tx.transactionDate.slice(0, 10);
       const entry = stats.get(dateKey) || { income: 0, expense: 0, transactions: [] };
-      if (tx.type === "INCOME") {
-        entry.income += tx.amountMinor;
-      } else if (tx.type === "EXPENSE") {
-        entry.expense += tx.amountMinor;
+      if (!tx.excludeFromStats && tx.subType !== "LOAN_DISBURSEMENT") {
+        if (tx.type === "INCOME") {
+          entry.income += tx.amountMinor;
+        } else if (tx.type === "EXPENSE") {
+          entry.expense += tx.amountMinor;
+        }
       }
       entry.transactions.push(tx);
       stats.set(dateKey, entry);
@@ -56,16 +58,16 @@ export function CalendarView({
     return stats;
   }, [transactions]);
 
-  // Selected day: default to today if in current month, or the 1st of month
-  const [selectedDate, setSelectedDate] = useState<string>(() => {
-    const yStr = String(year);
-    const mStr = String(month + 1).padStart(2, "0");
-    const prefix = `${yStr}-${mStr}`;
-    if (todayStr.startsWith(prefix)) {
-      return todayStr;
+  const currentMonthPrefix = `${year}-${String(month + 1).padStart(2, "0")}`;
+  const [selectedDateState, setSelectedDateState] = useState<string | null>(null);
+
+  // If selectedDateState does not belong to the current month, fallback to today or 1st of month
+  const selectedDate = useMemo(() => {
+    if (selectedDateState && selectedDateState.startsWith(currentMonthPrefix)) {
+      return selectedDateState;
     }
-    return `${prefix}-01`;
-  });
+    return todayStr.startsWith(currentMonthPrefix) ? todayStr : `${currentMonthPrefix}-01`;
+  }, [selectedDateState, currentMonthPrefix, todayStr]);
 
   // Calculate calendar grid days
   const calendarDays = useMemo(() => {
@@ -132,11 +134,17 @@ export function CalendarView({
             const isSelected = selectedDate === cell.dateStr;
 
             return (
-              <div
+              <button
+                type="button"
                 key={cell.dateStr}
                 data-testid={`calendar-day-${cell.dateStr}`}
-                onClick={() => setSelectedDate(cell.dateStr)}
-                className={`h-16 md:h-18 p-1 rounded border flex flex-col justify-between cursor-pointer transition-all select-none ${
+                onClick={() => setSelectedDateState(cell.dateStr)}
+                aria-pressed={isSelected}
+                aria-current={cell.isToday ? "date" : undefined}
+                aria-label={`${cell.dayNum}, ${stats?.income ? `Income ${formatMoney(stats.income)}, ` : ""}${
+                  stats?.expense ? `Expense ${formatMoney(stats.expense)}` : ""
+                }`}
+                className={`h-16 md:h-18 p-1 rounded border flex flex-col justify-between text-left cursor-pointer transition-all select-none ${
                   isSelected
                     ? "border-[var(--text)] bg-[var(--border)]/40 shadow-xs"
                     : cell.isToday
@@ -154,7 +162,7 @@ export function CalendarView({
                 </span>
 
                 {/* Day Incomes & Expenses */}
-                <div className="space-y-0.5 overflow-hidden">
+                <div className="space-y-0.5 overflow-hidden w-full">
                   {stats && stats.income > 0 && (
                     <div
                       data-testid="day-income"
@@ -172,7 +180,7 @@ export function CalendarView({
                     </div>
                   )}
                 </div>
-              </div>
+              </button>
             );
           })}
         </div>
@@ -224,12 +232,28 @@ export function CalendarView({
               const isCalibration = tx.source === "CALIBRATION" || tx.type === "ADJUSTMENT";
               const isExpense = tx.type === "EXPENSE";
               const isIncome = tx.type === "INCOME" || tx.type === "REFUND";
+              const isExcluded = Boolean(tx.excludeFromStats || tx.subType === "LOAN_DISBURSEMENT");
 
               return (
                 <div
                   key={tx.id}
                   data-testid={`transaction-row-${tx.id}`}
+                  role="button"
+                  tabIndex={0}
                   onClick={() => onSelectTransaction?.(tx)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      onSelectTransaction?.(tx);
+                    }
+                  }}
+                  aria-label={`${
+                    isCalibration
+                      ? "Balance Calibration"
+                      : isTransfer
+                      ? `Transfer from ${fromAccount} to ${toAccount || "Account"}`
+                      : `${tx.type} ${category?.name || ""}`
+                  }, ${fromAccount}, ${formatMoney(tx.amountMinor)}`}
                   className="py-2.5 px-1 flex items-center justify-between hover:bg-[var(--border)]/30 transition-colors cursor-pointer"
                 >
                   <div className="space-y-0.5 min-w-0 pr-2">
@@ -249,6 +273,8 @@ export function CalendarView({
                           ? "Balance Calibration"
                           : isTransfer
                           ? `${fromAccount} → ${toAccount || "Account"}`
+                          : tx.subType === "LOAN_DISBURSEMENT"
+                          ? "Loan Disbursement"
                           : category?.name || tx.type}
                       </span>
                       {tx.isSplit && (
@@ -259,6 +285,21 @@ export function CalendarView({
                           Split
                         </span>
                       )}
+                      {tx.subType === "LOAN_DISBURSEMENT" ? (
+                        <span
+                          data-testid="badge-loan-disbursement"
+                          className="text-[9px] px-1 rounded bg-amber-500/10 text-amber-500 font-medium"
+                        >
+                          Excluded from totals
+                        </span>
+                      ) : tx.excludeFromStats ? (
+                        <span
+                          data-testid="badge-exclude-stats"
+                          className="text-[9px] px-1 rounded bg-[var(--border)] text-[var(--text-muted)] font-medium"
+                        >
+                          Excluded from totals
+                        </span>
+                      ) : null}
                     </div>
                     <div className="text-[10px] text-[var(--text-muted)] truncate">
                       <span>{fromAccount}</span>
@@ -270,7 +311,9 @@ export function CalendarView({
                     <span
                       data-testid="transaction-amount"
                       className={`font-mono font-semibold text-xs tabular-nums ${
-                        isExpense
+                        isExcluded
+                          ? "text-[var(--text-muted)]"
+                          : isExpense
                           ? "text-expense"
                           : isIncome
                           ? "text-income"

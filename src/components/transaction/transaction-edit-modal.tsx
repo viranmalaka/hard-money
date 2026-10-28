@@ -171,6 +171,13 @@ function TransactionEditContent({
   const splitRemainingMinor = targetAmountMinor - splitSumMinor;
   const isSplitMismatch = isSplit && splitRemainingMinor !== 0;
 
+  const [splitAmountStrings, setSplitAmountStrings] = useState<string[]>(() => {
+    if (transaction.splitItems && transaction.splitItems.length > 0) {
+      return transaction.splitItems.map((item) => (item.amountMinor / 100).toFixed(2));
+    }
+    return [(transaction.amountMinor / 100).toFixed(2)];
+  });
+
   const handleAddSplitItem = () => {
     const remaining = Math.max(0, splitRemainingMinor);
     setSplitItems((prev) => [
@@ -182,10 +189,20 @@ function TransactionEditContent({
         note: "",
       },
     ]);
+    setSplitAmountStrings((prev) => [...prev, (remaining / 100).toFixed(2)]);
   };
 
   const handleRemoveSplitItem = (idx: number) => {
     setSplitItems((prev) => prev.filter((_, i) => i !== idx));
+    setSplitAmountStrings((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  const handleSplitAmountChange = (idx: number, rawVal: string) => {
+    setSplitAmountStrings((prev) => prev.map((val, i) => (i === idx ? rawVal : val)));
+    const minor = parseMoneyToMinor(rawVal);
+    setSplitItems((prev) =>
+      prev.map((item, i) => (i === idx ? { ...item, amountMinor: minor } : item))
+    );
   };
 
   const handleUpdateSplitItem = (idx: number, patch: Partial<LocalSplitItem>) => {
@@ -270,6 +287,9 @@ function TransactionEditContent({
       className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-end md:items-center justify-center p-0 md:p-4 select-none overflow-y-auto"
     >
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Edit Transaction"
         data-testid="transaction-edit-modal"
         className="w-full md:max-w-md bg-[var(--surface)] border border-hairline rounded-t-2xl md:rounded-xl shadow-2xl flex flex-col modal-sheet-dialog overflow-hidden"
       >
@@ -498,14 +518,17 @@ function TransactionEditContent({
 
                       <input
                         type="text"
+                        inputMode="decimal"
                         data-testid={`split-amount-${idx}`}
-                        value={(item.amountMinor / 100).toFixed(2)}
-                        onChange={(e) =>
-                          handleUpdateSplitItem(idx, {
-                            amountMinor: parseMoneyToMinor(e.target.value),
-                          })
-                        }
-                        className="col-span-5 px-2 py-1.5 rounded border border-hairline bg-[var(--surface)] text-[var(--text)] font-mono text-[11px] tabular-nums text-right"
+                        value={splitAmountStrings[idx] ?? ""}
+                        onChange={(e) => handleSplitAmountChange(idx, e.target.value)}
+                        onBlur={() => {
+                          const minor = splitItems[idx]?.amountMinor || 0;
+                          setSplitAmountStrings((prev) =>
+                            prev.map((val, i) => (i === idx ? (minor / 100).toFixed(2) : val))
+                          );
+                        }}
+                        className="col-span-5 px-2 py-1.5 min-h-[36px] rounded border border-hairline bg-[var(--surface)] text-[var(--text)] font-mono text-xs tabular-nums text-right"
                       />
 
                       <button

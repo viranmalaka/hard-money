@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getNextServerSeq } from "@/lib/server-seq";
-import { assertCanWriteAccount } from "@/lib/authorization";
+import { assertCanWriteAccount, authorizeLoan } from "@/lib/authorization";
 import { shouldFailMutation } from "@/lib/test-sync-hook";
 
 export interface SyncMutation {
@@ -149,6 +149,15 @@ export async function POST(request: NextRequest) {
               });
               continue;
             }
+            const existingItem = await prisma.shoppingListItem.findUnique({ where: { id: mutation.id } });
+            if (existingItem && existingItem.householdId !== householdId) {
+              results.push({
+                mutationId: mutation.mutationId,
+                status: "rejected",
+                reason: "Forbidden: Cannot overwrite shopping-list item from another household",
+              });
+              continue;
+            }
             await prisma.shoppingListItem.upsert({
               where: { id: mutation.id },
               create: {
@@ -221,6 +230,29 @@ export async function POST(request: NextRequest) {
               continue;
             }
           }
+          const existingAcc = await prisma.account.findUnique({ where: { id: mutation.id } });
+          if (existingAcc) {
+            if (existingAcc.userId !== user.id) {
+              if (existingAcc.householdId && existingAcc.accessScope === "SHARED_HOUSEHOLD") {
+                const role = userHouseholdRoleMap.get(existingAcc.householdId);
+                if (role !== "OWNER" && role !== "CO_OWNER") {
+                  results.push({
+                    mutationId: mutation.mutationId,
+                    status: "rejected",
+                    reason: "Forbidden: Only OWNER and CO_OWNER can update shared accounts",
+                  });
+                  continue;
+                }
+              } else {
+                results.push({
+                  mutationId: mutation.mutationId,
+                  status: "rejected",
+                  reason: "Forbidden: Cannot overwrite another user's account",
+                });
+                continue;
+              }
+            }
+          }
           await prisma.account.upsert({
             where: { id: mutation.id },
             create: {
@@ -288,6 +320,17 @@ export async function POST(request: NextRequest) {
               reason: "Forbidden: Cannot update another user's account",
             });
             continue;
+          }
+          if (payload.accessScope === "SHARED_HOUSEHOLD" && payload.householdId) {
+            const targetRole = userHouseholdRoleMap.get(payload.householdId);
+            if (targetRole !== "OWNER" && targetRole !== "CO_OWNER") {
+              results.push({
+                mutationId: mutation.mutationId,
+                status: "rejected",
+                reason: "Forbidden: Only OWNER and CO_OWNER can assign an account to target household",
+              });
+              continue;
+            }
           }
           await prisma.account.updateMany({
             where: { id: mutation.id },
@@ -414,30 +457,64 @@ export async function POST(request: NextRequest) {
       } else if (entityLower === "transaction") {
         const payload = mutation.payload || {};
         if (mutation.op === "CREATE") {
-          let txHouseholdId = payload.householdId || null;
+          let txHouseholdId: string | null = null;
           if (payload.accountId) {
             const acc = await prisma.account.findUnique({
               where: { id: payload.accountId },
             });
-            if (acc?.householdId) {
-              const role = userHouseholdRoleMap.get(acc.householdId);
-              if (!role && acc.userId !== user.id) {
+            if (acc) {
+              if (acc.householdId && acc.accessScope === "SHARED_HOUSEHOLD") {
+                const role = userHouseholdRoleMap.get(acc.householdId);
+                if (!role && acc.userId !== user.id) {
+                  results.push({
+                    mutationId: mutation.mutationId,
+                    status: "rejected",
+                    reason: "Forbidden: Not a member of this household",
+                  });
+                  continue;
+                }
+                if (role === "VIEWER") {
+                  results.push({
+                    mutationId: mutation.mutationId,
+                    status: "rejected",
+                    reason: "Forbidden: VIEWER cannot create transactions",
+                  });
+                  continue;
+                }
+                txHouseholdId = acc.householdId;
+              }
+            }
+          }
+
+          const existingTx = await prisma.transaction.findUnique({
+            where: { id: mutation.id },
+          });
+          if (existingTx) {
+            if (existingTx.householdId) {
+              const role = userHouseholdRoleMap.get(existingTx.householdId);
+              if (!role || role === "VIEWER") {
                 results.push({
                   mutationId: mutation.mutationId,
                   status: "rejected",
-                  reason: "Forbidden: Not a member of this household",
+                  reason: "Forbidden: Not authorized to overwrite transaction in this household",
                 });
                 continue;
               }
-              if (role === "VIEWER") {
+              if (role === "CONTRIBUTOR_ADD_ONLY" && existingTx.createdByUserId !== user.id && existingTx.userId !== user.id) {
                 results.push({
                   mutationId: mutation.mutationId,
                   status: "rejected",
-                  reason: "Forbidden: VIEWER cannot create transactions",
+                  reason: "Forbidden: CONTRIBUTOR_ADD_ONLY cannot overwrite another member's transaction",
                 });
                 continue;
               }
-              txHouseholdId = acc.accessScope === "SHARED_HOUSEHOLD" ? acc.householdId : null;
+            } else if (existingTx.userId !== user.id) {
+              results.push({
+                mutationId: mutation.mutationId,
+                status: "rejected",
+                reason: "Forbidden: Cannot overwrite another user's transaction",
+              });
+              continue;
             }
           }
 
@@ -491,7 +568,7 @@ export async function POST(request: NextRequest) {
               type: payload.type || "EXPENSE",
               subType: payload.subType || null,
               source: payload.source || "MANUAL",
-              createdByUserId: payload.createdByUserId || user.id,
+              createdByUserId: user.id,
               updatedByUserId: user.id,
               transactionDate: payload.transactionDate ? new Date(payload.transactionDate) : new Date(),
               note: payload.note || null,
@@ -562,6 +639,14 @@ export async function POST(request: NextRequest) {
           if (existingTx) {
             if (existingTx.householdId) {
               const role = userHouseholdRoleMap.get(existingTx.householdId);
+              if (!role) {
+                results.push({
+                  mutationId: mutation.mutationId,
+                  status: "rejected",
+                  reason: "Forbidden: Not a member of this household",
+                });
+                continue;
+              }
               if (role === "VIEWER") {
                 results.push({
                   mutationId: mutation.mutationId,
@@ -651,6 +736,14 @@ export async function POST(request: NextRequest) {
           if (existingTx) {
             if (existingTx.householdId) {
               const role = userHouseholdRoleMap.get(existingTx.householdId);
+              if (!role) {
+                results.push({
+                  mutationId: mutation.mutationId,
+                  status: "rejected",
+                  reason: "Forbidden: Not a member of this household",
+                });
+                continue;
+              }
               if (role === "VIEWER") {
                 results.push({
                   mutationId: mutation.mutationId,
@@ -703,6 +796,17 @@ export async function POST(request: NextRequest) {
       } else if (entityLower === "template") {
         const payload = mutation.payload || {};
         if (mutation.op === "CREATE") {
+          const existingTmpl = await prisma.transactionTemplate.findUnique({
+            where: { id: mutation.id },
+          });
+          if (existingTmpl && existingTmpl.userId !== user.id) {
+            results.push({
+              mutationId: mutation.mutationId,
+              status: "rejected",
+              reason: "Forbidden: Cannot overwrite another user's template",
+            });
+            continue;
+          }
           await prisma.transactionTemplate.upsert({
             where: { id: mutation.id },
             create: {
@@ -867,6 +971,17 @@ export async function POST(request: NextRequest) {
               });
             }
           }
+          const existingPlan = await prisma.creditCardInstallmentPlan.findUnique({
+            where: { id: mutation.id },
+          });
+          if (existingPlan && existingPlan.userId !== user.id) {
+            results.push({
+              mutationId: mutation.mutationId,
+              status: "rejected",
+              reason: "Forbidden: Cannot overwrite another user's installment plan",
+            });
+            continue;
+          }
           await prisma.creditCardInstallmentPlan.upsert({
             where: { id: mutation.id },
             create: {
@@ -969,6 +1084,32 @@ export async function POST(request: NextRequest) {
               },
               update: {},
             });
+          }
+
+          const existingFd = await (prisma as any).fixedDeposit.findUnique({
+            where: { id: mutation.id },
+          });
+          if (existingFd) {
+            if (existingFd.userId !== user.id) {
+              if (existingFd.householdId) {
+                const role = userHouseholdRoleMap.get(existingFd.householdId);
+                if (role !== "OWNER" && role !== "CO_OWNER") {
+                  results.push({
+                    mutationId: mutation.mutationId,
+                    status: "rejected",
+                    reason: "Forbidden: Only OWNER and CO_OWNER can update shared fixed deposits",
+                  });
+                  continue;
+                }
+              } else {
+                results.push({
+                  mutationId: mutation.mutationId,
+                  status: "rejected",
+                  reason: "Forbidden: Cannot overwrite another user's fixed deposit",
+                });
+                continue;
+              }
+            }
           }
 
           await (prisma as any).fixedDeposit.upsert({
@@ -1130,6 +1271,32 @@ export async function POST(request: NextRequest) {
             });
           }
 
+          const existingLoan = await (prisma as any).loan.findUnique({
+            where: { id: mutation.id },
+          });
+          if (existingLoan) {
+            if (existingLoan.userId !== user.id) {
+              if (existingLoan.householdId) {
+                const role = userHouseholdRoleMap.get(existingLoan.householdId);
+                if (role !== "OWNER" && role !== "CO_OWNER") {
+                  results.push({
+                    mutationId: mutation.mutationId,
+                    status: "rejected",
+                    reason: "Forbidden: Only OWNER and CO_OWNER can update shared loans",
+                  });
+                  continue;
+                }
+              } else {
+                results.push({
+                  mutationId: mutation.mutationId,
+                  status: "rejected",
+                  reason: "Forbidden: Cannot overwrite another user's loan",
+                });
+                continue;
+              }
+            }
+          }
+
           await (prisma as any).loan.upsert({
             where: { id: mutation.id },
             create: {
@@ -1240,12 +1407,38 @@ export async function POST(request: NextRequest) {
         }
       } else if (entityLower === "loanscheduleentry") {
         const payload = mutation.payload || {};
+        let targetLoanId = payload.loanId;
+        if (!targetLoanId) {
+          const existingEntry = await (prisma as any).loanScheduleEntry.findUnique({
+            where: { id: mutation.id },
+            select: { loanId: true },
+          });
+          targetLoanId = existingEntry?.loanId;
+        }
+        if (!targetLoanId) {
+          results.push({
+            mutationId: mutation.mutationId,
+            status: "rejected",
+            reason: "Missing loanId for schedule entry",
+          });
+          continue;
+        }
+        const authorizedLoan = await authorizeLoan(user, targetLoanId, "write");
+        if (!authorizedLoan) {
+          results.push({
+            mutationId: mutation.mutationId,
+            status: "rejected",
+            reason: "Forbidden: Unauthorized access to loan schedule entry",
+          });
+          continue;
+        }
+
         if (mutation.op === "CREATE") {
           await (prisma as any).loanScheduleEntry.upsert({
             where: { id: mutation.id },
             create: {
               id: mutation.id,
-              loanId: payload.loanId,
+              loanId: targetLoanId,
               installmentNumber: payload.installmentNumber,
               dueDate: payload.dueDate ? new Date(payload.dueDate) : new Date(),
               principalComponentMinor: payload.principalComponentMinor ?? 0,
@@ -1290,12 +1483,38 @@ export async function POST(request: NextRequest) {
         }
       } else if (entityLower === "loanpayment") {
         const payload = mutation.payload || {};
+        let targetLoanId = payload.loanId;
+        if (!targetLoanId) {
+          const existingPayment = await (prisma as any).loanPayment.findUnique({
+            where: { id: mutation.id },
+            select: { loanId: true },
+          });
+          targetLoanId = existingPayment?.loanId;
+        }
+        if (!targetLoanId) {
+          results.push({
+            mutationId: mutation.mutationId,
+            status: "rejected",
+            reason: "Missing loanId for loan payment",
+          });
+          continue;
+        }
+        const authorizedLoan = await authorizeLoan(user, targetLoanId, "write");
+        if (!authorizedLoan) {
+          results.push({
+            mutationId: mutation.mutationId,
+            status: "rejected",
+            reason: "Forbidden: Unauthorized access to loan payment",
+          });
+          continue;
+        }
+
         if (mutation.op === "CREATE") {
           await (prisma as any).loanPayment.upsert({
             where: { id: mutation.id },
             create: {
               id: mutation.id,
-              loanId: payload.loanId,
+              loanId: targetLoanId,
               transactionId: payload.transactionId || null,
               scheduleEntryId: payload.scheduleEntryId || null,
               principalComponentMinor: payload.principalComponentMinor ?? 0,

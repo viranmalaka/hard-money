@@ -8,15 +8,21 @@
   --color-surface: var(--surface);
   --color-border: var(--border);
   --color-app: var(--bg);
+  --color-hairline: var(--border);
+  --color-primary: var(--primary);
+  --color-accent: var(--accent);
 }
 
 :root {
   --bg: #FFFFFF;
   --surface: #F5F6F7;
+  --surface-hover: #ECEEF0;
   --border: #E4E6E8;
   --text: #1B1D1F;
   --text-muted: #6B7075;
+  --muted: #6B7075;
   --accent: #C72C38;
+  --primary: #C72C38;
   --income: #1D5BD2;
   --expense: #C92A2A;
   --transfer: #6B7075;
@@ -32,10 +38,13 @@ html[data-color-swap="true"] {
 .dark, [data-theme="dark"] {
   --bg: #121212;
   --surface: #1C1C1E;
+  --surface-hover: #262628;
   --border: #2C2C2E;
   --text: #ECECEC;
   --text-muted: #9A9EA3;
+  --muted: #9A9EA3;
   --accent: #E8505B;
+  --primary: #E8505B;
   --income: #5B93F0;
   --expense: #F06A6E;
   --transfer: #9A9EA3;

@@ -10,17 +10,17 @@ interface MonthlyViewProps {
   onSelectMonth?: (date: Date) => void;
 }
 
+const MONTH_NAMES = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
+
 export function MonthlyView({
   currentDate,
   allTransactions,
   onSelectMonth,
 }: MonthlyViewProps) {
   const year = currentDate.getFullYear();
-
-  const monthNames = [
-    "January", "February", "March", "April", "May", "June",
-    "July", "August", "September", "October", "November", "December",
-  ];
 
   // Aggregated data per month for the current year
   const monthlyData = useMemo(() => {
@@ -53,7 +53,7 @@ export function MonthlyView({
 
       list.push({
         monthIndex: m,
-        name: monthNames[m],
+        name: MONTH_NAMES[m],
         income: inc,
         expense: exp,
         net: inc - exp,
@@ -75,11 +75,13 @@ export function MonthlyView({
           const isCurrentMonth = item.monthIndex === currentDate.getMonth();
 
           return (
-            <div
+            <button
+              type="button"
               key={item.monthIndex}
               data-testid={`monthly-row-${year}-${String(item.monthIndex + 1).padStart(2, "0")}`}
               onClick={() => onSelectMonth?.(new Date(year, item.monthIndex, 1))}
-              className={`p-3 flex items-center justify-between text-xs hover:bg-[var(--border)]/30 transition-colors cursor-pointer ${
+              aria-label={`${item.name} ${year}, ${item.count} transactions, Income ${formatMoney(item.income)}, Expense ${formatMoney(item.expense)}, Net ${formatMoney(item.net)}`}
+              className={`w-full text-left p-3 flex items-center justify-between text-xs hover:bg-[var(--border)]/30 transition-colors cursor-pointer ${
                 isCurrentMonth ? "bg-[var(--border)]/20 font-medium" : ""
               }`}
             >
@@ -110,7 +112,7 @@ export function MonthlyView({
                   {item.net >= 0 ? `+ ${formatMoney(item.net)}` : `- ${formatMoney(Math.abs(item.net))}`}
                 </div>
               </div>
-            </div>
+            </button>
           );
         })}
       </div>
