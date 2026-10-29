@@ -97,7 +97,7 @@ export async function POST(
       accountId: fromAccount.id,
       toAccountId: toAccount.id,
       type: "TRANSFER",
-      subType: "ONLINE_TRANSFER",
+      subType: toAccount.type === "CREDIT_CARD" ? "CC_SETTLEMENT" : "ONLINE_TRANSFER",
       categoryId: null,
       note: transferNote,
       serverSeq: nextSeq,

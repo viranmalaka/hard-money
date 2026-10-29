@@ -104,8 +104,12 @@ export async function POST(
 
   const txType =
     body.type ||
-    (parsedPayload.transactionType === "CREDIT" ? "INCOME" : "EXPENSE");
-  const subType = parsedPayload.channel || "UNKNOWN";
+    (toAccount ? "TRANSFER" : parsedPayload.transactionType === "CREDIT" ? "INCOME" : "EXPENSE");
+  const subType =
+    body.subType ||
+    (toAccount && toAccount.type === "CREDIT_CARD"
+      ? "CC_SETTLEMENT"
+      : parsedPayload.channel || "UNKNOWN");
   const note = body.note ?? parsedPayload.merchantOrEntity ?? sms.sender;
   const categoryId = body.categoryId || null;
 

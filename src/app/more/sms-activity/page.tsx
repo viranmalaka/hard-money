@@ -279,6 +279,18 @@ export default function SmsActivityPage() {
                         )
                       )}
 
+                      {/* Review Reason Badge */}
+                      {item.status === "NEEDS_REVIEW" && item.reviewReason && (
+                        <span
+                          data-testid="sms-review-reason"
+                          className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-amber-500/10 text-amber-500 border border-amber-500/20"
+                        >
+                          {item.reviewReason === "CREDIT_CARD_SETTLEMENT"
+                            ? "Card Settlement Review"
+                            : item.reviewReason}
+                        </span>
+                      )}
+
                       {/* Parse Method */}
                       {item.parseMethod && (
                         <span

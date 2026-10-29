@@ -20,6 +20,9 @@ const mockPrisma = vi.hoisted(() => ({
   user: {
     findUnique: vi.fn(),
   },
+  category: {
+    findFirst: vi.fn(),
+  },
 }));
 
 vi.mock("@/lib/prisma", () => ({
@@ -322,6 +325,202 @@ Get protected -Do not Share OTP`;
     expect(result.status).toBe("NEEDS_REVIEW");
     expect(result.reviewReason).toBe("POSSIBLE_TRANSFER");
     expect(mockPrisma.transaction.update).not.toHaveBeenCalled();
+  });
+
+  describe("Credit Card Inward Transactions & Settlement Manual Review", () => {
+    const creditCardAccount = {
+      id: "acc-cc-6909",
+      userId: "user-123",
+      name: "Sampath Platinum Card",
+      type: "CREDIT_CARD",
+      currency: "LKR",
+      accountNumberLast4: "6909",
+      bankSenderIds: ["SAMPATH"],
+      openingBalanceMinor: 0,
+      linkedSettlementAccountId: "acc-sampath-4681",
+    };
+
+    it("always routes inward card payment to NEEDS_REVIEW with CREDIT_CARD_SETTLEMENT instead of auto-merging or regular posting", async () => {
+      const cardSettlementSms = "LKR 50,000.00 credited to Cr Crd no..**6909 for Card Payment";
+      const payload = {
+        isTransaction: true,
+        transactionType: "CREDIT" as const,
+        channel: "CARD_PAYMENT" as const,
+        amountText: "50,000.00",
+        destinationAmountText: null,
+        currency: "LKR",
+        accountLast4: "6909",
+        merchantOrEntity: "Card Payment",
+        inferredCategory: null,
+        balanceAfterText: null,
+        transactionTimestamp: null,
+        confidence: "HIGH" as const,
+      };
+
+      mockPrisma.account.findMany.mockResolvedValue([creditCardAccount]);
+      mockPrisma.transaction.findMany
+        .mockResolvedValueOnce([]) // manual candidates
+        .mockResolvedValueOnce([ // counterpart candidates
+          {
+            id: "tx-sampath-debit",
+            userId: "user-123",
+            accountId: "acc-sampath-4681",
+            toAccountId: null,
+            amountMinor: 5000000,
+            type: "EXPENSE",
+            subType: "ONLINE",
+            note: "Card Payment",
+            transactionDate: new Date("2026-10-27T18:50:00.000Z"),
+            account: sampathAccount,
+          },
+        ]);
+
+      mockPrisma.user.findUnique.mockResolvedValue({
+        smsAutoPostMode: "AUTO_VALIDATED",
+      });
+      mockPrisma.bankSms.update.mockResolvedValue({});
+
+      const result = await ingestParsedBankSms({
+        smsId: "sms-cc-payment",
+        userId: "user-123",
+        sender: "SAMPATH",
+        rawMessage: cardSettlementSms,
+        receivedAt: new Date("2026-10-27T18:55:00.000Z"),
+        parseMethod: "TEMPLATE",
+        payload,
+      });
+
+      // Must be held for manual review even in AUTO_VALIDATED mode
+      expect(result.status).toBe("NEEDS_REVIEW");
+      expect(result.reviewReason).toBe("CREDIT_CARD_SETTLEMENT");
+
+      // Must NOT auto-update transaction or auto-create transfer
+      expect(mockPrisma.transaction.update).not.toHaveBeenCalled();
+      expect(mockPrisma.transaction.create).not.toHaveBeenCalled();
+
+      // Enriched payload must contain suggestedTransfer for one-click merge in inbox
+      expect(mockPrisma.bankSms.update).toHaveBeenCalledWith({
+        where: { id: "sms-cc-payment" },
+        data: expect.objectContaining({
+          status: "NEEDS_REVIEW",
+          reviewReason: "CREDIT_CARD_SETTLEMENT",
+          parsedPayload: expect.objectContaining({
+            creditCardAccountId: "acc-cc-6909",
+            suggestedTransfer: expect.objectContaining({
+              counterpartTransactionId: "tx-sampath-debit",
+              fromAccountId: "acc-sampath-4681",
+              toAccountId: "acc-cc-6909",
+              amountMinor: 5000000,
+            }),
+          }),
+        }),
+      });
+    });
+
+    it("routes inward card payment without counterpart to CREDIT_CARD_SETTLEMENT with linked account suggestion", async () => {
+      const cardSettlementSms = "Payment of LKR 25,000.00 received for Card ending 6909";
+      const payload = {
+        isTransaction: true,
+        transactionType: "CREDIT" as const,
+        channel: "CARD_PAYMENT" as const,
+        amountText: "25,000.00",
+        destinationAmountText: null,
+        currency: "LKR",
+        accountLast4: "6909",
+        merchantOrEntity: null,
+        inferredCategory: null,
+        balanceAfterText: null,
+        transactionTimestamp: null,
+        confidence: "HIGH" as const,
+      };
+
+      mockPrisma.account.findMany.mockResolvedValue([creditCardAccount]);
+      mockPrisma.transaction.findMany
+        .mockResolvedValueOnce([]) // manual candidates
+        .mockResolvedValueOnce([]); // no counterpart candidates
+
+      mockPrisma.bankSms.update.mockResolvedValue({});
+
+      const result = await ingestParsedBankSms({
+        smsId: "sms-cc-payment-standalone",
+        userId: "user-123",
+        sender: "SAMPATH",
+        rawMessage: cardSettlementSms,
+        receivedAt: new Date("2026-10-27T18:55:00.000Z"),
+        parseMethod: "TEMPLATE",
+        payload,
+      });
+
+      expect(result.status).toBe("NEEDS_REVIEW");
+      expect(result.reviewReason).toBe("CREDIT_CARD_SETTLEMENT");
+      expect(mockPrisma.transaction.create).not.toHaveBeenCalled();
+
+      expect(mockPrisma.bankSms.update).toHaveBeenCalledWith({
+        where: { id: "sms-cc-payment-standalone" },
+        data: expect.objectContaining({
+          status: "NEEDS_REVIEW",
+          reviewReason: "CREDIT_CARD_SETTLEMENT",
+          parsedPayload: expect.objectContaining({
+            creditCardAccountId: "acc-cc-6909",
+            suggestedTransfer: expect.objectContaining({
+              fromAccountId: "acc-sampath-4681", // linked settlement account
+              toAccountId: "acc-cc-6909",
+              amountMinor: 2500000,
+            }),
+          }),
+        }),
+      });
+    });
+
+    it("allows outward credit card debits (expenses) to process normally", async () => {
+      const cardPurchaseSms =
+        "Cr Crd no..**6909 Auth Pmt LKR 2,500.00 at KEELLS SUPER Avl Bal LKR 145,000.00";
+      const payload = {
+        isTransaction: true,
+        transactionType: "DEBIT" as const,
+        channel: "POS" as const,
+        amountText: "2,500.00",
+        destinationAmountText: null,
+        currency: "LKR",
+        accountLast4: "6909",
+        merchantOrEntity: "KEELLS SUPER",
+        inferredCategory: "Groceries",
+        balanceAfterText: "145,000.00",
+        transactionTimestamp: null,
+        confidence: "HIGH" as const,
+      };
+
+      mockPrisma.account.findMany.mockResolvedValue([creditCardAccount]);
+      mockPrisma.transaction.findMany
+        .mockResolvedValueOnce([]) // manual candidates
+        .mockResolvedValueOnce([]) // counterpart candidates
+        .mockResolvedValueOnce([]); // balance history
+      mockPrisma.category.findFirst.mockResolvedValue({ id: "cat-groceries" });
+      mockPrisma.transaction.create.mockResolvedValue({ id: "tx-purchase-1" });
+      mockPrisma.bankSms.update.mockResolvedValue({});
+      mockPrisma.bankSms.findFirst.mockResolvedValue(null);
+
+      const result = await ingestParsedBankSms({
+        smsId: "sms-cc-purchase",
+        userId: "user-123",
+        sender: "SAMPATH",
+        rawMessage: cardPurchaseSms,
+        receivedAt: new Date("2026-10-27T18:55:00.000Z"),
+        parseMethod: "TEMPLATE",
+        payload,
+      });
+
+      expect(result.status).toBe("PROCESSED");
+      expect(result.transactionId).toBe("tx-purchase-1");
+      expect(mockPrisma.transaction.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          accountId: "acc-cc-6909",
+          amountMinor: 250000,
+          type: "EXPENSE",
+          subType: "POS",
+        }),
+      });
+    });
   });
 });
 

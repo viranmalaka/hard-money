@@ -1,10 +1,11 @@
 import { prisma } from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
 import { parseBankSmsTemplate, amountTextToMinor } from "./template-parser";
 import { matchAccountForSms } from "./account-matcher";
 import { parseWithGemini } from "./gemini-provider";
 import { decryptAesGcm } from "@/lib/encryption";
 import { ParsedTransactionPayload } from "./types";
-import { ingestParsedBankSms } from "./ingestion";
+import { ingestParsedBankSms, isInwardCreditCardTransaction } from "./ingestion";
 
 let workerPaused = false;
 
@@ -62,7 +63,7 @@ export async function processBankSms(smsId: string, options?: { force?: boolean 
           data: {
             status: "IGNORED_NON_TX",
             parseMethod: "TEMPLATE",
-            parsedPayload: payload as any,
+            parsedPayload: payload as unknown as Prisma.InputJsonValue,
           },
         });
         return;
@@ -76,7 +77,7 @@ export async function processBankSms(smsId: string, options?: { force?: boolean 
           data: {
             status: "NEEDS_REVIEW",
             parseMethod: "TEMPLATE",
-            parsedPayload: payload as any,
+            parsedPayload: payload as unknown as Prisma.InputJsonValue,
             reviewReason: "VALIDATION_FAILED",
             failureReason: "Amount must be greater than zero",
           },
@@ -92,7 +93,7 @@ export async function processBankSms(smsId: string, options?: { force?: boolean 
             data: {
               status: "NEEDS_REVIEW",
               parseMethod: "TEMPLATE",
-              parsedPayload: payload as any,
+              parsedPayload: payload as unknown as Prisma.InputJsonValue,
               reviewReason: "VALIDATION_FAILED",
               failureReason: "Transaction timestamp is in the future",
             },
@@ -237,9 +238,23 @@ export async function processBankSms(smsId: string, options?: { force?: boolean 
         data: {
           status: "NEEDS_REVIEW",
           parseMethod: "GEMINI",
-          parsedPayload: payload as any,
+          parsedPayload: payload as unknown as Prisma.InputJsonValue,
           reviewReason: "ACCOUNT_UNMATCHED",
         },
+      });
+      return;
+    }
+
+    // If inward transaction on credit card, route to ingestion to check for counterpart transfer and mark CREDIT_CARD_SETTLEMENT
+    if (isInwardCreditCardTransaction(matchedAccount.type, payload, sms.rawMessage)) {
+      await ingestParsedBankSms({
+        smsId,
+        userId: sms.userId,
+        sender: sms.sender,
+        rawMessage: sms.rawMessage,
+        receivedAt: sms.receivedAt,
+        parseMethod: "GEMINI",
+        payload,
       });
       return;
     }
@@ -251,7 +266,7 @@ export async function processBankSms(smsId: string, options?: { force?: boolean 
         data: {
           status: "NEEDS_REVIEW",
           parseMethod: "GEMINI",
-          parsedPayload: payload as any,
+          parsedPayload: payload as unknown as Prisma.InputJsonValue,
           reviewReason: "ALWAYS_REVIEW",
         },
       });

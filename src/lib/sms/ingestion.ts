@@ -24,6 +24,44 @@ export interface IngestionResult {
 }
 
 /**
+ * Detects if a parsed SMS represents an inward transaction to a credit card.
+ * Inward transactions (payments received, settlements, deposits, refund reversals)
+ * must be flagged for manual review rather than automatically posted as income or transfers.
+ */
+export function isInwardCreditCardTransaction(
+  accountType: string,
+  payload: ParsedTransactionPayload,
+  rawMessage: string
+): boolean {
+  if (accountType !== "CREDIT_CARD") {
+    return false;
+  }
+
+  // Explicit inward types/channels
+  if (
+    payload.transactionType === "CREDIT" ||
+    payload.transactionType === "REFUND_REVERSAL" ||
+    payload.channel === "CARD_PAYMENT" ||
+    payload.channel === "SALARY_OR_DEPOSIT" ||
+    (payload.channel as string) === "REFUND_REVERSAL"
+  ) {
+    return true;
+  }
+
+  // Text signals for payment received, credit of, or settlement
+  const inwardKeywords =
+    /\b(?:payment\s+received|received\s+for\s+card|settlement|credited|credit\s+of|credit\s+transfer|inward)\b/i;
+  if (
+    inwardKeywords.test(rawMessage) ||
+    (payload.merchantOrEntity && inwardKeywords.test(payload.merchantOrEntity))
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
  * Transaction Ingestion Service (PRD 4.S1 Step 3)
  * Handles account resolution, two-way deduplication, channel routing,
  * ATM fee rules, fee-SMS dedupe, and balance mismatch hints.
@@ -168,7 +206,82 @@ export async function ingestParsedBankSms(
     }
   }
 
-  // 3b. Inter-Account Transfer Deduplication & Auto-Reconciliation
+  // 3b-1. Credit Card Inward Transactions (Settlements / Deposits / Refunds)
+  // All inward transactions to a credit card must be marked as manual review (NEEDS_REVIEW)
+  // because in most cases they are card bill settlements from another account rather than regular income or transfer.
+  if (isInwardCreditCardTransaction(account.type, payload, rawMessage)) {
+    const transferWindowMs = 45 * 60 * 1000;
+    const minTransferTime = new Date(smsTime.getTime() - transferWindowMs);
+    const maxTransferTime = new Date(smsTime.getTime() + transferWindowMs);
+
+    const counterpartCandidates = await prisma.transaction.findMany({
+      where: {
+        userId,
+        accountId: { not: account.id },
+        toAccountId: null,
+        amountMinor,
+        type: "EXPENSE",
+        deletedAt: null,
+        transactionDate: { gte: minTransferTime, lte: maxTransferTime },
+      },
+      include: {
+        account: true,
+      },
+    });
+
+    let suggestedTransfer: {
+      counterpartTransactionId?: string;
+      fromAccountId?: string;
+      toAccountId: string;
+      amountMinor: number;
+      counterpartNote?: string | null;
+    } | null = null;
+
+    if (counterpartCandidates.length > 0) {
+      counterpartCandidates.sort(
+        (a, b) =>
+          Math.abs(a.transactionDate.getTime() - smsTime.getTime()) -
+          Math.abs(b.transactionDate.getTime() - smsTime.getTime())
+      );
+      const matchedTx = counterpartCandidates[0];
+      suggestedTransfer = {
+        counterpartTransactionId: matchedTx.id,
+        fromAccountId: matchedTx.accountId,
+        toAccountId: account.id,
+        amountMinor,
+        counterpartNote: matchedTx.note,
+      };
+    } else if (account.linkedSettlementAccountId) {
+      suggestedTransfer = {
+        fromAccountId: account.linkedSettlementAccountId,
+        toAccountId: account.id,
+        amountMinor,
+      };
+    }
+
+    const enrichedPayload = {
+      ...payload,
+      creditCardAccountId: account.id,
+      ...(suggestedTransfer ? { suggestedTransfer } : {}),
+    };
+
+    await prisma.bankSms.update({
+      where: { id: smsId },
+      data: {
+        status: "NEEDS_REVIEW",
+        reviewReason: "CREDIT_CARD_SETTLEMENT",
+        parseMethod,
+        parsedPayload: enrichedPayload as unknown as Prisma.InputJsonValue,
+      },
+    });
+
+    return {
+      status: "NEEDS_REVIEW",
+      reviewReason: "CREDIT_CARD_SETTLEMENT",
+    };
+  }
+
+  // 3b-2. Inter-Account Transfer Deduplication & Auto-Reconciliation
   // When money is transferred between two user accounts (e.g. DFCC -> Sampath),
   // two SMS arrive: one DEBIT and one CREDIT with matching amount within ±45 minutes.
   const isExcludedFromTransfer =
@@ -238,7 +351,11 @@ export async function ingestParsedBankSms(
       const sourceAccount = isIncomingCredit ? matchedTx.account : account;
       const destinationAccount = isIncomingCredit ? account : matchedTx.account;
 
-      if (isHighConfidence && autoPostMode === "AUTO_VALIDATED") {
+      if (
+        isHighConfidence &&
+        autoPostMode === "AUTO_VALIDATED" &&
+        destinationAccount.type !== "CREDIT_CARD"
+      ) {
         // High confidence + auto-post enabled -> Merge directly into a single TRANSFER transaction
         const nextSeq = await getNextServerSeq();
         const transferNote =
@@ -288,11 +405,16 @@ export async function ingestParsedBankSms(
           },
         };
 
+        const reason =
+          destinationAccount.type === "CREDIT_CARD"
+            ? "CREDIT_CARD_SETTLEMENT"
+            : "POSSIBLE_TRANSFER";
+
         await prisma.bankSms.update({
           where: { id: smsId },
           data: {
             status: "NEEDS_REVIEW",
-            reviewReason: "POSSIBLE_TRANSFER",
+            reviewReason: reason,
             parseMethod,
             parsedPayload: enrichedPayload as unknown as Prisma.InputJsonValue,
           },
@@ -300,7 +422,7 @@ export async function ingestParsedBankSms(
 
         return {
           status: "NEEDS_REVIEW",
-          reviewReason: "POSSIBLE_TRANSFER",
+          reviewReason: reason,
         };
       }
     }
@@ -416,21 +538,20 @@ export async function ingestParsedBankSms(
     });
     createdTxId = feeTx.id;
   } else if (payload.channel === "CARD_PAYMENT") {
-    let creditCard: any = null;
-    let fundingAccount: any = null;
+    let creditCard: { id: string } | null = null;
+    let fundingAccount: { id: string } | null = null;
 
     if (account.type === "CREDIT_CARD") {
-      creditCard = account;
-      if (creditCard.linkedSettlementAccountId) {
-        fundingAccount = await prisma.account.findUnique({
-          where: { id: creditCard.linkedSettlementAccountId },
-        });
-      }
-      if (!fundingAccount) {
-        fundingAccount = await prisma.account.findFirst({
-          where: { userId, type: { in: ["BANK_SAVINGS", "CASH"] }, deletedAt: null },
-        });
-      }
+      await prisma.bankSms.update({
+        where: { id: smsId },
+        data: {
+          status: "NEEDS_REVIEW",
+          reviewReason: "CREDIT_CARD_SETTLEMENT",
+          parseMethod,
+          parsedPayload: payload as unknown as Prisma.InputJsonValue,
+        },
+      });
+      return { status: "NEEDS_REVIEW", reviewReason: "CREDIT_CARD_SETTLEMENT" };
     } else {
       fundingAccount = account;
       creditCard = await prisma.account.findFirst({
@@ -450,7 +571,7 @@ export async function ingestParsedBankSms(
           status: "NEEDS_REVIEW",
           reviewReason: "ACCOUNT_UNMATCHED",
           parseMethod,
-          parsedPayload: payload as any,
+          parsedPayload: payload as unknown as Prisma.InputJsonValue,
         },
       });
       return { status: "NEEDS_REVIEW", reviewReason: "ACCOUNT_UNMATCHED" };
@@ -513,6 +634,19 @@ export async function ingestParsedBankSms(
     // Normal Expense or Income (POS, ONLINE, BILL_PAYMENT, SALARY_OR_DEPOSIT)
     const isCredit =
       payload.transactionType === "CREDIT" || payload.channel === "SALARY_OR_DEPOSIT";
+
+    if (account.type === "CREDIT_CARD" && isCredit) {
+      await prisma.bankSms.update({
+        where: { id: smsId },
+        data: {
+          status: "NEEDS_REVIEW",
+          reviewReason: "CREDIT_CARD_SETTLEMENT",
+          parseMethod,
+          parsedPayload: payload as unknown as Prisma.InputJsonValue,
+        },
+      });
+      return { status: "NEEDS_REVIEW", reviewReason: "CREDIT_CARD_SETTLEMENT" };
+    }
     const txType = isCredit ? "INCOME" : "EXPENSE";
     const subType =
       payload.channel === "SALARY_OR_DEPOSIT"

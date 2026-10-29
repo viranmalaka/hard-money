@@ -7,6 +7,7 @@ import {
   ArrowLeft,
   ArrowRightLeft,
   CheckCircle2,
+  CreditCard,
   RefreshCw,
   XCircle,
   AlertCircle,
@@ -23,9 +24,9 @@ export default function SmsReviewInboxPage() {
 
   // Form states per item
   const [formValues, setFormValues] = useState<Record<string, InboxFormValues>>({});
-
   const [submitting, setSubmitting] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
   const queryClient = useQueryClient();
   const inboxQuery = useQuery({ queryKey: queryKeys.inbox.all(), queryFn: listInbox });
   const accountsQuery = useQuery({ queryKey: queryKeys.accounts.all(), queryFn: getAccounts });
@@ -42,13 +43,38 @@ export default function SmsReviewInboxPage() {
         const next = { ...prev };
         for (const item of items) {
           if (!next[item.id]) {
-            const payload = item.parsedPayload || {};
+            const payload = (item.parsedPayload as Record<string, unknown> | null) || {};
+            const suggestedTransfer = payload.suggestedTransfer as
+              | { fromAccountId?: string; toAccountId?: string }
+              | undefined;
+            const isSettlement = item.reviewReason === "CREDIT_CARD_SETTLEMENT";
+            const accountLast4 = typeof payload.accountLast4 === "string" ? payload.accountLast4 : null;
+            const creditCardAccountId = typeof payload.creditCardAccountId === "string" ? payload.creditCardAccountId : undefined;
+            const defaultCreditCardId =
+              creditCardAccountId ||
+              suggestedTransfer?.toAccountId ||
+              (accounts.find(
+                (a) =>
+                  a.type === "CREDIT_CARD" &&
+                  accountLast4 &&
+                  a.name.includes(accountLast4)
+              )?.id ?? "");
+
             next[item.id] = {
-              accountId: "",
+              accountId: isSettlement
+                ? suggestedTransfer?.fromAccountId || ""
+                : "",
               amount: typeof payload.amountText === "string" ? payload.amountText : "",
               categoryId: "",
-              note: typeof payload.merchantOrEntity === "string" ? payload.merchantOrEntity : item.sender,
-              toAccountId: "",
+              note:
+                typeof payload.merchantOrEntity === "string"
+                  ? payload.merchantOrEntity
+                  : isSettlement
+                  ? "Credit Card Settlement"
+                  : item.sender,
+              toAccountId: isSettlement
+                ? defaultCreditCardId
+                : suggestedTransfer?.toAccountId || "",
               destinationAmount: "",
               exchangeRate: "",
             };
@@ -57,7 +83,7 @@ export default function SmsReviewInboxPage() {
         return next;
       });
     });
-  }, [items, selectedId]);
+  }, [items, selectedId, accounts]);
 
   const removeOptimistically = (itemId: string) => {
     const previous = queryClient.getQueryData(queryKeys.inbox.all());
@@ -223,6 +249,8 @@ export default function SmsReviewInboxPage() {
         return "Possible duplicate";
       case "POSSIBLE_TRANSFER":
         return "Possible transfer";
+      case "CREDIT_CARD_SETTLEMENT":
+        return "Card Settlement Review";
       default:
         return reason || "Needs Review";
     }
@@ -365,29 +393,54 @@ export default function SmsReviewInboxPage() {
                 </div>
               )}
 
-              {selectedItem.reviewReason === "POSSIBLE_TRANSFER" && (
-                <div className="p-3.5 rounded bg-[var(--accent)]/10 border border-[var(--accent)]/30 space-y-2">
-                  <div className="flex items-center gap-2 text-xs font-semibold text-[var(--accent)]">
-                    <ArrowRightLeft size={15} />
-                    <span>Possible Inter-Account Transfer Detected</span>
+              {(selectedItem.reviewReason === "POSSIBLE_TRANSFER" ||
+                selectedItem.reviewReason === "CREDIT_CARD_SETTLEMENT") &&
+                Boolean(
+                  (selectedItem.parsedPayload as Record<string, unknown> | null)?.suggestedTransfer
+                ) && (
+                  <div className="p-3.5 rounded bg-[var(--accent)]/10 border border-[var(--accent)]/30 space-y-2">
+                    <div className="flex items-center gap-2 text-xs font-semibold text-[var(--accent)]">
+                      <ArrowRightLeft size={15} />
+                      <span>
+                        {selectedItem.reviewReason === "CREDIT_CARD_SETTLEMENT"
+                          ? "Matching Settlement Debit Found"
+                          : "Possible Inter-Account Transfer Detected"}
+                      </span>
+                    </div>
+                    <p className="text-xs text-[var(--text-muted)] leading-relaxed">
+                      {selectedItem.reviewReason === "CREDIT_CARD_SETTLEMENT"
+                        ? "This payment matches a recent debit transaction on another account. You can merge both into a single verified Credit Card Settlement transfer, or customize below."
+                        : "This SMS matches a recent counterpart transaction on another account. You can merge both into a single verified Transfer, or edit and post as a separate transaction below."}
+                    </p>
+                    <div className="pt-1">
+                      <button
+                        type="button"
+                        data-testid="inbox-merge-transfer-btn"
+                        disabled={submitting === selectedItem.id}
+                        onClick={() => handleMergeTransfer(selectedItem.id)}
+                        className="flex items-center justify-center gap-2 px-4 py-2 rounded bg-[var(--accent)] text-white text-xs font-semibold hover:opacity-90 active:scale-95 transition-all disabled:opacity-50"
+                      >
+                        <ArrowRightLeft size={14} />
+                        <span>Merge as Transfer</span>
+                      </button>
+                    </div>
                   </div>
-                  <p className="text-xs text-[var(--text-muted)] leading-relaxed">
-                    This SMS matches a recent counterpart transaction on another account. You can merge both into a single verified Transfer, or edit and post as a separate transaction below.
-                  </p>
-                  <div className="pt-1">
-                    <button
-                      type="button"
-                      data-testid="inbox-merge-transfer-btn"
-                      disabled={submitting === selectedItem.id}
-                      onClick={() => handleMergeTransfer(selectedItem.id)}
-                      className="flex items-center justify-center gap-2 px-4 py-2 rounded bg-[var(--accent)] text-white text-xs font-semibold hover:opacity-90 active:scale-95 transition-all disabled:opacity-50"
-                    >
-                      <ArrowRightLeft size={14} />
-                      <span>Merge as Transfer</span>
-                    </button>
+                )}
+
+              {selectedItem.reviewReason === "CREDIT_CARD_SETTLEMENT" &&
+                !Boolean(
+                  (selectedItem.parsedPayload as Record<string, unknown> | null)?.suggestedTransfer
+                ) && (
+                  <div className="p-3 rounded bg-amber-500/10 border border-amber-500/20 text-xs space-y-1">
+                    <div className="flex items-center gap-1.5 font-semibold text-amber-600 dark:text-amber-400">
+                      <CreditCard size={14} />
+                      <span>Credit Card Settlement Review</span>
+                    </div>
+                    <p className="text-[var(--text-muted)]">
+                      This inward payment is flagged for settlement handling. Please select the funding source account and destination credit card below to post as a verified settlement transfer.
+                    </p>
                   </div>
-                </div>
-              )}
+                )}
 
               {/* Edit Controls */}
               {(() => {
@@ -396,86 +449,175 @@ export default function SmsReviewInboxPage() {
                   amount: "",
                   categoryId: "",
                   note: "",
+                  toAccountId: "",
+                  destinationAmount: "",
+                  exchangeRate: "",
                 };
+                const isSettlement = selectedItem.reviewReason === "CREDIT_CARD_SETTLEMENT";
 
                 return (
                   <div className="space-y-3 pt-2">
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-1">
-                        <label className="text-xs font-medium text-[var(--text-muted)]">
-                          Account *
-                        </label>
-                        <select
-                          data-testid="inbox-account-select"
-                          value={form.accountId}
-                          onChange={(e) =>
-                            handleFieldChange(selectedItem.id, "accountId", e.target.value)
-                          }
-                          className="w-full h-8 px-2.5 rounded bg-[var(--bg)] border border-hairline text-xs text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
-                        >
-                          <option value="">-- Select Account --</option>
-                          {accounts.map((acc) => (
-                            <option key={acc.id} value={acc.id}>
-                              {acc.name} ({acc.type})
-                            </option>
-                          ))}
-                        </select>
-                      </div>
+                    {isSettlement ? (
+                      <div className="space-y-3">
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="space-y-1">
+                            <label className="text-xs font-medium text-[var(--text-muted)]">
+                              Funding Account (From) *
+                            </label>
+                            <select
+                              data-testid="inbox-account-select"
+                              value={form.accountId}
+                              onChange={(e) =>
+                                handleFieldChange(selectedItem.id, "accountId", e.target.value)
+                              }
+                              className="w-full h-8 px-2.5 rounded bg-[var(--bg)] border border-hairline text-xs text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
+                            >
+                              <option value="">-- Select Source Account --</option>
+                              {accounts.map((acc) => (
+                                <option key={acc.id} value={acc.id}>
+                                  {acc.name} ({acc.type})
+                                </option>
+                              ))}
+                            </select>
+                          </div>
 
-                      <div className="space-y-1">
-                        <label className="text-xs font-medium text-[var(--text-muted)]">
-                          Amount (LKR) *
-                        </label>
-                        <input
-                          data-testid="inbox-amount-input"
-                          type="text"
-                          value={form.amount}
-                          onChange={(e) =>
-                            handleFieldChange(selectedItem.id, "amount", e.target.value)
-                          }
-                          placeholder="e.g. 1500.00"
-                          className="w-full h-8 px-2.5 rounded bg-[var(--bg)] border border-hairline text-xs text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
-                        />
-                      </div>
-                    </div>
+                          <div className="space-y-1">
+                            <label className="text-xs font-medium text-[var(--text-muted)]">
+                              Credit Card (To) *
+                            </label>
+                            <select
+                              data-testid="inbox-to-account-select"
+                              value={form.toAccountId}
+                              onChange={(e) =>
+                                handleFieldChange(selectedItem.id, "toAccountId", e.target.value)
+                              }
+                              className="w-full h-8 px-2.5 rounded bg-[var(--bg)] border border-hairline text-xs text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
+                            >
+                              <option value="">-- Select Credit Card --</option>
+                              {accounts
+                                .filter((acc) => acc.type === "CREDIT_CARD")
+                                .map((acc) => (
+                                  <option key={acc.id} value={acc.id}>
+                                    {acc.name}
+                                  </option>
+                                ))}
+                            </select>
+                          </div>
+                        </div>
 
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-1">
-                        <label className="text-xs font-medium text-[var(--text-muted)]">
-                          Category
-                        </label>
-                        <select
-                          data-testid="inbox-category-select"
-                          value={form.categoryId}
-                          onChange={(e) =>
-                            handleFieldChange(selectedItem.id, "categoryId", e.target.value)
-                          }
-                          className="w-full h-8 px-2.5 rounded bg-[var(--bg)] border border-hairline text-xs text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
-                        >
-                          <option value="">-- Optional Category --</option>
-                          {categories.map((cat) => (
-                            <option key={cat.id} value={cat.id}>
-                              {cat.icon || "📁"} {cat.name}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="space-y-1">
+                            <label className="text-xs font-medium text-[var(--text-muted)]">
+                              Settlement Amount (LKR) *
+                            </label>
+                            <input
+                              data-testid="inbox-amount-input"
+                              type="text"
+                              value={form.amount}
+                              onChange={(e) =>
+                                handleFieldChange(selectedItem.id, "amount", e.target.value)
+                              }
+                              placeholder="e.g. 1500.00"
+                              className="w-full h-8 px-2.5 rounded bg-[var(--bg)] border border-hairline text-xs text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
+                            />
+                          </div>
 
-                      <div className="space-y-1">
-                        <label className="text-xs font-medium text-[var(--text-muted)]">
-                          Note / Merchant
-                        </label>
-                        <input
-                          data-testid="inbox-note-input"
-                          type="text"
-                          value={form.note}
-                          onChange={(e) =>
-                            handleFieldChange(selectedItem.id, "note", e.target.value)
-                          }
-                          className="w-full h-8 px-2.5 rounded bg-[var(--bg)] border border-hairline text-xs text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
-                        />
+                          <div className="space-y-1">
+                            <label className="text-xs font-medium text-[var(--text-muted)]">
+                              Settlement Note
+                            </label>
+                            <input
+                              data-testid="inbox-note-input"
+                              type="text"
+                              value={form.note}
+                              onChange={(e) =>
+                                handleFieldChange(selectedItem.id, "note", e.target.value)
+                              }
+                              className="w-full h-8 px-2.5 rounded bg-[var(--bg)] border border-hairline text-xs text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
+                            />
+                          </div>
+                        </div>
                       </div>
-                    </div>
+                    ) : (
+                      <>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="space-y-1">
+                            <label className="text-xs font-medium text-[var(--text-muted)]">
+                              Account *
+                            </label>
+                            <select
+                              data-testid="inbox-account-select"
+                              value={form.accountId}
+                              onChange={(e) =>
+                                handleFieldChange(selectedItem.id, "accountId", e.target.value)
+                              }
+                              className="w-full h-8 px-2.5 rounded bg-[var(--bg)] border border-hairline text-xs text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
+                            >
+                              <option value="">-- Select Account --</option>
+                              {accounts.map((acc) => (
+                                <option key={acc.id} value={acc.id}>
+                                  {acc.name} ({acc.type})
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+
+                          <div className="space-y-1">
+                            <label className="text-xs font-medium text-[var(--text-muted)]">
+                              Amount (LKR) *
+                            </label>
+                            <input
+                              data-testid="inbox-amount-input"
+                              type="text"
+                              value={form.amount}
+                              onChange={(e) =>
+                                handleFieldChange(selectedItem.id, "amount", e.target.value)
+                              }
+                              placeholder="e.g. 1500.00"
+                              className="w-full h-8 px-2.5 rounded bg-[var(--bg)] border border-hairline text-xs text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="space-y-1">
+                            <label className="text-xs font-medium text-[var(--text-muted)]">
+                              Category
+                            </label>
+                            <select
+                              data-testid="inbox-category-select"
+                              value={form.categoryId}
+                              onChange={(e) =>
+                                handleFieldChange(selectedItem.id, "categoryId", e.target.value)
+                              }
+                              className="w-full h-8 px-2.5 rounded bg-[var(--bg)] border border-hairline text-xs text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
+                            >
+                              <option value="">-- Optional Category --</option>
+                              {categories.map((cat) => (
+                                <option key={cat.id} value={cat.id}>
+                                  {cat.icon || "📁"} {cat.name}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+
+                          <div className="space-y-1">
+                            <label className="text-xs font-medium text-[var(--text-muted)]">
+                              Note / Merchant
+                            </label>
+                            <input
+                              data-testid="inbox-note-input"
+                              type="text"
+                              value={form.note}
+                              onChange={(e) =>
+                                handleFieldChange(selectedItem.id, "note", e.target.value)
+                              }
+                              className="w-full h-8 px-2.5 rounded bg-[var(--bg)] border border-hairline text-xs text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
+                            />
+                          </div>
+                        </div>
+                      </>
+                    )}
 
                     {/* Actions Toolbar */}
                     <div className="flex items-center justify-between pt-3 border-t border-hairline">

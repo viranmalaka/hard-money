@@ -248,7 +248,10 @@ export function parseBankSmsTemplate(
   const isAtmOther =
     /\batm\b/i.test(text) && /\b(?:other bank|other-bank|other)\b/i.test(text);
   const isAtm = /\batm\b/i.test(text) || /\bwithdrawn\b/i.test(text);
-  const isCredit = /\b(?:credited|deposit|inward|salary)\b/i.test(text);
+  const isCredit =
+    /\b(?:credited|deposit|inward|salary|payment.*received|received.*payment|paid\s+to\s+card|credit\s+of)\b/i.test(
+      text,
+    );
   const isTransfer =
     /\b(?:ceft|transfer|donation|vsrpmt|funding\s+a\/c)\b/i.test(text);
 
