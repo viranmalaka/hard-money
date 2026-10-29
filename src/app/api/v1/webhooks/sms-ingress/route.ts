@@ -146,18 +146,15 @@ export async function POST(request: NextRequest) {
 
     console.log(`[SMS-INGRESS] [Created] BankSms #${bankSms.id} saved with status PENDING`);
 
-    // 6. Asynchronous worker processing (if not paused)
+    // 6. Worker processing (if not paused)
     if (!isWorkerPaused()) {
-      console.log(`[SMS-INGRESS] Dispatching background worker for BankSms #${bankSms.id}...`);
-      setTimeout(() => {
-        processBankSms(bankSms.id)
-          .then(() => {
-            console.log(`[SMS-INGRESS] Background worker finished processing BankSms #${bankSms.id}`);
-          })
-          .catch((workerErr) => {
-            console.error(`[SMS-INGRESS] Worker error processing BankSms #${bankSms.id}:`, workerErr);
-          });
-      }, 0);
+      console.log(`[SMS-INGRESS] Processing BankSms #${bankSms.id}...`);
+      try {
+        await processBankSms(bankSms.id);
+        console.log(`[SMS-INGRESS] Worker finished processing BankSms #${bankSms.id}`);
+      } catch (workerErr) {
+        console.error(`[SMS-INGRESS] Worker error processing BankSms #${bankSms.id}:`, workerErr);
+      }
     } else {
       console.log(`[SMS-INGRESS] Worker is paused; BankSms #${bankSms.id} left PENDING`);
     }

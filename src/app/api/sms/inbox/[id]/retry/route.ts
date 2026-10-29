@@ -21,6 +21,24 @@ export async function POST(
     return NextResponse.json({ error: "SMS not found" }, { status: 404 });
   }
 
+  // If SMS is currently in PROCESSING state, prevent accidental double-processing
+  // unless 1 minute has elapsed since ingress (createdAt/receivedAt) or force flag is set.
+  const isForce = _request.nextUrl.searchParams.get("force") === "true";
+  if (sms.status === "PROCESSING" && !isForce) {
+    const ingressTime = new Date(sms.createdAt || sms.receivedAt).getTime();
+    const elapsedMs = Date.now() - ingressTime;
+    if (elapsedMs < 60 * 1000) {
+      const waitSeconds = Math.ceil((60 * 1000 - elapsedMs) / 1000);
+      return NextResponse.json(
+        {
+          error: "SMS is currently being processed. Please wait 1 minute before retrying.",
+          retryAfterSeconds: waitSeconds,
+        },
+        { status: 429 }
+      );
+    }
+  }
+
   await prisma.bankSms.update({
     where: { id },
     data: {
@@ -30,7 +48,7 @@ export async function POST(
     },
   });
 
-  await processBankSms(id);
+  await processBankSms(id, { force: true });
 
   const updated = await prisma.bankSms.findUnique({
     where: { id },
