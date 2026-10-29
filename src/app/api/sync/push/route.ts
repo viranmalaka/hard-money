@@ -5,6 +5,8 @@ import { getNextServerSeq } from "@/lib/server-seq";
 import { assertCanWriteAccount, authorizeLoan } from "@/lib/authorization";
 import { shouldFailMutation } from "@/lib/test-sync-hook";
 
+export const maxDuration = 60;
+
 export interface SyncMutation {
   mutationId: string;
   entity:

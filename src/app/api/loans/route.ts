@@ -8,6 +8,8 @@ import { assertCanWriteAccount } from "@/lib/authorization";
 import { getNextServerSeq } from "@/lib/server-seq";
 
 
+export const maxDuration = 60;
+
 export async function GET() {
   const session = await getSessionUser();
   if (!session) {
@@ -141,25 +143,26 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    for (const row of scheduleRows) {
-      const scheduleSeq = await getNextServerSeq(tx);
+    const scheduleSeq = await getNextServerSeq(tx);
+    const scheduleEntriesData = scheduleRows.map((row) => {
       const dueDate = addMonthsOnDay(new Date(startDateTime), row.installmentNumber, resolvedPaymentDueDay);
+      return {
+        id: uuidv4(),
+        loanId: loan.id,
+        installmentNumber: row.installmentNumber,
+        dueDate,
+        principalComponentMinor: row.principalComponentMinor,
+        interestComponentMinor: row.interestComponentMinor,
+        openingBalanceMinor: row.openingBalanceMinor,
+        closingBalanceMinor: row.closingBalanceMinor,
+        status: row.installmentNumber <= paidInstallments ? "PAID" : "SCHEDULED",
+        serverSeq: scheduleSeq,
+      };
+    });
 
-      await tx.loanScheduleEntry.create({
-        data: {
-          id: uuidv4(),
-          loanId: loan.id,
-          installmentNumber: row.installmentNumber,
-          dueDate,
-          principalComponentMinor: row.principalComponentMinor,
-          interestComponentMinor: row.interestComponentMinor,
-          openingBalanceMinor: row.openingBalanceMinor,
-          closingBalanceMinor: row.closingBalanceMinor,
-          status: row.installmentNumber <= paidInstallments ? "PAID" : "SCHEDULED",
-          serverSeq: scheduleSeq,
-        },
-      });
-    }
+    await tx.loanScheduleEntry.createMany({
+      data: scheduleEntriesData,
+    });
 
     if (linkedDisbursementAccountId && originalPrincipalMinor > 0) {
       const transactionSeq = await getNextServerSeq(tx);

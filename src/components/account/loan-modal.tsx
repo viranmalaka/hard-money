@@ -4,7 +4,6 @@ import React, { useState } from "react";
 import { X } from "lucide-react";
 import { LocalAccount } from "@/lib/db";
 import { useSync } from "@/components/sync-provider";
-import { localCreateLoan } from "@/lib/sync/client";
 import { parseMoneyToMinor } from "@/lib/finance-core/money";
 import { useModalHistory } from "@/hooks/use-modal-history";
 
@@ -16,7 +15,7 @@ interface LoanModalProps {
 
 export function LoanModal({ isOpen, onClose, accounts }: LoanModalProps) {
   useModalHistory(isOpen, onClose, "loan-modal");
-  const { db, userId, sync } = useSync();
+  const { sync } = useSync();
 
   const [kind, setKind] = useState<"LOAN" | "LEASE">("LOAN");
   const [lenderName, setLenderName] = useState("");
@@ -95,30 +94,40 @@ export function LoanModal({ isOpen, onClose, accounts }: LoanModalProps) {
         paidInstallments += 1;
       }
 
-      await localCreateLoan(db, {
-        userId: userId || "",
-        householdId: null,
-        kind,
-        lenderName: lenderName.trim(),
-        originalPrincipalMinor: principalMinor,
-        residualValueMinor: residualMinor,
-        annualInterestRateBps: Math.round(aprNum * 100),
-        tenureMonths: tenureNum,
-        paidInstallments,
-        startDate,
-        paymentDueDay,
-        monthlyEmiAmountMinor: 0, // Will be computed by localCreateLoan
-        calculationType,
-        linkedDisbursementAccountId: disbursementAccountId || null,
-        status: "ACTIVE",
-        closedAt: null,
+      if (typeof window !== "undefined" && !navigator.onLine) {
+        setErrors({ form: "An internet connection is required to create a loan or lease." });
+        return;
+      }
+
+      const res = await fetch("/api/loans", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          kind,
+          lenderName: lenderName.trim(),
+          originalPrincipalMinor: principalMinor,
+          residualValueMinor: residualMinor,
+          annualInterestRateBps: Math.round(aprNum * 100),
+          tenureMonths: tenureNum,
+          paidInstallments,
+          startDate,
+          paymentDueDay,
+          calculationType,
+          linkedDisbursementAccountId: disbursementAccountId || null,
+        }),
       });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Failed to create loan");
+      }
 
       await sync();
       onClose();
-    } catch (err) {
+    } catch (err: unknown) {
       console.error("Failed to create loan:", err);
-      setErrors({ form: "Failed to create loan. Please try again." });
+      const msg = err instanceof Error ? err.message : "Failed to create loan. Please try again.";
+      setErrors({ form: msg });
     } finally {
       setSubmitting(false);
     }
