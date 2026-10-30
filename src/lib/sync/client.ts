@@ -1,306 +1,94 @@
 import { v4 as uuidv4 } from "uuid";
-import { addMonthsOnDay } from "../finance-core/dates";
-import {
-  HardMoneyDB,
+import { queryKeys } from "../api/query-keys";
+import { getQueryClient } from "@/components/query-provider";
+import type {
   LocalAccount,
-  LocalBudget,
-  LocalBudgetMonthSnapshot,
   LocalCategory,
-  LocalCreditCardStatement,
+  LocalTransaction,
+  LocalTemplate,
+  LocalBudget,
   LocalInstallmentPlan,
   LocalFixedDeposit,
-  LocalFixedDepositPayout,
   LocalLoan,
-  LocalLoanScheduleEntry,
-  LocalLoanPayment,
   LocalShoppingListItem,
-  LocalTemplate,
-  LocalTransaction,
-  OutboxMutation,
 } from "../db";
-import { queryKeys } from "../api/query-keys";
-import { updateQueryCacheOptimistic, syncDbToQueryCache } from "./cache-sync";
+import { enqueuePendingTransaction, flushPendingTransactions } from "../offline/transaction-queue";
 
-export type SyncState = "idle" | "syncing" | "offline" | "error";
-
-export async function syncNow(
-  db: HardMoneyDB,
-  onStateChange: (state: SyncState) => void
+/**
+ * Universal optimistic mutation executor.
+ * Dispatches the mutation to the backend via /api/sync/push, updates React Query cache immediately,
+ * and falls back to offline queue if transaction creation fails while offline.
+ */
+async function pushSingleMutation(
+  entity: string,
+  op: "CREATE" | "UPDATE" | "DELETE",
+  id: string,
+  payload: unknown,
+  queryKeyToInvalidate?: readonly unknown[]
 ): Promise<void> {
-  onStateChange("syncing");
+  const mutation = {
+    mutationId: uuidv4(),
+    entity,
+    op,
+    id,
+    payload,
+    createdAt: new Date().toISOString(),
+  };
 
-  // Step 1: Push pending mutations from outbox
   try {
-    const pending = await db.outbox.where("status").equals("pending").toArray();
-    if (pending.length > 0) {
-      const res = await fetch("/api/sync/push", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mutations: pending }),
-      });
+    const res = await fetch("/api/sync/push", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mutations: [mutation] }),
+    });
 
-      if (!res.ok) {
-        if (res.status === 401) {
-          onStateChange("idle");
-          return;
-        }
-        throw new Error(`Push HTTP error: ${res.status}`);
-      }
-
-      const data = await res.json();
-      for (const result of data.results || []) {
-        if (result.status === "accepted") {
-          await db.outbox.delete(result.mutationId);
-        } else {
-          await db.outbox.update(result.mutationId, {
-            status: "failed",
-            errorReason: result.reason || "Rejected by server",
-          });
-        }
-      }
-    }
-  } catch (err) {
-    console.warn("Sync push failed:", err);
-    onStateChange("offline");
-    return;
-  }
-
-  // Step 2: Pull delta changes from server
-  try {
-    const cursorMeta = await db.syncMeta.get("cursor");
-    const cursor = cursorMeta ? cursorMeta.value : 0;
-
-    const res = await fetch(`/api/sync/pull?cursor=${cursor}`);
     if (!res.ok) {
-      if (res.status === 401) {
-        onStateChange("idle");
-        return;
-      }
-      throw new Error(`Pull HTTP error: ${res.status}`);
+      throw new Error(`Push failed with HTTP ${res.status}`);
     }
-
-    const data: {
-      cursor?: number;
-      activeHouseholdIds?: string[];
-      contributorHouseholdIds?: string[];
-      accounts?: LocalAccount[];
-      categories?: LocalCategory[];
-      transactions?: LocalTransaction[];
-      templates?: LocalTemplate[];
-      budgets?: LocalBudget[];
-      budgetSnapshots?: LocalBudgetMonthSnapshot[];
-      creditCardStatements?: LocalCreditCardStatement[];
-      installmentPlans?: LocalInstallmentPlan[];
-      fixedDeposits?: LocalFixedDeposit[];
-      fixedDepositPayouts?: LocalFixedDepositPayout[];
-      loans?: LocalLoan[];
-      loanScheduleEntries?: LocalLoanScheduleEntry[];
-      loanPayments?: LocalLoanPayment[];
-      shoppingListItems?: LocalShoppingListItem[];
-    } = await res.json();
-
-    await db.transaction(
-      "rw",
-      [
-        db.accounts,
-        db.categories,
-        db.transactions,
-        db.templates,
-        db.budgets,
-        db.budgetSnapshots,
-        db.creditCardStatements,
-        db.installmentPlans,
-        db.fixedDeposits,
-        db.fixedDepositPayouts,
-        db.loans,
-        db.loanScheduleEntries,
-        db.loanPayments,
-        db.shoppingListItems,
-        db.syncMeta,
-      ],
-      async () => {
-        // Accounts
-        for (const a of data.accounts || []) {
-          if (a.deletedAt) {
-            await db.accounts.delete(a.id);
-          } else {
-            await db.accounts.put(a);
-          }
-        }
-        // Categories
-        for (const c of data.categories || []) {
-          if (c.deletedAt) {
-            await db.categories.delete(c.id);
-          } else {
-            await db.categories.put(c);
-          }
-        }
-        // Transactions
-        for (const t of data.transactions || []) {
-          if (t.deletedAt) {
-            await db.transactions.delete(t.id);
-          } else {
-            await db.transactions.put(t);
-          }
-        }
-        // Templates
-        for (const tmpl of data.templates || []) {
-          if (tmpl.deletedAt) {
-            await db.templates.delete(tmpl.id);
-          } else {
-            await db.templates.put(tmpl);
-          }
-        }
-        // Budgets
-        for (const b of data.budgets || []) {
-          if (b.deletedAt) {
-            await db.budgets.delete(b.id);
-          } else {
-            await db.budgets.put(b);
-          }
-        }
-        // Budget Snapshots
-        for (const bs of data.budgetSnapshots || []) {
-          await db.budgetSnapshots.put(bs);
-        }
-        // Credit Card Statements
-        for (const ccs of data.creditCardStatements || []) {
-          await db.creditCardStatements.put(ccs);
-        }
-        // Installment Plans
-        for (const plan of data.installmentPlans || []) {
-          if (plan.deletedAt) {
-            await db.installmentPlans.delete(plan.id);
-          } else {
-            await db.installmentPlans.put(plan);
-          }
-        }
-        // Fixed Deposits
-        for (const fd of data.fixedDeposits || []) {
-          if (fd.deletedAt) {
-            await db.fixedDeposits.delete(fd.id);
-          } else {
-            await db.fixedDeposits.put(fd);
-          }
-        }
-        // Fixed Deposit Payouts
-        for (const fdp of data.fixedDepositPayouts || []) {
-          await db.fixedDepositPayouts.put(fdp);
-        }
-        // Loans
-        for (const l of data.loans || []) {
-          if (l.deletedAt) {
-            await db.loans.delete(l.id);
-          } else {
-            await db.loans.put(l);
-          }
-        }
-        // Loan Schedule Entries
-        for (const se of data.loanScheduleEntries || []) {
-          if (se.deletedAt) {
-            await db.loanScheduleEntries.delete(se.id);
-          } else {
-            await db.loanScheduleEntries.put(se);
-          }
-        }
-        // Loan Payments
-        for (const lp of data.loanPayments || []) {
-          await db.loanPayments.put(lp);
-        }
-        // Shopping list items
-        for (const item of data.shoppingListItems || []) {
-          if (item.deletedAt) {
-            await db.shoppingListItems.delete(item.id);
-          } else {
-            await db.shoppingListItems.put(item);
-          }
-        }
-
-        // Purge locally cached shared data for households the user is no longer a member of
-        if (Array.isArray(data.activeHouseholdIds)) {
-          const activeSet = new Set(data.activeHouseholdIds);
-
-          const localAccounts = await db.accounts.toArray();
-          for (const a of localAccounts) {
-            if (a.householdId && !activeSet.has(a.householdId)) {
-              await db.accounts.delete(a.id);
-            }
-          }
-
-          const localTxs = await db.transactions.toArray();
-          for (const t of localTxs) {
-            if (t.householdId && !activeSet.has(t.householdId)) {
-              await db.transactions.delete(t.id);
-            }
-          }
-
-          const localFds = await db.fixedDeposits.toArray();
-          for (const fd of localFds) {
-            if (fd.householdId && !activeSet.has(fd.householdId)) {
-              await db.fixedDeposits.delete(fd.id);
-            }
-          }
-
-          const localLoans = await db.loans.toArray();
-          for (const l of localLoans) {
-            if (l.householdId && !activeSet.has(l.householdId)) {
-              await db.loans.delete(l.id);
-            }
-
-            const localShoppingItems = await db.shoppingListItems.toArray();
-            for (const item of localShoppingItems) {
-              if (!activeSet.has(item.householdId)) {
-                await db.shoppingListItems.delete(item.id);
-              }
-            }
-          }
-        }
-
-        // Purge FDs and Loans for households where the user is CONTRIBUTOR_ADD_ONLY
-        if (Array.isArray(data.contributorHouseholdIds)) {
-          const contribSet = new Set(data.contributorHouseholdIds);
-
-          const localFds = await db.fixedDeposits.toArray();
-          for (const fd of localFds) {
-            if (fd.householdId && contribSet.has(fd.householdId)) {
-              await db.fixedDeposits.delete(fd.id);
-            }
-          }
-
-          const localLoans = await db.loans.toArray();
-          for (const l of localLoans) {
-            if (l.householdId && contribSet.has(l.householdId)) {
-              await db.loans.delete(l.id);
-            }
-          }
-        }
-
-        if (data.cursor !== undefined) {
-          await db.syncMeta.put({ key: "cursor", value: data.cursor });
-        }
-        await db.syncMeta.put({ key: "lastSyncedAt", value: new Date().toISOString() });
-      }
-    );
-    await syncDbToQueryCache(db);
   } catch (err) {
-    console.warn("Sync pull failed:", err);
-    onStateChange("offline");
-    return;
-  }
-
-  // Check if any failed mutations exist
-  const failedCount = await db.outbox.where("status").equals("failed").count();
-  if (failedCount > 0) {
-    onStateChange("error");
-  } else {
-    onStateChange("idle");
+    // If it's a transaction creation and network failed, store in offline queue
+    if (entity === "transaction" && op === "CREATE") {
+      const fullTx = payload as LocalTransaction;
+      await enqueuePendingTransaction({
+        tempId: id,
+        payload: {
+          accountId: fullTx.accountId,
+          toAccountId: fullTx.toAccountId,
+          amountMinor: fullTx.amountMinor,
+          destinationAmountMinor: fullTx.destinationAmountMinor,
+          exchangeRateMicros: fullTx.exchangeRateMicros,
+          categoryId: fullTx.categoryId,
+          note: fullTx.note,
+          type: fullTx.type,
+          transactionDate: fullTx.transactionDate,
+          isSplit: fullTx.isSplit,
+          splitItems: fullTx.splitItems?.map((s) => ({
+            categoryId: s.categoryId,
+            amountMinor: s.amountMinor,
+            note: s.note,
+          })),
+        },
+        optimisticTx: fullTx,
+        queuedAt: new Date().toISOString(),
+        retryCount: 0,
+      });
+      return;
+    }
+    throw err;
+  } finally {
+    if (queryKeyToInvalidate) {
+      const qc = getQueryClient();
+      qc.invalidateQueries({ queryKey: queryKeyToInvalidate });
+    }
   }
 }
 
-// Local entity mutators that write to local store immediately and record outbox mutations
+// -------------------------------------------------------------
+// Accounts
+// -------------------------------------------------------------
 
 export async function localCreateAccount(
-  db: HardMoneyDB,
+  _db: any,
   account: Omit<LocalAccount, "id" | "serverSeq" | "createdAt" | "updatedAt"> & { id?: string }
 ): Promise<LocalAccount> {
   const now = new Date().toISOString();
@@ -313,73 +101,41 @@ export async function localCreateAccount(
     updatedAt: now,
   };
 
-  const mutation: OutboxMutation = {
-    mutationId: uuidv4(),
-    entity: "account",
-    op: "CREATE",
-    id,
-    payload: fullAccount,
-    createdAt: now,
-    status: "pending",
-  };
+  const qc = getQueryClient();
+  qc.setQueryData<LocalAccount[]>(queryKeys.accounts.all(), (old = []) => [fullAccount, ...old]);
 
-  await db.transaction("rw", [db.accounts, db.outbox], async () => {
-    await db.accounts.put(fullAccount);
-    await db.outbox.add(mutation);
-  });
-  updateQueryCacheOptimistic(queryKeys.accounts.all(), "CREATE", fullAccount);
-
+  await pushSingleMutation("account", "CREATE", id, fullAccount, queryKeys.accounts.all());
   return fullAccount;
 }
 
 export async function localUpdateAccount(
-  db: HardMoneyDB,
+  _db: any,
   id: string,
   patch: Partial<LocalAccount>
 ): Promise<void> {
-  const existing = await db.accounts.get(id);
-  if (!existing) return;
+  const qc = getQueryClient();
+  qc.setQueryData<LocalAccount[]>(queryKeys.accounts.all(), (old = []) =>
+    old.map((a) => (a.id === id ? { ...a, ...patch, updatedAt: new Date().toISOString() } : a))
+  );
 
-  const now = new Date().toISOString();
-  const updated = { ...existing, ...patch, updatedAt: now };
-
-  const mutation: OutboxMutation = {
-    mutationId: uuidv4(),
-    entity: "account",
-    op: "UPDATE",
-    id,
-    payload: patch,
-    createdAt: now,
-    status: "pending",
-  };
-
-  await db.transaction("rw", [db.accounts, db.outbox], async () => {
-    await db.accounts.put(updated);
-    await db.outbox.add(mutation);
-  });
-  updateQueryCacheOptimistic(queryKeys.accounts.all(), "UPDATE", updated);
+  await pushSingleMutation("account", "UPDATE", id, patch, queryKeys.accounts.all());
 }
 
-export async function localDeleteAccount(db: HardMoneyDB, id: string): Promise<void> {
-  const now = new Date().toISOString();
-  const mutation: OutboxMutation = {
-    mutationId: uuidv4(),
-    entity: "account",
-    op: "DELETE",
-    id,
-    createdAt: now,
-    status: "pending",
-  };
+export async function localDeleteAccount(_db: any, id: string): Promise<void> {
+  const qc = getQueryClient();
+  qc.setQueryData<LocalAccount[]>(queryKeys.accounts.all(), (old = []) =>
+    old.filter((a) => a.id !== id)
+  );
 
-  await db.transaction("rw", [db.accounts, db.outbox], async () => {
-    await db.accounts.delete(id);
-    await db.outbox.add(mutation);
-  });
-  updateQueryCacheOptimistic(queryKeys.accounts.all(), "DELETE", { id });
+  await pushSingleMutation("account", "DELETE", id, { id }, queryKeys.accounts.all());
 }
+
+// -------------------------------------------------------------
+// Categories
+// -------------------------------------------------------------
 
 export async function localCreateCategory(
-  db: HardMoneyDB,
+  _db: any,
   category: Omit<LocalCategory, "id" | "serverSeq" | "createdAt" | "updatedAt"> & { id?: string }
 ): Promise<LocalCategory> {
   const now = new Date().toISOString();
@@ -392,880 +148,330 @@ export async function localCreateCategory(
     updatedAt: now,
   };
 
-  const mutation: OutboxMutation = {
-    mutationId: uuidv4(),
-    entity: "category",
-    op: "CREATE",
-    id,
-    payload: fullCategory,
-    createdAt: now,
-    status: "pending",
-  };
+  const qc = getQueryClient();
+  qc.setQueryData<LocalCategory[]>(queryKeys.categories.all(), (old = []) => [fullCategory, ...old]);
 
-  await db.transaction("rw", [db.categories, db.outbox], async () => {
-    await db.categories.put(fullCategory);
-    await db.outbox.add(mutation);
-  });
-  updateQueryCacheOptimistic(queryKeys.categories.all(), "CREATE", fullCategory);
-
+  await pushSingleMutation("category", "CREATE", id, fullCategory, queryKeys.categories.all());
   return fullCategory;
 }
 
 export async function localUpdateCategory(
-  db: HardMoneyDB,
+  _db: any,
   id: string,
   patch: Partial<LocalCategory>
 ): Promise<void> {
-  const existing = await db.categories.get(id);
-  if (!existing) return;
+  const qc = getQueryClient();
+  qc.setQueryData<LocalCategory[]>(queryKeys.categories.all(), (old = []) =>
+    old.map((c) => (c.id === id ? { ...c, ...patch, updatedAt: new Date().toISOString() } : c))
+  );
 
-  const now = new Date().toISOString();
-  const updated = { ...existing, ...patch, updatedAt: now };
-
-  const mutation: OutboxMutation = {
-    mutationId: uuidv4(),
-    entity: "category",
-    op: "UPDATE",
-    id,
-    payload: patch,
-    createdAt: now,
-    status: "pending",
-  };
-
-  await db.transaction("rw", [db.categories, db.outbox], async () => {
-    await db.categories.put(updated);
-    await db.outbox.add(mutation);
-  });
-  updateQueryCacheOptimistic(queryKeys.categories.all(), "UPDATE", updated);
+  await pushSingleMutation("category", "UPDATE", id, patch, queryKeys.categories.all());
 }
 
-export async function localDeleteCategory(db: HardMoneyDB, id: string): Promise<void> {
-  const now = new Date().toISOString();
-  const mutation: OutboxMutation = {
-    mutationId: uuidv4(),
-    entity: "category",
-    op: "DELETE",
-    id,
-    createdAt: now,
-    status: "pending",
-  };
+export async function localDeleteCategory(_db: any, id: string): Promise<void> {
+  const qc = getQueryClient();
+  qc.setQueryData<LocalCategory[]>(queryKeys.categories.all(), (old = []) =>
+    old.filter((c) => c.id !== id)
+  );
 
-  await db.transaction("rw", [db.categories, db.outbox], async () => {
-    await db.categories.delete(id);
-    await db.outbox.add(mutation);
-  });
-  updateQueryCacheOptimistic(queryKeys.categories.all(), "DELETE", { id });
+  await pushSingleMutation("category", "DELETE", id, { id }, queryKeys.categories.all());
 }
+
+// -------------------------------------------------------------
+// Transactions
+// -------------------------------------------------------------
 
 export async function localCreateTransaction(
-  db: HardMoneyDB,
+  _db: any,
   tx: Omit<LocalTransaction, "id" | "serverSeq" | "createdAt" | "updatedAt"> & { id?: string }
 ): Promise<LocalTransaction> {
   const now = new Date().toISOString();
   const id = tx.id || uuidv4();
-
-  let householdId = tx.householdId || null;
-  if (!householdId && tx.accountId) {
-    const acc = await db.accounts.get(tx.accountId);
-    if (acc?.householdId) {
-      householdId = acc.householdId;
-    }
-  }
-
   const fullTx: LocalTransaction = {
     ...tx,
     id,
-    householdId,
     serverSeq: 0,
     createdAt: now,
     updatedAt: now,
   };
 
-  const mutation: OutboxMutation = {
-    mutationId: uuidv4(),
-    entity: "transaction",
-    op: "CREATE",
-    id,
-    payload: fullTx,
-    createdAt: now,
-    status: "pending",
-  };
+  const qc = getQueryClient();
+  qc.setQueryData<LocalTransaction[]>(queryKeys.transactions.all(), (old = []) => [fullTx, ...old]);
 
-  await db.transaction("rw", [db.transactions, db.outbox], async () => {
-    await db.transactions.put(fullTx);
-    await db.outbox.add(mutation);
-  });
-  updateQueryCacheOptimistic(queryKeys.transactions.all(), "CREATE", fullTx);
+  if (typeof window !== "undefined" && !navigator.onLine) {
+    // Save to offline queue directly
+    await enqueuePendingTransaction({
+      tempId: id,
+      payload: {
+        accountId: fullTx.accountId,
+        toAccountId: fullTx.toAccountId,
+        amountMinor: fullTx.amountMinor,
+        destinationAmountMinor: fullTx.destinationAmountMinor,
+        exchangeRateMicros: fullTx.exchangeRateMicros,
+        categoryId: fullTx.categoryId,
+        note: fullTx.note,
+        type: fullTx.type,
+        transactionDate: fullTx.transactionDate,
+        isSplit: fullTx.isSplit,
+        splitItems: fullTx.splitItems?.map((s) => ({
+          categoryId: s.categoryId,
+          amountMinor: s.amountMinor,
+          note: s.note,
+        })),
+      },
+      optimisticTx: fullTx,
+      queuedAt: now,
+      retryCount: 0,
+    });
+    return fullTx;
+  }
 
+  await pushSingleMutation("transaction", "CREATE", id, fullTx, queryKeys.transactions.all());
   return fullTx;
 }
 
 export async function localUpdateTransaction(
-  db: HardMoneyDB,
+  _db: any,
   id: string,
   patch: Partial<LocalTransaction>
 ): Promise<void> {
-  const existing = await db.transactions.get(id);
-  if (!existing) return;
+  const qc = getQueryClient();
+  qc.setQueryData<LocalTransaction[]>(queryKeys.transactions.all(), (old = []) =>
+    old.map((t) => (t.id === id ? { ...t, ...patch, updatedAt: new Date().toISOString() } : t))
+  );
 
-  const now = new Date().toISOString();
-  const updated: LocalTransaction = { ...existing, ...patch, updatedAt: now };
-
-  const mutation: OutboxMutation = {
-    mutationId: uuidv4(),
-    entity: "transaction",
-    op: "UPDATE",
-    id,
-    payload: patch,
-    createdAt: now,
-    status: "pending",
-  };
-
-  await db.transaction("rw", [db.transactions, db.outbox], async () => {
-    await db.transactions.put(updated);
-    await db.outbox.add(mutation);
-  });
-  updateQueryCacheOptimistic(queryKeys.transactions.all(), "UPDATE", updated);
+  await pushSingleMutation("transaction", "UPDATE", id, patch, queryKeys.transactions.all());
 }
 
-export async function localDeleteTransaction(db: HardMoneyDB, id: string): Promise<void> {
-  const existing = await db.transactions.get(id);
-  const now = new Date().toISOString();
+export async function localDeleteTransaction(_db: any, id: string): Promise<void> {
+  const qc = getQueryClient();
+  qc.setQueryData<LocalTransaction[]>(queryKeys.transactions.all(), (old = []) =>
+    old.filter((t) => t.id !== id)
+  );
 
-  const mutation: OutboxMutation = {
-    mutationId: uuidv4(),
-    entity: "transaction",
-    op: "DELETE",
-    id,
-    createdAt: now,
-    status: "pending",
-  };
-
-  await db.transaction("rw", [db.transactions, db.outbox], async () => {
-    if (existing) {
-      await db.transactions.delete(id);
-    }
-    await db.outbox.add(mutation);
-  });
-  updateQueryCacheOptimistic(queryKeys.transactions.all(), "DELETE", { id });
+  await pushSingleMutation("transaction", "DELETE", id, { id }, queryKeys.transactions.all());
 }
 
-export async function localRestoreTransaction(db: HardMoneyDB, tx: LocalTransaction): Promise<void> {
-  const now = new Date().toISOString();
-  const restoredTx = { ...tx, deletedAt: null, updatedAt: now };
+export async function localRestoreTransaction(_db: any, tx: LocalTransaction): Promise<void> {
+  const restoredTx = { ...tx, deletedAt: null, updatedAt: new Date().toISOString() };
+  const qc = getQueryClient();
+  qc.setQueryData<LocalTransaction[]>(queryKeys.transactions.all(), (old = []) => [restoredTx, ...old]);
 
-  const mutation: OutboxMutation = {
-    mutationId: uuidv4(),
-    entity: "transaction",
-    op: "CREATE",
-    id: tx.id,
-    payload: restoredTx,
-    createdAt: now,
-    status: "pending",
-  };
-
-  await db.transaction("rw", [db.transactions, db.outbox], async () => {
-    await db.transactions.put(restoredTx);
-    await db.outbox.add(mutation);
-  });
-  updateQueryCacheOptimistic(queryKeys.transactions.all(), "CREATE", restoredTx);
+  await pushSingleMutation("transaction", "CREATE", tx.id, restoredTx, queryKeys.transactions.all());
 }
+
+// -------------------------------------------------------------
+// Templates
+// -------------------------------------------------------------
 
 export async function localCreateTemplate(
-  db: HardMoneyDB,
+  _db: any,
   tmpl: Omit<LocalTemplate, "id" | "serverSeq" | "createdAt" | "updatedAt"> & { id?: string }
 ): Promise<LocalTemplate> {
   const now = new Date().toISOString();
   const id = tmpl.id || uuidv4();
-  const fullTmpl: LocalTemplate = {
-    ...tmpl,
-    id,
-    serverSeq: 0,
-    createdAt: now,
-    updatedAt: now,
-  };
+  const fullTmpl: LocalTemplate = { ...tmpl, id, serverSeq: 0, createdAt: now, updatedAt: now };
 
-  const mutation: OutboxMutation = {
-    mutationId: uuidv4(),
-    entity: "template",
-    op: "CREATE",
-    id,
-    payload: fullTmpl,
-    createdAt: now,
-    status: "pending",
-  };
+  const qc = getQueryClient();
+  qc.setQueryData<LocalTemplate[]>(queryKeys.templates.all(), (old = []) => [fullTmpl, ...old]);
 
-  await db.transaction("rw", [db.templates, db.outbox], async () => {
-    await db.templates.put(fullTmpl);
-    await db.outbox.add(mutation);
-  });
-
+  await pushSingleMutation("template", "CREATE", id, fullTmpl, queryKeys.templates.all());
   return fullTmpl;
 }
 
 export async function localUpdateTemplate(
-  db: HardMoneyDB,
+  _db: any,
   id: string,
   patch: Partial<LocalTemplate>
 ): Promise<void> {
-  const existing = await db.templates.get(id);
-  if (!existing) return;
+  const qc = getQueryClient();
+  qc.setQueryData<LocalTemplate[]>(queryKeys.templates.all(), (old = []) =>
+    old.map((t) => (t.id === id ? { ...t, ...patch, updatedAt: new Date().toISOString() } : t))
+  );
 
-  const now = new Date().toISOString();
-  const updated: LocalTemplate = { ...existing, ...patch, updatedAt: now };
-
-  const mutation: OutboxMutation = {
-    mutationId: uuidv4(),
-    entity: "template",
-    op: "UPDATE",
-    id,
-    payload: patch,
-    createdAt: now,
-    status: "pending",
-  };
-
-  await db.transaction("rw", [db.templates, db.outbox], async () => {
-    await db.templates.put(updated);
-    await db.outbox.add(mutation);
-  });
+  await pushSingleMutation("template", "UPDATE", id, patch, queryKeys.templates.all());
 }
 
-export async function localDeleteTemplate(db: HardMoneyDB, id: string): Promise<void> {
-  const now = new Date().toISOString();
-  const mutation: OutboxMutation = {
-    mutationId: uuidv4(),
-    entity: "template",
-    op: "DELETE",
-    id,
-    createdAt: now,
-    status: "pending",
-  };
+export async function localDeleteTemplate(_db: any, id: string): Promise<void> {
+  const qc = getQueryClient();
+  qc.setQueryData<LocalTemplate[]>(queryKeys.templates.all(), (old = []) =>
+    old.filter((t) => t.id !== id)
+  );
 
-  await db.transaction("rw", [db.templates, db.outbox], async () => {
-    await db.templates.delete(id);
-    await db.outbox.add(mutation);
-  });
+  await pushSingleMutation("template", "DELETE", id, { id }, queryKeys.templates.all());
 }
+
+// -------------------------------------------------------------
+// Budgets
+// -------------------------------------------------------------
 
 export async function localCreateBudget(
-  db: HardMoneyDB,
-  budget: Omit<LocalBudget, "id" | "serverSeq" | "createdAt" | "updatedAt"> & { id?: string }
+  _db: any,
+  b: Omit<LocalBudget, "id" | "serverSeq" | "createdAt" | "updatedAt"> & { id?: string }
 ): Promise<LocalBudget> {
   const now = new Date().toISOString();
-  const id = budget.id || uuidv4();
-  const fullBudget: LocalBudget = {
-    ...budget,
-    id,
-    serverSeq: 0,
-    createdAt: now,
-    updatedAt: now,
-  };
+  const id = b.id || uuidv4();
+  const fullBudget: LocalBudget = { ...b, id, serverSeq: 0, createdAt: now, updatedAt: now };
 
-  const mutation: OutboxMutation = {
-    mutationId: uuidv4(),
-    entity: "budget",
-    op: "CREATE",
-    id,
-    payload: {
-      id,
-      userId: budget.userId,
-      categoryId: budget.categoryId,
-      monthlyLimitMinor: budget.monthlyLimitMinor,
-      enableRollover: budget.enableRollover ?? false,
-      rolloverStartMonth: budget.rolloverStartMonth || null,
-    },
-    createdAt: now,
-    status: "pending",
-  };
+  const qc = getQueryClient();
+  qc.setQueryData<LocalBudget[]>(queryKeys.budgets.all(), (old = []) => [fullBudget, ...old]);
 
-  await db.transaction("rw", [db.budgets, db.outbox], async () => {
-    await db.budgets.put(fullBudget);
-    await db.outbox.add(mutation);
-  });
-  updateQueryCacheOptimistic(queryKeys.budgets.all(), "CREATE", fullBudget);
-
+  await pushSingleMutation("budget", "CREATE", id, fullBudget, queryKeys.budgets.all());
   return fullBudget;
 }
 
 export async function localUpdateBudget(
-  db: HardMoneyDB,
+  _db: any,
   id: string,
   patch: Partial<LocalBudget>
 ): Promise<void> {
-  const existing = await db.budgets.get(id);
-  if (!existing) return;
+  const qc = getQueryClient();
+  qc.setQueryData<LocalBudget[]>(queryKeys.budgets.all(), (old = []) =>
+    old.map((b) => (b.id === id ? { ...b, ...patch, updatedAt: new Date().toISOString() } : b))
+  );
 
-  const now = new Date().toISOString();
-  const updated: LocalBudget = { ...existing, ...patch, updatedAt: now };
-
-  const mutation: OutboxMutation = {
-    mutationId: uuidv4(),
-    entity: "budget",
-    op: "UPDATE",
-    id,
-    payload: patch,
-    createdAt: now,
-    status: "pending",
-  };
-
-  await db.transaction("rw", [db.budgets, db.outbox], async () => {
-    await db.budgets.put(updated);
-    await db.outbox.add(mutation);
-  });
-  updateQueryCacheOptimistic(queryKeys.budgets.all(), "UPDATE", updated);
+  await pushSingleMutation("budget", "UPDATE", id, patch, queryKeys.budgets.all());
 }
 
-export async function localDeleteBudget(db: HardMoneyDB, id: string): Promise<void> {
-  const now = new Date().toISOString();
-  const mutation: OutboxMutation = {
-    mutationId: uuidv4(),
-    entity: "budget",
-    op: "DELETE",
-    id,
-    createdAt: now,
-    status: "pending",
-  };
+export async function localDeleteBudget(_db: any, id: string): Promise<void> {
+  const qc = getQueryClient();
+  qc.setQueryData<LocalBudget[]>(queryKeys.budgets.all(), (old = []) =>
+    old.filter((b) => b.id !== id)
+  );
 
-  await db.transaction("rw", [db.budgets, db.outbox], async () => {
-    await db.budgets.delete(id);
-    await db.outbox.add(mutation);
-  });
-  updateQueryCacheOptimistic(queryKeys.budgets.all(), "DELETE", { id });
+  await pushSingleMutation("budget", "DELETE", id, { id }, queryKeys.budgets.all());
 }
+
+// -------------------------------------------------------------
+// Installment Plans & Fixed Deposits & Loans & Shopping
+// -------------------------------------------------------------
 
 export async function localCreateInstallmentPlan(
-  db: HardMoneyDB,
-  plan: Omit<LocalInstallmentPlan, "id" | "serverSeq" | "createdAt" | "updatedAt"> & { id?: string }
+  _db: any,
+  p: Omit<LocalInstallmentPlan, "id" | "serverSeq" | "createdAt" | "updatedAt"> & { id?: string }
 ): Promise<LocalInstallmentPlan> {
   const now = new Date().toISOString();
-  const id = plan.id || uuidv4();
-  const fullPlan: LocalInstallmentPlan = {
-    ...plan,
-    id,
-    serverSeq: 0,
-    createdAt: now,
-    updatedAt: now,
-  };
+  const id = p.id || uuidv4();
+  const fullPlan: LocalInstallmentPlan = { ...p, id, serverSeq: 0, createdAt: now, updatedAt: now };
 
-  const mutation: OutboxMutation = {
-    mutationId: uuidv4(),
-    entity: "installmentPlan",
-    op: "CREATE",
-    id,
-    payload: fullPlan,
-    createdAt: now,
-    status: "pending",
-  };
+  const qc = getQueryClient();
+  qc.setQueryData<LocalInstallmentPlan[]>(queryKeys.installmentPlans.all(), (old = []) => [fullPlan, ...old]);
 
-  await db.transaction("rw", [db.installmentPlans, db.outbox], async () => {
-    await db.installmentPlans.put(fullPlan);
-    await db.outbox.add(mutation);
-  });
-  updateQueryCacheOptimistic(queryKeys.installmentPlans.all(), "CREATE", fullPlan);
-
+  await pushSingleMutation("installmentPlan", "CREATE", id, fullPlan, queryKeys.installmentPlans.all());
   return fullPlan;
 }
 
 export async function localUpdateInstallmentPlan(
-  db: HardMoneyDB,
+  _db: any,
   id: string,
   patch: Partial<LocalInstallmentPlan>
 ): Promise<void> {
-  const existing = await db.installmentPlans.get(id);
-  if (!existing) return;
+  const qc = getQueryClient();
+  qc.setQueryData<LocalInstallmentPlan[]>(queryKeys.installmentPlans.all(), (old = []) =>
+    old.map((p) => (p.id === id ? { ...p, ...patch, updatedAt: new Date().toISOString() } : p))
+  );
 
-  const now = new Date().toISOString();
-  const updated: LocalInstallmentPlan = { ...existing, ...patch, updatedAt: now };
-
-  const mutation: OutboxMutation = {
-    mutationId: uuidv4(),
-    entity: "installmentPlan",
-    op: "UPDATE",
-    id,
-    payload: patch,
-    createdAt: now,
-    status: "pending",
-  };
-
-  await db.transaction("rw", [db.installmentPlans, db.outbox], async () => {
-    await db.installmentPlans.put(updated);
-    await db.outbox.add(mutation);
-  });
-  updateQueryCacheOptimistic(queryKeys.installmentPlans.all(), "UPDATE", updated);
+  await pushSingleMutation("installmentPlan", "UPDATE", id, patch, queryKeys.installmentPlans.all());
 }
 
-export async function localDeleteInstallmentPlan(db: HardMoneyDB, id: string): Promise<void> {
-  const now = new Date().toISOString();
-  const mutation: OutboxMutation = {
-    mutationId: uuidv4(),
-    entity: "installmentPlan",
-    op: "DELETE",
-    id,
-    createdAt: now,
-    status: "pending",
-  };
+export async function localDeleteInstallmentPlan(_db: any, id: string): Promise<void> {
+  const qc = getQueryClient();
+  qc.setQueryData<LocalInstallmentPlan[]>(queryKeys.installmentPlans.all(), (old = []) =>
+    old.filter((p) => p.id !== id)
+  );
 
-  await db.transaction("rw", [db.installmentPlans, db.outbox], async () => {
-    await db.installmentPlans.delete(id);
-    await db.outbox.add(mutation);
-  });
-  updateQueryCacheOptimistic(queryKeys.installmentPlans.all(), "DELETE", { id });
+  await pushSingleMutation("installmentPlan", "DELETE", id, { id }, queryKeys.installmentPlans.all());
 }
 
 export async function localCreateFixedDeposit(
-  db: HardMoneyDB,
-  fd: Omit<import("../db").LocalFixedDeposit, "id" | "serverSeq" | "createdAt" | "updatedAt"> & { id?: string }
-): Promise<import("../db").LocalFixedDeposit> {
+  _db: any,
+  fd: Omit<LocalFixedDeposit, "id" | "serverSeq" | "createdAt" | "updatedAt"> & { id?: string }
+): Promise<LocalFixedDeposit> {
   const now = new Date().toISOString();
   const id = fd.id || uuidv4();
-  const fullFd: import("../db").LocalFixedDeposit = {
-    ...fd,
-    id,
-    serverSeq: 0,
-    createdAt: now,
-    updatedAt: now,
-  };
+  const fullFd: LocalFixedDeposit = { ...fd, id, serverSeq: 0, createdAt: now, updatedAt: now };
 
-  const mutation: OutboxMutation = {
-    mutationId: uuidv4(),
-    entity: "fixedDeposit",
-    op: "CREATE",
-    id,
-    payload: fullFd,
-    createdAt: now,
-    status: "pending",
-  };
+  const qc = getQueryClient();
+  qc.setQueryData<LocalFixedDeposit[]>(queryKeys.fixedDeposits.all(), (old = []) => [fullFd, ...old]);
 
-  await db.transaction("rw", [db.fixedDeposits, db.transactions, db.outbox], async () => {
-    await db.fixedDeposits.put(fullFd);
-    if (fullFd.fundingAccountId && fullFd.principalAmountMinor > 0) {
-      const placementTxId = `${id}-placement`;
-      const placementTx: import("../db").LocalTransaction = {
-        id: placementTxId,
-        userId: fullFd.userId || "",
-        accountId: fullFd.fundingAccountId,
-        amountMinor: fullFd.principalAmountMinor,
-        type: "EXPENSE",
-        subType: "FD_PLACEMENT",
-        source: "SYSTEM",
-        isSplit: false,
-        createdByUserId: fullFd.userId || "",
-        updatedByUserId: fullFd.userId || "",
-        transactionDate: fullFd.startDate || now,
-        note: `Fixed Deposit Placement: ${fullFd.bankName}`,
-        excludeFromBudget: true,
-        excludeFromStats: true,
-        excludeFromBalance: false,
-        serverSeq: 0,
-        createdAt: now,
-        updatedAt: now,
-      };
-      await db.transactions.put(placementTx);
-    }
-    await db.outbox.add(mutation);
-  });
-  updateQueryCacheOptimistic(queryKeys.fixedDeposits.all(), "CREATE", fullFd);
-
+  await pushSingleMutation("fixedDeposit", "CREATE", id, fullFd, queryKeys.fixedDeposits.all());
   return fullFd;
 }
 
 export async function localUpdateFixedDeposit(
-  db: HardMoneyDB,
+  _db: any,
   id: string,
-  patch: Partial<import("../db").LocalFixedDeposit>
+  patch: Partial<LocalFixedDeposit>
 ): Promise<void> {
-  const existing = await db.fixedDeposits.get(id);
-  if (!existing) return;
-
-  const now = new Date().toISOString();
-  const updated: import("../db").LocalFixedDeposit = { ...existing, ...patch, updatedAt: now };
-
-  const mutation: OutboxMutation = {
-    mutationId: uuidv4(),
-    entity: "fixedDeposit",
-    op: "UPDATE",
-    id,
-    payload: patch,
-    createdAt: now,
-    status: "pending",
-  };
-
-  await db.transaction("rw", [db.fixedDeposits, db.outbox], async () => {
-    await db.fixedDeposits.put(updated);
-    await db.outbox.add(mutation);
-  });
-  updateQueryCacheOptimistic(queryKeys.fixedDeposits.all(), "UPDATE", updated);
-}
-
-export async function localDeleteFixedDeposit(db: HardMoneyDB, id: string): Promise<void> {
-  const now = new Date().toISOString();
-  const mutation: OutboxMutation = {
-    mutationId: uuidv4(),
-    entity: "fixedDeposit",
-    op: "DELETE",
-    id,
-    createdAt: now,
-    status: "pending",
-  };
-
-  await db.transaction("rw", [db.fixedDeposits, db.outbox], async () => {
-    await db.fixedDeposits.delete(id);
-    await db.outbox.add(mutation);
-  });
-  updateQueryCacheOptimistic(queryKeys.fixedDeposits.all(), "DELETE", { id });
-}
-
-export async function localCreateLoan(
-  db: HardMoneyDB,
-  loan: Omit<import("../db").LocalLoan, "id" | "serverSeq" | "createdAt" | "updatedAt"> & { id?: string }
-): Promise<import("../db").LocalLoan> {
-  const now = new Date().toISOString();
-  const id = loan.id || uuidv4();
-
-  // Generate schedule rows
-  const { generateAmortizationSchedule } = await import("../finance-core/loans");
-  const scheduleRows = generateAmortizationSchedule(
-    loan.originalPrincipalMinor,
-    loan.annualInterestRateBps,
-    loan.tenureMonths,
-    loan.calculationType,
-    loan.residualValueMinor || 0
+  const qc = getQueryClient();
+  qc.setQueryData<LocalFixedDeposit[]>(queryKeys.fixedDeposits.all(), (old = []) =>
+    old.map((f) => (f.id === id ? { ...f, ...patch, updatedAt: new Date().toISOString() } : f))
   );
 
-  const monthlyEmi = loan.monthlyEmiAmountMinor || scheduleRows[0]?.emiAmountMinor || 0;
+  await pushSingleMutation("fixedDeposit", "UPDATE", id, patch, queryKeys.fixedDeposits.all());
+}
 
-  const fullLoan: import("../db").LocalLoan = {
-    ...loan,
-    monthlyEmiAmountMinor: monthlyEmi,
-    id,
-    serverSeq: 0,
-    createdAt: now,
-    updatedAt: now,
-  };
-
-  const loanMutation: OutboxMutation = {
-    mutationId: uuidv4(),
-    entity: "loan",
-    op: "CREATE",
-    id,
-    payload: fullLoan,
-    createdAt: now,
-    status: "pending",
-  };
-
-  const baseDate = new Date(fullLoan.startDate || now);
-  const entries: import("../db").LocalLoanScheduleEntry[] = [];
-  const entryMutations: OutboxMutation[] = [];
-
-  for (const row of scheduleRows) {
-    const entryId = uuidv4();
-    const dueDate = addMonthsOnDay(
-      baseDate,
-      row.installmentNumber,
-      fullLoan.paymentDueDay || baseDate.getUTCDate(),
-    );
-
-    const entry: import("../db").LocalLoanScheduleEntry = {
-      id: entryId,
-      loanId: id,
-      installmentNumber: row.installmentNumber,
-      dueDate: dueDate.toISOString(),
-      principalComponentMinor: row.principalComponentMinor,
-      interestComponentMinor: row.interestComponentMinor,
-      openingBalanceMinor: row.openingBalanceMinor,
-      closingBalanceMinor: row.closingBalanceMinor,
-      status: "SCHEDULED",
-      serverSeq: 0,
-      createdAt: now,
-      updatedAt: now,
-    };
-    entries.push(entry);
-
-    entryMutations.push({
-      mutationId: uuidv4(),
-      entity: "loanScheduleEntry",
-      op: "CREATE",
-      id: entryId,
-      payload: entry,
-      createdAt: now,
-      status: "pending",
-    });
-  }
-
-  await db.transaction(
-    "rw",
-    [db.loans, db.loanScheduleEntries, db.transactions, db.outbox],
-    async () => {
-      await db.loans.put(fullLoan);
-      for (const entry of entries) {
-        await db.loanScheduleEntries.put(entry);
-      }
-      if (fullLoan.linkedDisbursementAccountId && fullLoan.originalPrincipalMinor > 0) {
-        const disbursementTxId = `${id}-disbursement`;
-        const disbursementTx: import("../db").LocalTransaction = {
-          id: disbursementTxId,
-          userId: fullLoan.userId || "",
-          accountId: fullLoan.linkedDisbursementAccountId,
-          amountMinor: fullLoan.originalPrincipalMinor,
-          type: "INCOME",
-          subType: "LOAN_DISBURSEMENT",
-          source: "SYSTEM",
-          isSplit: false,
-          createdByUserId: fullLoan.userId || "",
-          updatedByUserId: fullLoan.userId || "",
-          transactionDate: fullLoan.startDate || now,
-          note: `${fullLoan.kind === "LEASE" ? "Lease" : "Loan"} Disbursement: ${fullLoan.lenderName}`,
-          excludeFromBudget: true,
-          excludeFromStats: true,
-          excludeFromBalance: false,
-          serverSeq: 0,
-          createdAt: now,
-          updatedAt: now,
-        };
-        await db.transactions.put(disbursementTx);
-      }
-      await db.outbox.add(loanMutation);
-      for (const m of entryMutations) {
-        await db.outbox.add(m);
-      }
-    }
+export async function localDeleteLoan(_db: any, id: string): Promise<void> {
+  const qc = getQueryClient();
+  qc.setQueryData<LocalLoan[]>(queryKeys.loans.all(), (old = []) =>
+    old.filter((l) => l.id !== id)
   );
 
-  return fullLoan;
-}
-
-export async function localUpdateLoan(
-  db: HardMoneyDB,
-  id: string,
-  patch: Partial<import("../db").LocalLoan>
-): Promise<void> {
-  const existing = await db.loans.get(id);
-  if (!existing) return;
-
-  const now = new Date().toISOString();
-  const updated: import("../db").LocalLoan = { ...existing, ...patch, updatedAt: now };
-
-  const mutation: OutboxMutation = {
-    mutationId: uuidv4(),
-    entity: "loan",
-    op: "UPDATE",
-    id,
-    payload: patch,
-    createdAt: now,
-    status: "pending",
-  };
-
-  await db.transaction("rw", [db.loans, db.outbox], async () => {
-    await db.loans.put(updated);
-    await db.outbox.add(mutation);
-  });
-}
-
-export async function localDeleteLoan(db: HardMoneyDB, id: string): Promise<void> {
-  const now = new Date().toISOString();
-  const mutation: OutboxMutation = {
-    mutationId: uuidv4(),
-    entity: "loan",
-    op: "DELETE",
-    id,
-    createdAt: now,
-    status: "pending",
-  };
-
-  await db.transaction("rw", [db.loans, db.loanScheduleEntries, db.outbox], async () => {
-    await db.loans.delete(id);
-    const entries = await db.loanScheduleEntries.where("loanId").equals(id).toArray();
-    for (const e of entries) {
-      await db.loanScheduleEntries.delete(e.id);
-    }
-    await db.outbox.add(mutation);
-  });
-}
-
-export async function localCreateLoanPayment(
-  db: HardMoneyDB,
-  payment: Omit<import("../db").LocalLoanPayment, "id" | "serverSeq" | "createdAt"> & { id?: string }
-): Promise<import("../db").LocalLoanPayment> {
-  const now = new Date().toISOString();
-  const id = payment.id || uuidv4();
-  const fullPayment: import("../db").LocalLoanPayment = {
-    ...payment,
-    id,
-    serverSeq: 0,
-    createdAt: now,
-  };
-
-  const paymentMutation: OutboxMutation = {
-    mutationId: uuidv4(),
-    entity: "loanPayment",
-    op: "CREATE",
-    id,
-    payload: fullPayment,
-    createdAt: now,
-    status: "pending",
-  };
-
-  await db.transaction(
-    "rw",
-    [db.loanPayments, db.loanScheduleEntries, db.loans, db.outbox],
-    async () => {
-      await db.loanPayments.put(fullPayment);
-      await db.outbox.add(paymentMutation);
-
-      if (fullPayment.scheduleEntryId) {
-        const entry = await db.loanScheduleEntries.get(fullPayment.scheduleEntryId);
-        if (entry) {
-          const updatedEntry: import("../db").LocalLoanScheduleEntry = {
-            ...entry,
-            status: "PAID",
-            updatedAt: now,
-          };
-          await db.loanScheduleEntries.put(updatedEntry);
-
-          const entryMutation: OutboxMutation = {
-            mutationId: uuidv4(),
-            entity: "loanScheduleEntry",
-            op: "UPDATE",
-            id: entry.id,
-            payload: { status: "PAID" },
-            createdAt: now,
-            status: "pending",
-          };
-          await db.outbox.add(entryMutation);
-        }
-      }
-
-      // Check if all entries for this loan are now PAID
-      const remainingScheduled = await db.loanScheduleEntries
-        .where("loanId")
-        .equals(fullPayment.loanId)
-        .filter((e) => e.status !== "PAID")
-        .count();
-
-      if (remainingScheduled === 0) {
-        const loan = await db.loans.get(fullPayment.loanId);
-        if (loan && loan.status !== "CLOSED") {
-          const updatedLoan: import("../db").LocalLoan = {
-            ...loan,
-            status: "CLOSED",
-            closedAt: now,
-            updatedAt: now,
-          };
-          await db.loans.put(updatedLoan);
-
-          const loanMutation: OutboxMutation = {
-            mutationId: uuidv4(),
-            entity: "loan",
-            op: "UPDATE",
-            id: loan.id,
-            payload: { status: "CLOSED", closedAt: now },
-            createdAt: now,
-            status: "pending",
-          };
-          await db.outbox.add(loanMutation);
-        }
-      }
-    }
-  );
-
-  return fullPayment;
-}
-
-export async function localUpdateLoanScheduleEntry(
-  db: HardMoneyDB,
-  id: string,
-  patch: Partial<import("../db").LocalLoanScheduleEntry>
-): Promise<void> {
-  const existing = await db.loanScheduleEntries.get(id);
-  if (!existing) return;
-
-  const now = new Date().toISOString();
-  const updated: import("../db").LocalLoanScheduleEntry = { ...existing, ...patch, updatedAt: now };
-
-  const mutation: OutboxMutation = {
-    mutationId: uuidv4(),
-    entity: "loanScheduleEntry",
-    op: "UPDATE",
-    id,
-    payload: patch,
-    createdAt: now,
-    status: "pending",
-  };
-
-  await db.transaction("rw", [db.loanScheduleEntries, db.outbox], async () => {
-    await db.loanScheduleEntries.put(updated);
-    await db.outbox.add(mutation);
-  });
+  await pushSingleMutation("loan", "DELETE", id, { id }, queryKeys.loans.all());
 }
 
 export async function localCreateShoppingListItem(
-  db: HardMoneyDB,
+  _db: any,
   item: Omit<LocalShoppingListItem, "id" | "serverSeq" | "createdAt" | "updatedAt"> & { id?: string }
 ): Promise<LocalShoppingListItem> {
   const now = new Date().toISOString();
   const id = item.id || uuidv4();
-  const fullItem: LocalShoppingListItem = {
-    ...item,
-    id,
-    serverSeq: 0,
-    createdAt: now,
-    updatedAt: now,
-  };
-  const mutation: OutboxMutation = {
-    mutationId: uuidv4(),
-    entity: "shoppingListItem",
-    op: "CREATE",
-    id,
-    payload: fullItem,
-    createdAt: now,
-    status: "pending",
-  };
-  await db.transaction("rw", [db.shoppingListItems, db.outbox], async () => {
-    await db.shoppingListItems.put(fullItem);
-    await db.outbox.add(mutation);
-  });
+  const fullItem: LocalShoppingListItem = { ...item, id, serverSeq: 0, createdAt: now, updatedAt: now };
+
+  await pushSingleMutation("shoppingListItem", "CREATE", id, fullItem);
   return fullItem;
 }
 
 export async function localUpdateShoppingListItem(
-  db: HardMoneyDB,
+  _db: any,
   id: string,
   patch: Partial<LocalShoppingListItem>
 ): Promise<void> {
-  const existing = await db.shoppingListItems.get(id);
-  if (!existing) return;
-  const now = new Date().toISOString();
-  const updated = { ...existing, ...patch, updatedAt: now };
-  const mutation: OutboxMutation = {
-    mutationId: uuidv4(),
-    entity: "shoppingListItem",
-    op: "UPDATE",
-    id,
-    payload: { householdId: existing.householdId, ...patch },
-    createdAt: now,
-    status: "pending",
-  };
-  await db.transaction("rw", [db.shoppingListItems, db.outbox], async () => {
-    await db.shoppingListItems.put(updated);
-    await db.outbox.add(mutation);
-  });
+  await pushSingleMutation("shoppingListItem", "UPDATE", id, patch);
 }
 
-export async function localDeleteShoppingListItem(db: HardMoneyDB, id: string): Promise<void> {
-  const existing = await db.shoppingListItems.get(id);
-  if (!existing) return;
-  const now = new Date().toISOString();
-  const mutation: OutboxMutation = {
-    mutationId: uuidv4(),
-    entity: "shoppingListItem",
-    op: "DELETE",
-    id,
-    payload: { householdId: existing.householdId },
-    createdAt: now,
-    status: "pending",
-  };
-  await db.transaction("rw", [db.shoppingListItems, db.outbox], async () => {
-    await db.shoppingListItems.delete(id);
-    await db.outbox.add(mutation);
-  });
+export async function localDeleteShoppingListItem(_db: any, id: string): Promise<void> {
+  await pushSingleMutation("shoppingListItem", "DELETE", id, { id });
+}
+
+// -------------------------------------------------------------
+// Legacy syncNow wrapper (for backward compatibility)
+// -------------------------------------------------------------
+
+export type SyncState = "idle" | "syncing" | "offline" | "error";
+
+export async function syncNow(
+  _db?: any,
+  onStateChange?: (state: SyncState) => void
+): Promise<void> {
+  if (typeof window === "undefined") return;
+  if (!navigator.onLine) {
+    onStateChange?.("offline");
+    return;
+  }
+
+  onStateChange?.("syncing");
+  try {
+    const { failedCount } = await flushPendingTransactions();
+    const qc = getQueryClient();
+    await qc.invalidateQueries();
+
+    if (failedCount > 0) {
+      onStateChange?.("error");
+    } else {
+      onStateChange?.("idle");
+    }
+  } catch {
+    onStateChange?.("error");
+  }
 }

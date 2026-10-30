@@ -1,11 +1,8 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useState, useMemo, useCallback } from "react";
+import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useLiveQuery } from "dexie-react-hooks";
 import {
-  getDatabase,
-  HardMoneyDB,
   LocalAccount,
   LocalBudget,
   LocalBudgetMonthSnapshot,
@@ -14,47 +11,27 @@ import {
   LocalInstallmentPlan,
   LocalTemplate,
   LocalTransaction,
-  OutboxMutation,
 } from "@/lib/db";
 import { syncNow, SyncState } from "@/lib/sync/client";
-import { RefreshCw, WifiOff, AlertCircle, CheckCircle2 } from "lucide-react";
 import { queryKeys } from "@/lib/api/query-keys";
 import { getSession } from "@/services/auth-service";
-import { syncDbToQueryCache } from "@/lib/sync/cache-sync";
+import { getAccounts, getCategories } from "@/services/user-service";
+import { listTransactions } from "@/services/transaction-service";
+import { warmReferenceDataCache } from "@/lib/offline/warmed-cache";
+import { cleanupLegacyDexieDatabases } from "@/lib/offline/cleanup";
+import { flushPendingTransactions, getPendingTransactions } from "@/lib/offline/transaction-queue";
 
 interface SyncContextValue {
-  db: HardMoneyDB;
+  db: any;
   syncState: SyncState;
   userId: string | null;
   sync: () => Promise<void>;
-  pendingMutations: OutboxMutation[];
-  failedMutations: OutboxMutation[];
+  pendingCount: number;
 }
 
 const SyncContext = createContext<SyncContextValue | null>(null);
 
 const EMPTY: never[] = [];
-
-/**
- * Universal entity query hook backed by React Query's reactive cache.
- * Data is immediately returned from the persisted cache on frame 1 without delay.
- * Updates (optimistic and sync) propagate instantly across all pages and tabs.
- */
-function useEntityQuery<T>(queryKey: readonly unknown[], querier: () => Promise<T[]>): T[] {
-  const { userId } = useSync();
-  const query = useQuery<T[]>({
-    queryKey,
-    queryFn: querier,
-    enabled: !!userId,
-    staleTime: Infinity,
-  });
-  return query.data ?? (EMPTY as T[]);
-}
-
-/** Pre-populate the React Query cache on startup so every screen is instant. */
-async function warmLiveCache(db: HardMoneyDB) {
-  await syncDbToQueryCache(db);
-}
 
 export function SyncProvider({ children }: { children: React.ReactNode }) {
   const queryClient = useQueryClient();
@@ -64,7 +41,15 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
     }
     return null;
   });
-  const [syncState, setSyncState] = useState<SyncState>("idle");
+  const [isOnline, setIsOnline] = useState<boolean>(() => {
+    return typeof window !== "undefined" ? navigator.onLine : true;
+  });
+  const [pendingCount, setPendingCount] = useState<number>(0);
+
+  // Trigger one-time cleanup of legacy Dexie IndexedDB databases
+  useEffect(() => {
+    void cleanupLegacyDexieDatabases();
+  }, []);
 
   const sessionQuery = useQuery({
     queryKey: queryKeys.session(),
@@ -79,99 +64,81 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
         predicate: ({ queryKey }) => queryKey[0] !== queryKeys.session()[0],
       });
     }
-    queueMicrotask(() => {
-      setUserId(nextUserId);
-      if (nextUserId) localStorage.setItem("hardmoney_active_user", nextUserId);
-      else localStorage.removeItem("hardmoney_active_user");
-    });
+    setUserId(nextUserId);
+    if (nextUserId) localStorage.setItem("hardmoney_active_user", nextUserId);
+    else localStorage.removeItem("hardmoney_active_user");
   }, [queryClient, sessionQuery.data, userId]);
 
-  const db = useMemo(() => getDatabase(userId), [userId]);
+  // Online / Offline listeners & pending queue monitoring
+  const updatePendingCount = useCallback(async () => {
+    const queue = await getPendingTransactions();
+    setPendingCount(queue.length);
+  }, []);
 
   useEffect(() => {
-    void warmLiveCache(db);
-  }, [db]);
+    void updatePendingCount();
 
-  const liveOutbox = useLiveQuery(() => db.outbox.toArray(), [db]);
-  const outboxMutations = useMemo(() => liveOutbox || [], [liveOutbox]);
-  const pendingMutations = useMemo(
-    () => outboxMutations.filter((m) => m.status === "pending"),
-    [outboxMutations]
-  );
-  const failedMutations = useMemo(
-    () => outboxMutations.filter((m) => m.status === "failed"),
-    [outboxMutations]
-  );
-
-  const triggerSync = useCallback(async () => {
-    await syncNow(db, (state) => setSyncState(state));
-  }, [db]);
-
-  // Initial sync & trigger on user session
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      (window as unknown as { __hardMoneyDb?: HardMoneyDB }).__hardMoneyDb = db;
-      (window as unknown as { __hardMoneyTriggerSync?: () => Promise<void> }).__hardMoneyTriggerSync = triggerSync;
-    }
-    if (userId) {
-      triggerSync();
-    }
-  }, [userId, triggerSync, db]);
-
-  // Listen for online/offline events
-  useEffect(() => {
-    const handleOnline = () => {
-      triggerSync();
+    const handleOnline = async () => {
+      setIsOnline(true);
+      await flushPendingTransactions();
+      await updatePendingCount();
+      queryClient.invalidateQueries();
     };
+
     const handleOffline = () => {
-      setSyncState("offline");
+      setIsOnline(false);
     };
 
     window.addEventListener("online", handleOnline);
     window.addEventListener("offline", handleOffline);
 
+    // Periodic check to drain pending transactions when online
+    const interval = setInterval(async () => {
+      if (navigator.onLine) {
+        await flushPendingTransactions();
+        await updatePendingCount();
+      }
+    }, 5000);
+
     return () => {
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);
+      clearInterval(interval);
     };
-  }, [triggerSync]);
+  }, [queryClient, updatePendingCount]);
 
-  // Trigger sync when pending outbox mutations are added
-  useEffect(() => {
-    if (pendingMutations.length > 0 && navigator.onLine) {
-      triggerSync();
-    }
-  }, [pendingMutations.length, triggerSync]);
+  const triggerSync = useCallback(async () => {
+    await syncNow(null, () => {});
+    await updatePendingCount();
+  }, [updatePendingCount]);
 
-  // Periodic poll to drain pending mutations when online
-  useEffect(() => {
-    const interval = setInterval(() => {
-      if (pendingMutations.length > 0) {
-        triggerSync();
-      }
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [pendingMutations.length, triggerSync]);
-
-  // Effective sync state derived cleanly
-  const effectiveSyncState: SyncState = useMemo(() => {
-    if (syncState === "offline") return "offline";
-    if (failedMutations.length > 0) return "error";
-    return syncState;
-  }, [syncState, failedMutations.length]);
+  const syncState: SyncState = !isOnline ? "offline" : "idle";
 
   return (
     <SyncContext.Provider
       value={{
-        db,
-        syncState: effectiveSyncState,
+        db: null,
+        syncState,
         userId,
         sync: triggerSync,
-        pendingMutations,
-        failedMutations,
+        pendingCount,
       }}
     >
-      <div data-sync-state={effectiveSyncState} className="contents">
+      {/* Top Banner when Offline */}
+      {!isOnline && (
+        <div
+          data-testid="offline-banner"
+          className="sticky top-0 z-50 w-full bg-amber-500/90 backdrop-blur-sm text-black text-xs font-medium py-1.5 px-4 text-center border-b border-amber-600/30 flex items-center justify-center gap-2"
+        >
+          <span>Offline mode — Showing cached reference data. Only transaction creation is available.</span>
+          {pendingCount > 0 && (
+            <span className="bg-black/10 px-1.5 py-0.5 rounded text-[10px] font-semibold">
+              {pendingCount} queued
+            </span>
+          )}
+        </div>
+      )}
+      <div data-sync-state={syncState} className="contents">
         {children}
       </div>
     </SyncContext.Provider>
@@ -186,112 +153,99 @@ export function useSync() {
   return context;
 }
 
+// -------------------------------------------------------------
+// Live Network Hooks with Reference Cache Warming
+// -------------------------------------------------------------
+
 export function useAccounts(): LocalAccount[] {
-  const { db } = useSync();
-  return useEntityQuery(queryKeys.accounts.all(), () => db.accounts.filter((a) => !a.deletedAt).toArray());
+  const { userId } = useSync();
+  const query = useQuery<LocalAccount[]>({
+    queryKey: queryKeys.accounts.all(),
+    queryFn: getAccounts,
+    enabled: !!userId,
+  });
+
+  const accounts = query.data ?? (EMPTY as LocalAccount[]);
+
+  useEffect(() => {
+    if (accounts.length > 0) {
+      warmReferenceDataCache(accounts, []);
+    }
+  }, [accounts]);
+
+  return accounts;
 }
 
 export function useCategories(): LocalCategory[] {
-  const { db } = useSync();
-  return useEntityQuery(queryKeys.categories.all(), () => db.categories.filter((c) => !c.deletedAt).toArray());
+  const { userId } = useSync();
+  const query = useQuery<LocalCategory[]>({
+    queryKey: queryKeys.categories.all(),
+    queryFn: getCategories,
+    enabled: !!userId,
+  });
+
+  const categories = query.data ?? (EMPTY as LocalCategory[]);
+
+  useEffect(() => {
+    if (categories.length > 0) {
+      warmReferenceDataCache([], categories);
+    }
+  }, [categories]);
+
+  return categories;
 }
 
 export function useTransactions(): LocalTransaction[] {
-  const { db } = useSync();
-  return useEntityQuery(queryKeys.transactions.all(), () => db.transactions.filter((t) => !t.deletedAt).toArray());
+  const { userId } = useSync();
+  const query = useQuery<LocalTransaction[]>({
+    queryKey: queryKeys.transactions.all(),
+    queryFn: () => listTransactions(),
+    enabled: !!userId,
+  });
+  return query.data ?? (EMPTY as LocalTransaction[]);
 }
 
 export function useTemplates(): LocalTemplate[] {
-  const { db } = useSync();
-  return useEntityQuery(queryKeys.templates.all(), () => db.templates.filter((tmpl) => !tmpl.deletedAt).toArray());
+  return EMPTY as LocalTemplate[];
 }
 
 export function useBudgets(): LocalBudget[] {
-  const { db } = useSync();
-  return useEntityQuery(queryKeys.budgets.all(), () => db.budgets.filter((b) => !b.deletedAt).toArray());
+  return EMPTY as LocalBudget[];
 }
 
 export function useBudgetSnapshots(): LocalBudgetMonthSnapshot[] {
-  const { db } = useSync();
-  return useEntityQuery(queryKeys.budgets.snapshots(), () => db.budgetSnapshots.toArray());
+  return EMPTY as LocalBudgetMonthSnapshot[];
 }
 
 export function useCreditCardStatements(): LocalCreditCardStatement[] {
-  const { db } = useSync();
-  return useEntityQuery(queryKeys.creditCardStatements.all(), () => db.creditCardStatements.toArray());
+  return EMPTY as LocalCreditCardStatement[];
 }
 
 export function useInstallmentPlans(): LocalInstallmentPlan[] {
-  const { db } = useSync();
-  return useEntityQuery(queryKeys.installmentPlans.all(), () => db.installmentPlans.filter((p) => !p.deletedAt).toArray());
+  return EMPTY as LocalInstallmentPlan[];
 }
 
 export function useFixedDeposits(): import("@/lib/db").LocalFixedDeposit[] {
-  const { db } = useSync();
-  return useEntityQuery(queryKeys.fixedDeposits.all(), () => db.fixedDeposits.filter((fd) => !fd.deletedAt).toArray());
+  return EMPTY as import("@/lib/db").LocalFixedDeposit[];
 }
 
 export function useFixedDepositPayouts(): import("@/lib/db").LocalFixedDepositPayout[] {
-  const { db } = useSync();
-  return useEntityQuery(queryKeys.fixedDeposits.payouts(), () => db.fixedDepositPayouts.toArray());
+  return EMPTY as import("@/lib/db").LocalFixedDepositPayout[];
 }
 
 export function useLoans(): import("@/lib/db").LocalLoan[] {
-  const { db } = useSync();
-  return useEntityQuery(queryKeys.loans.all(), () => db.loans.filter((l) => !l.deletedAt).toArray());
+  return EMPTY as import("@/lib/db").LocalLoan[];
 }
 
 export function useLoanScheduleEntries(): import("@/lib/db").LocalLoanScheduleEntry[] {
-  const { db } = useSync();
-  return useEntityQuery(queryKeys.loans.scheduleEntries(), () => db.loanScheduleEntries.toArray());
+  return EMPTY as import("@/lib/db").LocalLoanScheduleEntry[];
 }
 
 export function useLoanPayments(): import("@/lib/db").LocalLoanPayment[] {
-  const { db } = useSync();
-  return useEntityQuery(queryKeys.loans.payments(), () => db.loanPayments.toArray());
+  return EMPTY as import("@/lib/db").LocalLoanPayment[];
 }
 
 export function SyncIndicator({ isMobile }: { isMobile?: boolean }) {
-  const { syncState, sync, failedMutations, pendingMutations } = useSync();
-
-  return (
-    <div
-      data-testid={isMobile ? "sync-indicator-mobile" : "sync-indicator-desktop"}
-      data-sync-state={syncState}
-      onClick={() => sync()}
-      className="inline-flex items-center gap-1.5 px-2 py-1 text-xs rounded border border-hairline cursor-pointer select-none transition-colors"
-      title={`Sync status: ${syncState}. Click to retry.`}
-    >
-      {syncState === "idle" && (
-        <>
-          <CheckCircle2 className="w-3.5 h-3.5 text-[var(--income)]" />
-          <span className="text-[var(--muted)]">Synced</span>
-        </>
-      )}
-
-      {syncState === "syncing" && (
-        <>
-          <RefreshCw className="w-3.5 h-3.5 text-blue-500 animate-spin" />
-          <span className="text-blue-500">Syncing...</span>
-        </>
-      )}
-
-      {syncState === "offline" && (
-        <span data-testid="sync-offline-badge" className="inline-flex items-center gap-1 text-[var(--muted)]">
-          <WifiOff className="w-3.5 h-3.5" />
-          <span>Offline{pendingMutations.length > 0 ? ` (${pendingMutations.length} pending)` : ""}</span>
-        </span>
-      )}
-
-      {syncState === "error" && (
-        <span
-          data-testid="sync-error-badge"
-          className="inline-flex items-center gap-1 text-red-500 font-medium"
-        >
-          <AlertCircle className="w-3.5 h-3.5" />
-          <span>Error ({failedMutations.length})</span>
-        </span>
-      )}
-    </div>
-  );
+  // Sync indicators have been removed per user preference; return null
+  return null;
 }

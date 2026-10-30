@@ -80,7 +80,7 @@ export function LoanDetailModal({ loan, isOpen, onClose, accounts }: LoanDetailM
           .toArray();
 
         if (localEntries.length > 0) {
-          setSchedule(localEntries.filter((e) => !e.deletedAt));
+          setSchedule(localEntries.filter((e: LocalLoanScheduleEntry) => !e.deletedAt));
         }
         if (localPayments.length > 0) {
           setPayments(localPayments);
@@ -122,7 +122,7 @@ export function LoanDetailModal({ loan, isOpen, onClose, accounts }: LoanDetailM
 
           if (active) {
             if (localEntries.length > 0) {
-              setSchedule(localEntries.filter((e) => !e.deletedAt));
+              setSchedule(localEntries.filter((e: LocalLoanScheduleEntry) => !e.deletedAt));
             }
             if (localPayments.length > 0) {
               setPayments(localPayments);

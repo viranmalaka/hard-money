@@ -189,6 +189,17 @@ export function DailyView({
                               : category?.name || tx.type}
                           </span>
 
+                          {/* Pending Sync Badge */}
+                          {tx.isPendingSync && (
+                            <span
+                              data-testid="badge-pending-sync"
+                              className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-600 dark:text-amber-400 font-medium"
+                              title="Saved offline - waiting to sync with server"
+                            >
+                              <span>Pending sync</span>
+                            </span>
+                          )}
+
                           {/* SMS Glyph */}
                           {(tx.source === "SMS" || tx.feeTransactionId) && (
                             <button

@@ -1,8 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { useLiveQuery } from "dexie-react-hooks";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Check, GripVertical, Pencil, Plus, Trash2, X } from "lucide-react";
 import Link from "next/link";
 import { useSync } from "@/components/sync-provider";
@@ -14,6 +13,7 @@ import {
 import type { LocalShoppingListItem } from "@/lib/db";
 import { listHouseholds } from "@/services/household-service";
 import { queryKeys } from "@/lib/api/query-keys";
+import { listShoppingItems } from "@/services/shopping-list-service";
 
 function sortItems(items: LocalShoppingListItem[]) {
   return [...items].sort((a, b) => {
@@ -26,7 +26,7 @@ function sortItems(items: LocalShoppingListItem[]) {
 }
 
 export default function ShoppingListPage() {
-  const { db, sync } = useSync();
+  const { sync } = useSync();
   const [householdId, setHouseholdId] = useState("");
   const [name, setName] = useState("");
   const [quantity, setQuantity] = useState("");
@@ -37,18 +37,12 @@ export default function ShoppingListPage() {
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const liveItems = useLiveQuery<LocalShoppingListItem[]>(
-    () =>
-      householdId
-        ? db.shoppingListItems
-            .where("householdId")
-            .equals(householdId)
-            .filter((item) => !item.deletedAt)
-            .toArray()
-        : Promise.resolve([] as LocalShoppingListItem[]),
-    [db, householdId]
-  );
-  const items = useMemo(() => liveItems ?? [], [liveItems]);
+  const itemsQuery = useQuery<LocalShoppingListItem[]>({
+    queryKey: ["shopping-list", "items", householdId],
+    queryFn: () => listShoppingItems(householdId),
+    enabled: !!householdId,
+  });
+  const items = useMemo(() => itemsQuery.data ?? [], [itemsQuery.data]);
   const sortedItems = useMemo(() => sortItems(items), [items]);
   const openItems = sortedItems.filter((item) => !item.isCompleted);
   const completedItems = sortedItems.filter((item) => item.isCompleted);
@@ -65,13 +59,15 @@ export default function ShoppingListPage() {
     }
   }, [householdId, households]);
 
+  const queryClient = useQueryClient();
+
   const addItem = async (event: FormEvent) => {
     event.preventDefault();
     const trimmedName = name.trim();
     if (!trimmedName || !householdId) return;
     setError(null);
     try {
-      await localCreateShoppingListItem(db, {
+      await localCreateShoppingListItem(null, {
         householdId,
         name: trimmedName,
         quantity: quantity.trim() || null,
@@ -80,6 +76,7 @@ export default function ShoppingListPage() {
       });
       setName("");
       setQuantity("");
+      queryClient.invalidateQueries({ queryKey: ["shopping-list", "items", householdId] });
       await sync();
     } catch {
       setError("Unable to add item");
@@ -87,26 +84,29 @@ export default function ShoppingListPage() {
   };
 
   const toggleItem = async (item: LocalShoppingListItem) => {
-    await localUpdateShoppingListItem(db, item.id, {
+    await localUpdateShoppingListItem(null, item.id, {
       isCompleted: !item.isCompleted,
       completedAt: item.isCompleted ? null : new Date().toISOString(),
     });
+    queryClient.invalidateQueries({ queryKey: ["shopping-list", "items", householdId] });
     await sync();
   };
 
   const saveEdit = async (item: LocalShoppingListItem) => {
     const nextName = editName.trim();
     if (!nextName) return;
-    await localUpdateShoppingListItem(db, item.id, {
+    await localUpdateShoppingListItem(null, item.id, {
       name: nextName,
       quantity: editQuantity.trim() || null,
     });
     setEditingId(null);
+    queryClient.invalidateQueries({ queryKey: ["shopping-list", "items", householdId] });
     await sync();
   };
 
   const deleteItem = async (id: string) => {
-    await localDeleteShoppingListItem(db, id);
+    await localDeleteShoppingListItem(null, id);
+    queryClient.invalidateQueries({ queryKey: ["shopping-list", "items", householdId] });
     await sync();
   };
 
@@ -114,7 +114,8 @@ export default function ShoppingListPage() {
     if (!window.confirm(`Clear ${completedItems.length} completed item${completedItems.length === 1 ? "" : "s"}?`)) {
       return;
     }
-    await Promise.all(completedItems.map((item) => localDeleteShoppingListItem(db, item.id)));
+    await Promise.all(completedItems.map((item) => localDeleteShoppingListItem(null, item.id)));
+    queryClient.invalidateQueries({ queryKey: ["shopping-list", "items", householdId] });
     await sync();
   };
 
@@ -127,10 +128,11 @@ export default function ShoppingListPage() {
     const [moved] = reordered.splice(from, 1);
     reordered.splice(to, 0, moved);
     await Promise.all(
-      reordered.map((item, index) => localUpdateShoppingListItem(db, item.id, { position: index }))
+      reordered.map((item, index) => localUpdateShoppingListItem(null, item.id, { position: index }))
     );
     setDraggedId(null);
     setDropTargetId(null);
+    queryClient.invalidateQueries({ queryKey: ["shopping-list", "items", householdId] });
     await sync();
   };
 

@@ -4,7 +4,6 @@ import React, { memo, useMemo, useState, useCallback } from "react";
 import Link from "next/link";
 import { Wallet, Plus, CreditCard, Building2, Banknote, Edit2, Archive, Trash2, X, AlertTriangle, PiggyBank, Landmark } from "lucide-react";
 import { EmptyState } from "@/components/ui/empty-state";
-import { SyncIndicator } from "@/components/sync-provider";
 import { localCreateAccount, localUpdateAccount, localDeleteAccount, localUpdateTransaction, localDeleteInstallmentPlan, localUpdateFixedDeposit } from "@/lib/sync/client";
 import { LocalAccount, LocalInstallmentPlan, LocalFixedDeposit, LocalLoan } from "@/lib/db";
 import { formatMoney, parseMoneyToMinor } from "@/lib/finance-core/money";
@@ -310,9 +309,6 @@ export default function AccountsPage() {
       <div className="flex items-center justify-between py-1">
         <div className="flex items-center gap-2">
           <h1 className="text-base font-semibold tracking-tight text-[var(--text)]">Accounts</h1>
-          <div className="mobile-only">
-            <SyncIndicator isMobile={true} />
-          </div>
         </div>
         <div className="flex items-center gap-2">
           <label className="flex items-center gap-1.5 text-xs text-[var(--text-muted)] cursor-pointer select-none">

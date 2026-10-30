@@ -1,4 +1,7 @@
-import Dexie, { type Table } from "dexie";
+/**
+ * Shared entity interfaces used across client components and services.
+ * Offline-first Dexie stores have been replaced by standard API fetching.
+ */
 
 export interface LocalAccount {
   id: string;
@@ -21,7 +24,7 @@ export interface LocalAccount {
   paymentDueDay?: number | null;
   linkedSettlementAccountId?: string | null;
   isArchived: boolean;
-  serverSeq: number;
+  serverSeq?: number;
   createdAt: string;
   updatedAt: string;
   deletedAt?: string | null;
@@ -35,7 +38,7 @@ export interface LocalCategory {
   icon: string;
   color: string;
   type?: "EXPENSE" | "INCOME";
-  serverSeq: number;
+  serverSeq?: number;
   createdAt: string;
   updatedAt: string;
   deletedAt?: string | null;
@@ -60,7 +63,7 @@ export interface LocalTemplate {
   defaultAmountMinor?: number | null;
   note?: string | null;
   icon?: string | null;
-  serverSeq: number;
+  serverSeq?: number;
   createdAt: string;
   updatedAt: string;
   deletedAt?: string | null;
@@ -94,10 +97,11 @@ export interface LocalTransaction {
   feeTransactionId?: string | null;
   possibleDuplicateOfTransactionId?: string | null;
   authorName?: string | null;
-  serverSeq: number;
+  serverSeq?: number;
   createdAt: string;
   updatedAt: string;
   deletedAt?: string | null;
+  isPendingSync?: boolean;
 }
 
 export interface LocalBudget {
@@ -107,7 +111,7 @@ export interface LocalBudget {
   monthlyLimitMinor: number;
   enableRollover: boolean;
   rolloverStartMonth?: string | null;
-  serverSeq: number;
+  serverSeq?: number;
   createdAt: string;
   updatedAt: string;
   deletedAt?: string | null;
@@ -123,7 +127,7 @@ export interface LocalBudgetMonthSnapshot {
   spentMinor: number;
   carriedInMinor: number;
   carriedOutMinor: number;
-  serverSeq: number;
+  serverSeq?: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -138,7 +142,7 @@ export interface LocalCreditCardStatement {
   billedDebtMinor: number;
   totalDebtMinor: number;
   isSettled: boolean;
-  serverSeq: number;
+  serverSeq?: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -162,7 +166,7 @@ export interface LocalInstallmentPlan {
   status: "ACTIVE" | "COMPLETED" | "CANCELLED";
   originalTransactionId?: string | null;
   note?: string | null;
-  serverSeq: number;
+  serverSeq?: number;
   createdAt: string;
   updatedAt: string;
   deletedAt?: string | null;
@@ -189,7 +193,7 @@ export interface LocalFixedDeposit {
   status: "ACTIVE" | "MATURED" | "CLOSED";
   closedAt?: string | null;
   prematureClosure: boolean;
-  serverSeq: number;
+  serverSeq?: number;
   createdAt: string;
   updatedAt: string;
   deletedAt?: string | null;
@@ -203,7 +207,7 @@ export interface LocalFixedDepositPayout {
   taxWithheldMinor: number;
   netInterestMinor: number;
   transactionId?: string | null;
-  serverSeq: number;
+  serverSeq?: number;
   createdAt: string;
 }
 
@@ -225,7 +229,7 @@ export interface LocalLoan {
   linkedDisbursementAccountId?: string | null;
   status: "ACTIVE" | "CLOSED";
   closedAt?: string | null;
-  serverSeq: number;
+  serverSeq?: number;
   createdAt: string;
   updatedAt: string;
   deletedAt?: string | null;
@@ -242,7 +246,7 @@ export interface LocalLoanScheduleEntry {
   openingBalanceMinor: number;
   closingBalanceMinor: number;
   status: "SCHEDULED" | "PAID" | "OVERRIDDEN";
-  serverSeq: number;
+  serverSeq?: number;
   createdAt: string;
   updatedAt: string;
   deletedAt?: string | null;
@@ -257,7 +261,7 @@ export interface LocalLoanPayment {
   interestComponentMinor: number;
   isExtraPrincipal: boolean;
   paymentDate: string;
-  serverSeq: number;
+  serverSeq?: number;
   createdAt: string;
 }
 
@@ -269,156 +273,8 @@ export interface LocalShoppingListItem {
   isCompleted: boolean;
   position: number;
   completedAt?: string | null;
-  serverSeq: number;
+  serverSeq?: number;
   createdAt: string;
   updatedAt: string;
   deletedAt?: string | null;
-}
-
-export interface OutboxMutation {
-  mutationId: string;
-  entity:
-    | "account"
-    | "category"
-    | "transaction"
-    | "template"
-    | "budget"
-    | "statement"
-    | "installmentPlan"
-    | "fixedDeposit"
-    | "loan"
-    | "loanScheduleEntry"
-    | "loanPayment"
-    | "shoppingListItem";
-  op: "CREATE" | "UPDATE" | "DELETE";
-  id: string;
-  payload?: unknown;
-  createdAt: string;
-  status: "pending" | "failed";
-  errorReason?: string;
-}
-
-export interface SyncMeta {
-  key: string;
-  value: unknown;
-}
-
-export class HardMoneyDB extends Dexie {
-  accounts!: Table<LocalAccount, string>;
-  categories!: Table<LocalCategory, string>;
-  transactions!: Table<LocalTransaction, string>;
-  templates!: Table<LocalTemplate, string>;
-  budgets!: Table<LocalBudget, string>;
-  budgetSnapshots!: Table<LocalBudgetMonthSnapshot, string>;
-  creditCardStatements!: Table<LocalCreditCardStatement, string>;
-  installmentPlans!: Table<LocalInstallmentPlan, string>;
-  fixedDeposits!: Table<LocalFixedDeposit, string>;
-  fixedDepositPayouts!: Table<LocalFixedDepositPayout, string>;
-  loans!: Table<LocalLoan, string>;
-  loanScheduleEntries!: Table<LocalLoanScheduleEntry, string>;
-  loanPayments!: Table<LocalLoanPayment, string>;
-  shoppingListItems!: Table<LocalShoppingListItem, string>;
-  outbox!: Table<OutboxMutation, string>;
-  syncMeta!: Table<SyncMeta, string>;
-
-  constructor(dbName: string) {
-    super(dbName);
-
-    // Version 1: initial schema
-    this.version(1).stores({
-      accounts: "id, userId, householdId, name, type, serverSeq, deletedAt, isArchived",
-      categories: "id, userId, householdId, name, serverSeq, deletedAt",
-      transactions: "id, userId, accountId, toAccountId, categoryId, transactionDate, serverSeq, deletedAt",
-      templates: "id, userId, name, serverSeq, deletedAt",
-      outbox: "mutationId, entity, op, id, status, createdAt",
-      syncMeta: "key",
-    });
-
-    // Version 2: preserves data (migration test scaffold)
-    this.version(2).upgrade(() => {
-      // no schema changes required for v2, verifies upgrade pathway
-    });
-
-    // Version 3: budgets, snapshots, and credit card statements
-    this.version(3).stores({
-      accounts: "id, userId, householdId, name, type, serverSeq, deletedAt, isArchived",
-      categories: "id, userId, householdId, name, serverSeq, deletedAt",
-      transactions: "id, userId, accountId, toAccountId, categoryId, transactionDate, serverSeq, deletedAt",
-      templates: "id, userId, name, serverSeq, deletedAt",
-      budgets: "id, userId, categoryId, serverSeq, deletedAt",
-      budgetSnapshots: "id, userId, categoryId, month, serverSeq",
-      creditCardStatements: "id, userId, accountId, cycleCutoffDate, serverSeq",
-      installmentPlans: "id, userId, accountId, status, serverSeq, deletedAt",
-      outbox: "mutationId, entity, op, id, status, createdAt",
-      syncMeta: "key",
-    });
-
-    // Version 4: fixed deposits and payouts
-    this.version(4).stores({
-      accounts: "id, userId, householdId, name, type, serverSeq, deletedAt, isArchived",
-      categories: "id, userId, householdId, name, serverSeq, deletedAt",
-      transactions: "id, userId, accountId, toAccountId, categoryId, transactionDate, serverSeq, deletedAt",
-      templates: "id, userId, name, serverSeq, deletedAt",
-      budgets: "id, userId, categoryId, serverSeq, deletedAt",
-      budgetSnapshots: "id, userId, categoryId, month, serverSeq",
-      creditCardStatements: "id, userId, accountId, cycleCutoffDate, serverSeq",
-      installmentPlans: "id, userId, accountId, status, serverSeq, deletedAt",
-      fixedDeposits: "id, userId, bankName, status, maturityDate, serverSeq, deletedAt",
-      fixedDepositPayouts: "id, fixedDepositId, periodEnd, serverSeq",
-      outbox: "mutationId, entity, op, id, status, createdAt",
-      syncMeta: "key",
-    });
-
-    // Version 5: loans, schedule entries, and loan payments
-    this.version(5).stores({
-      accounts: "id, userId, householdId, name, type, serverSeq, deletedAt, isArchived",
-      categories: "id, userId, householdId, name, serverSeq, deletedAt",
-      transactions: "id, userId, accountId, toAccountId, categoryId, transactionDate, serverSeq, deletedAt",
-      templates: "id, userId, name, serverSeq, deletedAt",
-      budgets: "id, userId, categoryId, serverSeq, deletedAt",
-      budgetSnapshots: "id, userId, categoryId, month, serverSeq",
-      creditCardStatements: "id, userId, accountId, cycleCutoffDate, serverSeq",
-      installmentPlans: "id, userId, accountId, status, serverSeq, deletedAt",
-      fixedDeposits: "id, userId, bankName, status, maturityDate, serverSeq, deletedAt",
-      fixedDepositPayouts: "id, fixedDepositId, periodEnd, serverSeq",
-      loans: "id, userId, kind, status, serverSeq, deletedAt",
-      loanScheduleEntries: "id, loanId, installmentNumber, status, dueDate, serverSeq, deletedAt",
-      loanPayments: "id, loanId, transactionId, scheduleEntryId, paymentDate, serverSeq",
-      outbox: "mutationId, entity, op, id, status, createdAt",
-      syncMeta: "key",
-    });
-
-    // Version 6: shared household shopping list
-    this.version(6).stores({
-      accounts: "id, userId, householdId, name, type, serverSeq, deletedAt, isArchived",
-      categories: "id, userId, householdId, name, serverSeq, deletedAt",
-      transactions: "id, userId, accountId, toAccountId, categoryId, transactionDate, serverSeq, deletedAt",
-      templates: "id, userId, name, serverSeq, deletedAt",
-      budgets: "id, userId, categoryId, serverSeq, deletedAt",
-      budgetSnapshots: "id, userId, categoryId, month, serverSeq",
-      creditCardStatements: "id, userId, accountId, cycleCutoffDate, serverSeq",
-      installmentPlans: "id, userId, accountId, status, serverSeq, deletedAt",
-      fixedDeposits: "id, userId, bankName, status, maturityDate, serverSeq, deletedAt",
-      fixedDepositPayouts: "id, fixedDepositId, periodEnd, serverSeq",
-      loans: "id, userId, kind, status, serverSeq, deletedAt",
-      loanScheduleEntries: "id, loanId, installmentNumber, status, dueDate, serverSeq, deletedAt",
-      loanPayments: "id, loanId, transactionId, scheduleEntryId, paymentDate, serverSeq",
-      shoppingListItems: "id, householdId, isCompleted, position, serverSeq, deletedAt",
-      outbox: "mutationId, entity, op, id, status, createdAt",
-      syncMeta: "key",
-    });
-  }
-}
-
-// User-scoped database instances cache
-const dbCache = new Map<string, HardMoneyDB>();
-
-export function getDatabase(userId?: string | null): HardMoneyDB {
-  const name = userId ? `hardmoney_${userId}` : "hardmoney_anonymous";
-  let db = dbCache.get(name);
-  if (!db) {
-    db = new HardMoneyDB(name);
-    dbCache.set(name, db);
-  }
-  return db;
 }

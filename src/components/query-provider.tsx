@@ -1,18 +1,16 @@
 "use client";
 
-import { QueryClient } from "@tanstack/react-query";
-import { PersistQueryClientProvider, Persister } from "@tanstack/react-query-persist-client";
-import { useState, useMemo } from "react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { useState } from "react";
 import { isRetryableApiError } from "@/lib/api/client";
-import { get, set, del } from "idb-keyval";
 
 function makeQueryClient() {
   return new QueryClient({
     defaultOptions: {
       queries: {
-        staleTime: 30_000,
-        gcTime: 1000 * 60 * 60 * 24 * 7, // 7 days for offline persistence
-        refetchOnWindowFocus: false,
+        staleTime: 10_000, // 10 seconds default fresh time
+        gcTime: 1000 * 60 * 10, // 10 minutes cache garbage collection
+        refetchOnWindowFocus: true,
         refetchOnReconnect: true,
         retry: (failureCount, error) => failureCount < 2 && isRetryableApiError(error),
       },
@@ -35,52 +33,12 @@ export function getQueryClient(): QueryClient {
   return browserQueryClient;
 }
 
-export function createIdbPersister(idbKey = "HARDMONEY_REACT_QUERY_CACHE"): Persister {
-  return {
-    persistClient: async (client) => {
-      try {
-        await set(idbKey, client);
-      } catch (err) {
-        console.warn("Failed to persist query client to IndexedDB:", err);
-      }
-    },
-    restoreClient: async () => {
-      try {
-        return await get(idbKey);
-      } catch (err) {
-        console.warn("Failed to restore query client from IndexedDB:", err);
-        return undefined;
-      }
-    },
-    removeClient: async () => {
-      try {
-        await del(idbKey);
-      } catch (err) {
-        console.warn("Failed to remove query client from IndexedDB:", err);
-      }
-    },
-  };
-}
-
 export function QueryProvider({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(() => getQueryClient());
-  const persister = useMemo(() => createIdbPersister(), []);
 
   return (
-    <PersistQueryClientProvider
-      client={queryClient}
-      persistOptions={{
-        persister,
-        maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
-        dehydrateOptions: {
-          shouldDehydrateQuery: (query) => {
-            return query.state.status === "success";
-          },
-        },
-      }}
-    >
+    <QueryClientProvider client={queryClient}>
       {children}
-    </PersistQueryClientProvider>
+    </QueryClientProvider>
   );
 }
-

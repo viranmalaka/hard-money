@@ -22,6 +22,8 @@ export const queryKeys = {
   },
   transactions: {
     all: () => ["transactions"] as const,
+    byMonth: (month: string) => ["transactions", "month", month] as const,
+    summary: (month?: string) => ["transactions", "summary", month ?? "all"] as const,
   },
   templates: {
     all: () => ["templates"] as const,

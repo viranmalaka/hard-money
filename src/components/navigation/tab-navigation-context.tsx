@@ -9,8 +9,6 @@ import React, {
   useMemo,
 } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { prefetchTabData, prefetchSubsequentTabs } from "@/lib/prefetch/tab-prefetch";
-import { useSync } from "@/components/sync-provider";
 
 export type TabId = "trans" | "stats" | "budget" | "accounts" | "more";
 
@@ -56,7 +54,6 @@ export function TabNavigationProvider({
 }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { userId } = useSync();
 
   const currentTab = useMemo(() => getTabFromPath(pathname), [pathname]);
   const [visitedTabs, setVisitedTabs] = useState<Set<TabId>>(() => {
@@ -85,17 +82,9 @@ export function TabNavigationProvider({
 
   const activeTab = currentTab;
 
-  // Idle prefetch subsequent tabs on startup
-  useEffect(() => {
-    prefetchSubsequentTabs(userId);
-  }, [userId]);
-
-  const prefetchTab = useCallback(
-    (tab: TabId) => {
-      void prefetchTabData(tab, userId);
-    },
-    [userId]
-  );
+  const prefetchTab = useCallback((_tab: TabId) => {
+    // No-op without Dexie pre-warming
+  }, []);
 
   const switchToTab = useCallback(
     (destination: TabId | string) => {

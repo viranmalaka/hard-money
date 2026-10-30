@@ -2,13 +2,14 @@
 
 import React, { useState, useMemo, useEffect } from "react";
 import { ArrowLeftRight, Moon, Sun, CreditCard } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import { MonthSwitcher } from "@/components/ui/month-switcher";
 import { SummaryBar } from "@/components/ui/summary-bar";
 import { SegmentedTabs } from "@/components/ui/segmented-tabs";
 import { EmptyState } from "@/components/ui/empty-state";
 import { useTheme } from "@/components/theme-provider";
 import { useMounted } from "@/lib/use-mounted";
-import { useTransactions, useCategories, useAccounts, useSync, SyncIndicator } from "@/components/sync-provider";
+import { useCategories, useAccounts, useSync } from "@/components/sync-provider";
 import { formatMoney } from "@/lib/finance-core/money";
 import { TransFilterBar, TransFilterState } from "@/components/transaction/trans-filter-bar";
 import { DailyView } from "@/components/transaction/daily-view";
@@ -18,6 +19,9 @@ import { SummaryView } from "@/components/transaction/summary-view";
 import { TransactionEditModal } from "@/components/transaction/transaction-edit-modal";
 import { LocalTransaction } from "@/lib/db";
 import { localRestoreTransaction } from "@/lib/sync/client";
+import { listTransactions, getTransactionSummary } from "@/services/transaction-service";
+import { queryKeys } from "@/lib/api/query-keys";
+import { getPendingTransactions } from "@/lib/offline/transaction-queue";
 
 export default function TransactionsPage() {
   const [currentDate, setCurrentDate] = useState(() => {
@@ -37,6 +41,7 @@ export default function TransactionsPage() {
   });
   const [selectedTxForEdit, setSelectedTxForEdit] = useState<LocalTransaction | null>(null);
   const [deletedTx, setDeletedTx] = useState<LocalTransaction | null>(null);
+  const [offlinePendingTxs, setOfflinePendingTxs] = useState<LocalTransaction[]>([]);
 
   const [filters, setFilters] = useState<TransFilterState>({
     searchQuery: "",
@@ -47,10 +52,47 @@ export default function TransactionsPage() {
 
   const { resolvedTheme, toggleTheme, toggleColorSwap, colorSwap } = useTheme();
   const mounted = useMounted();
-  const { db } = useSync();
-  const transactions = useTransactions();
+  const { db, userId, pendingCount } = useSync();
   const categories = useCategories();
   const accounts = useAccounts();
+
+  // Current month prefix YYYY-MM
+  const monthPrefix = useMemo(() => {
+    const y = currentDate.getFullYear();
+    const m = String(currentDate.getMonth() + 1).padStart(2, "0");
+    return `${y}-${m}`;
+  }, [currentDate]);
+
+  // Load transactions scoped to the active month from the network
+  const monthTransactionsQuery = useQuery({
+    queryKey: queryKeys.transactions.byMonth(monthPrefix),
+    queryFn: () => listTransactions({ month: monthPrefix }),
+    enabled: !!userId,
+  });
+
+  // Load server-calculated summaries for the selected month
+  const summaryQuery = useQuery({
+    queryKey: queryKeys.transactions.summary(monthPrefix),
+    queryFn: () => getTransactionSummary(monthPrefix),
+    enabled: !!userId,
+  });
+
+  // Pull pending offline transactions from queue to show optimistically in the list
+  useEffect(() => {
+    let isMounted = true;
+    getPendingTransactions().then((records) => {
+      if (isMounted) {
+        setOfflinePendingTxs(
+          records
+            .map((r) => ({ ...r.optimisticTx, isPendingSync: true }))
+            .filter((t) => t.transactionDate.startsWith(monthPrefix))
+        );
+      }
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, [monthPrefix, pendingCount]);
 
   // Auto-dismiss undo toast after 6 seconds
   useEffect(() => {
@@ -91,20 +133,15 @@ export default function TransactionsPage() {
     return map;
   }, [accounts]);
 
-  // Current month prefix YYYY-MM
-  const monthPrefix = useMemo(() => {
-    const y = currentDate.getFullYear();
-    const m = String(currentDate.getMonth() + 1).padStart(2, "0");
-    return `${y}-${m}`;
-  }, [currentDate]);
-
-  // Transactions belonging to selected month (excluding soft-deleted)
+  // Combined month transactions: server-loaded + any un-synced offline pending items
   const monthTransactions = useMemo(() => {
-    return transactions.filter((t) => {
-      if (t.deletedAt) return false;
-      return t.transactionDate.startsWith(monthPrefix);
-    });
-  }, [transactions, monthPrefix]);
+    const serverList = monthTransactionsQuery.data ?? [];
+    if (offlinePendingTxs.length === 0) return serverList;
+
+    const serverIds = new Set(serverList.map((t) => t.id));
+    const extra = offlinePendingTxs.filter((t) => !serverIds.has(t.id));
+    return [...extra, ...serverList];
+  }, [monthTransactionsQuery.data, offlinePendingTxs]);
 
   // Filtered transactions for the current view
   const filteredTransactions = useMemo(() => {
@@ -166,8 +203,17 @@ export default function TransactionsPage() {
     });
   }, [monthTransactions, filters, categoryMap]);
 
-  // Derived Summary Totals for selected month
+  // Summaries from Server (fallback to local calculation while loading)
   const { incomeMinor, expenseMinor, totalMinor, adjustmentsMinor } = useMemo(() => {
+    if (summaryQuery.data) {
+      return {
+        incomeMinor: summaryQuery.data.totalIncomeMinor,
+        expenseMinor: summaryQuery.data.totalExpenseMinor,
+        totalMinor: summaryQuery.data.netSavingsMinor,
+        adjustmentsMinor: 0,
+      };
+    }
+
     let inc = 0;
     let exp = 0;
     let adj = 0;
@@ -184,7 +230,6 @@ export default function TransactionsPage() {
       } else if (t.type === "EXPENSE") {
         exp += t.amountMinor;
       } else if (t.type === "REFUND") {
-        // Refund reduces expenses in the refund month
         exp = Math.max(0, exp - t.amountMinor);
       } else if (t.type === "ADJUSTMENT" || t.source === "CALIBRATION") {
         adj += t.direction === "IN" ? t.amountMinor : -t.amountMinor;
@@ -197,7 +242,7 @@ export default function TransactionsPage() {
       totalMinor: inc - exp,
       adjustmentsMinor: adj,
     };
-  }, [monthTransactions]);
+  }, [summaryQuery.data, monthTransactions]);
 
   const handleUndoDelete = async () => {
     if (!deletedTx) return;
@@ -222,8 +267,6 @@ export default function TransactionsPage() {
 
         {/* Mobile quick controls */}
         <div className="mobile-only flex items-center gap-1.5">
-          <SyncIndicator isMobile={true} />
-
           <button
             type="button"
             data-testid="color-swap-toggle"
@@ -314,7 +357,7 @@ export default function TransactionsPage() {
       {activeTab === "monthly" && (
         <MonthlyView
           currentDate={currentDate}
-          allTransactions={transactions}
+          allTransactions={monthTransactions}
           onSelectMonth={(newDate) => {
             setCurrentDate(newDate);
             setActiveTab("daily");

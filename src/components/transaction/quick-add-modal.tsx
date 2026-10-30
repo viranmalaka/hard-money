@@ -3,7 +3,8 @@
 import React, { useState, useMemo, useCallback, useRef } from "react";
 import { X, AlertCircle, Calculator } from "lucide-react";
 import { useAccounts, useCategories, useTemplates, useSync } from "@/components/sync-provider";
-import { LocalTemplate } from "@/lib/db";
+import { getWarmedAccounts, getWarmedCategories } from "@/lib/offline/warmed-cache";
+import { LocalAccount, LocalCategory, LocalTemplate } from "@/lib/db";
 import { localCreateTransaction } from "@/lib/sync/client";
 import {
   evaluateExpression,
@@ -68,8 +69,24 @@ function getInitialDraft() {
 function QuickAddModalContent() {
   const { closeQuickAdd, initialType, initialAccountId } = useQuickAdd();
   useModalHistory(true, closeQuickAdd, "quick-add");
-  const accounts = useAccounts();
-  const categories = useCategories();
+  const liveAccounts = useAccounts();
+  const liveCategories = useCategories();
+  const accounts: LocalAccount[] = useMemo(() => {
+    if (liveAccounts && liveAccounts.length > 0) return liveAccounts;
+    if (typeof window !== "undefined" && !navigator.onLine) {
+      return getWarmedAccounts();
+    }
+    return liveAccounts;
+  }, [liveAccounts]);
+
+  const categories: LocalCategory[] = useMemo(() => {
+    if (liveCategories && liveCategories.length > 0) return liveCategories;
+    if (typeof window !== "undefined" && !navigator.onLine) {
+      return getWarmedCategories();
+    }
+    return liveCategories;
+  }, [liveCategories]);
+
   const { db, userId } = useSync();
 
   const activeAccounts = useMemo(() => accounts.filter((a) => !a.isArchived), [accounts]);
