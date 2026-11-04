@@ -4,75 +4,98 @@ import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  ArrowLeftRight,
   BarChart3,
-  PieChart,
+  Home,
+  Plus,
   Settings,
   Wallet,
 } from "lucide-react";
 import { useTabNavigation, TabId } from "./tab-navigation-context";
+import { useQuickAdd } from "../transaction/quick-add-context";
 
 export function BottomNav() {
   const pathname = usePathname();
   const { activeTab, switchToTab, prefetchTab } = useTabNavigation();
+  const { openQuickAdd } = useQuickAdd();
 
-  if (pathname === "/login" || pathname === "/register") {
+  if (
+    pathname === "/login" ||
+    pathname === "/register" ||
+    pathname === "/offline"
+  ) {
     return null;
   }
 
-  const navItems: { id: TabId; name: string; href: string; icon: typeof ArrowLeftRight }[] = [
-    { id: "trans", name: "Trans.", href: "/", icon: ArrowLeftRight },
-    { id: "stats", name: "Stats", href: "/stats", icon: BarChart3 },
-    { id: "budget", name: "Budget", href: "/budget", icon: PieChart },
-    { id: "accounts", name: "Accounts", href: "/accounts", icon: Wallet },
-    { id: "more", name: "More", href: "/more", icon: Settings },
-  ];
+  const isNavActive = (id: TabId, href: string) => {
+    if (activeTab) return activeTab === id;
+    if (id === "more" && (pathname === "/budget" || pathname.startsWith("/more"))) {
+      return true;
+    }
+    if (href === "/") return pathname === "/";
+    return pathname.startsWith(href);
+  };
+
+  const renderSlot = (
+    id: TabId,
+    name: string,
+    href: string,
+    Icon: typeof Home
+  ) => {
+    const active = isNavActive(id, href);
+    return (
+      <Link
+        key={id}
+        href={href}
+        transitionTypes={["nav-tab"]}
+        data-testid={`bottom-nav-${id}`}
+        data-active={active ? "true" : "false"}
+        aria-current={active ? "page" : undefined}
+        onClick={(e) => {
+          e.preventDefault();
+          switchToTab(id);
+        }}
+        onPointerDown={() => prefetchTab(id)}
+        onMouseEnter={() => prefetchTab(id)}
+        className={`flex flex-col items-center justify-center gap-1 py-1.5 rounded-2xl transition-colors ${
+          active
+            ? "text-[var(--accent)] font-bold"
+            : "text-[var(--text-muted)] hover:text-[var(--text)] font-medium"
+        }`}
+      >
+        <Icon size={21} className={active ? "stroke-[2.4px]" : "stroke-[1.8px]"} />
+        <span className="text-2xs leading-none">{name}</span>
+      </Link>
+    );
+  };
 
   return (
     <nav
       data-testid="bottom-nav"
+      aria-label="Primary Mobile Navigation"
       style={{ viewTransitionName: "bottom-nav" }}
-      className="mobile-only fixed bottom-0 left-0 right-0 bottom-nav-safe bg-surface border-t border-hairline z-40 items-center justify-around px-1 select-none"
+      className="mobile-only shrink-0 w-full relative z-40 bg-[var(--surface)] border-t border-[var(--border)] px-3 bottom-nav-safe items-center justify-center select-none"
     >
-      {navItems.map((item) => {
-        const isActive = activeTab
-          ? activeTab === item.id
-          : item.href === "/"
-          ? pathname === "/"
-          : pathname.startsWith(item.href);
-        const Icon = item.icon;
+      <div className="w-full max-w-lg mx-auto grid grid-cols-5 items-center">
+        {renderSlot("trans", "Home", "/", Home)}
+        {renderSlot("stats", "Stats", "/stats", BarChart3)}
 
-        return (
-          <Link
-            key={item.id}
-            href={item.href}
-            transitionTypes={["nav-tab"]}
-            data-testid={`bottom-nav-${item.id}`}
-            data-active={isActive ? "true" : "false"}
-            aria-current={isActive ? "page" : undefined}
-            onClick={(e) => {
-              // Intercept for instant native tab switch
-              e.preventDefault();
-              switchToTab(item.id);
-            }}
-            onPointerDown={() => {
-              // Pre-warm data on touch/pointer down before click completes
-              prefetchTab(item.id);
-            }}
-            onMouseEnter={() => {
-              prefetchTab(item.id);
-            }}
-            className={`flex flex-col items-center justify-center flex-1 h-full py-1 gap-1 text-[11px] font-medium transition-colors ${
-              isActive
-                ? "text-[var(--text)] font-semibold"
-                : "text-[var(--text-muted)] hover:text-[var(--text)]"
-            }`}
+        {/* Split-Lens Center Circular Quick-Add Trigger */}
+        <div className="flex items-center justify-center">
+          <button
+            type="button"
+            data-testid="fab"
+            onClick={() => openQuickAdd({ type: "EXPENSE" })}
+            aria-label="Add Transaction"
+            title="New Transaction"
+            className="w-12 h-12 rounded-full bg-[var(--accent)] text-[var(--accent-fg)] flex items-center justify-center shadow-md hover:opacity-95 active:scale-95 transition-all cursor-pointer"
           >
-            <Icon size={20} className={isActive ? "stroke-[2.2px]" : "stroke-[1.6px]"} />
-            <span>{item.name}</span>
-          </Link>
-        );
-      })}
+            <Plus size={23} strokeWidth={2.6} />
+          </button>
+        </div>
+
+        {renderSlot("accounts", "Accounts", "/accounts", Wallet)}
+        {renderSlot("more", "More", "/more", Settings)}
+      </div>
     </nav>
   );
 }

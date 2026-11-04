@@ -2,12 +2,20 @@
 
 import React, { useState, useMemo } from "react";
 import { BarChart3 } from "lucide-react";
+import { AppHeader } from "@/components/navigation/app-header";
 import { MonthSwitcher } from "@/components/ui/month-switcher";
 import { SummaryBar } from "@/components/ui/summary-bar";
 import { EmptyState } from "@/components/ui/empty-state";
 import { useTransactions, useCategories } from "@/components/sync-provider";
-import { formatMoney, calculatePercentagesLargestRemainder } from "@/lib/finance-core";
-import { CategoryList, CategoryTransactions, TrendSection } from "@/components/stats/stats-sections";
+import {
+  formatMoney,
+  calculatePercentagesLargestRemainder,
+} from "@/lib/finance-core";
+import {
+  CategoryList,
+  CategoryTransactions,
+  TrendSection,
+} from "@/components/stats/stats-sections";
 import { useTabActiveRefresh } from "@/hooks/use-tab-active-refresh";
 
 function getMonthString(d: Date): string {
@@ -21,19 +29,25 @@ export default function StatsPage() {
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth(), 1);
   });
-  const [activeTab, setActiveTab] = useState<"expense" | "income" | "trend">("expense");
-  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<"expense" | "income" | "trend">(
+    "expense"
+  );
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(
+    null
+  );
 
-  // Revalidate or trigger refresh when stats tab becomes active
   useTabActiveRefresh("/stats", () => {
-    // Tab became active; Dexie live queries auto-reflect changes, hook provides hook point for background sync
+    // Active tab hook
   });
 
   const transactions = useTransactions();
   const categories = useCategories();
 
   const categoryMap = useMemo(() => {
-    const map = new Map<string, { id: string; name: string; color: string; icon: string }>();
+    const map = new Map<
+      string,
+      { id: string; name: string; color: string; icon: string }
+    >();
     for (const c of categories) {
       map.set(c.id, c);
     }
@@ -42,19 +56,26 @@ export default function StatsPage() {
 
   const monthStr = useMemo(() => getMonthString(currentDate), [currentDate]);
 
-  // Month transactions
   const monthTransactions = useMemo(() => {
     return transactions.filter(
-      (t) => !t.deletedAt && !t.excludeFromStats && t.transactionDate.startsWith(monthStr)
+      (t) =>
+        !t.deletedAt &&
+        !t.excludeFromStats &&
+        t.transactionDate.startsWith(monthStr)
     );
   }, [transactions, monthStr]);
 
-  // Overall totals for SummaryBar
   const { totalIncome, totalExpense } = useMemo(() => {
     let inc = 0;
     let exp = 0;
     for (const t of monthTransactions) {
-      if (t.type === "TRANSFER" || t.type === "ADJUSTMENT" || t.source === "CALIBRATION") continue;
+      if (
+        t.type === "TRANSFER" ||
+        t.type === "ADJUSTMENT" ||
+        t.source === "CALIBRATION"
+      ) {
+        continue;
+      }
 
       if (t.isSplit && t.splitItems && t.splitItems.length > 0) {
         for (const item of t.splitItems) {
@@ -72,7 +93,6 @@ export default function StatsPage() {
     return { totalIncome: inc, totalExpense: exp };
   }, [monthTransactions]);
 
-  // Category breakdown for active dataset (expense vs income)
   const categoryStats = useMemo(() => {
     if (activeTab === "trend") return { list: [], total: 0 };
 
@@ -80,20 +100,38 @@ export default function StatsPage() {
     let grandTotal = 0;
 
     for (const t of monthTransactions) {
-      if (t.type === "TRANSFER" || t.type === "ADJUSTMENT" || t.source === "CALIBRATION") continue;
+      if (
+        t.type === "TRANSFER" ||
+        t.type === "ADJUSTMENT" ||
+        t.source === "CALIBRATION"
+      ) {
+        continue;
+      }
 
       if (t.isSplit && t.splitItems && t.splitItems.length > 0) {
         for (const item of t.splitItems) {
           if (activeTab === "expense") {
             if (t.type === "EXPENSE") {
-              catAmounts.set(item.categoryId, (catAmounts.get(item.categoryId) || 0) + item.amountMinor);
+              catAmounts.set(
+                item.categoryId,
+                (catAmounts.get(item.categoryId) || 0) + item.amountMinor
+              );
               grandTotal += item.amountMinor;
             } else if (t.type === "REFUND") {
-              catAmounts.set(item.categoryId, Math.max(0, (catAmounts.get(item.categoryId) || 0) - item.amountMinor));
+              catAmounts.set(
+                item.categoryId,
+                Math.max(
+                  0,
+                  (catAmounts.get(item.categoryId) || 0) - item.amountMinor
+                )
+              );
               grandTotal = Math.max(0, grandTotal - item.amountMinor);
             }
           } else if (activeTab === "income" && t.type === "INCOME") {
-            catAmounts.set(item.categoryId, (catAmounts.get(item.categoryId) || 0) + item.amountMinor);
+            catAmounts.set(
+              item.categoryId,
+              (catAmounts.get(item.categoryId) || 0) + item.amountMinor
+            );
             grandTotal += item.amountMinor;
           }
         }
@@ -106,7 +144,10 @@ export default function StatsPage() {
           catAmounts.set(catId, (catAmounts.get(catId) || 0) + t.amountMinor);
           grandTotal += t.amountMinor;
         } else if (t.type === "REFUND") {
-          catAmounts.set(catId, Math.max(0, (catAmounts.get(catId) || 0) - t.amountMinor));
+          catAmounts.set(
+            catId,
+            Math.max(0, (catAmounts.get(catId) || 0) - t.amountMinor)
+          );
           grandTotal = Math.max(0, grandTotal - t.amountMinor);
         }
       } else if (activeTab === "income" && t.type === "INCOME") {
@@ -137,11 +178,16 @@ export default function StatsPage() {
     return { list, total: grandTotal };
   }, [monthTransactions, activeTab, categoryMap]);
 
-  // Transactions belonging to selected category
   const selectedCategoryTransactions = useMemo(() => {
     if (!selectedCategoryId) return [];
     return monthTransactions.filter((t) => {
-      if (t.type === "TRANSFER" || t.type === "ADJUSTMENT" || t.source === "CALIBRATION") return false;
+      if (
+        t.type === "TRANSFER" ||
+        t.type === "ADJUSTMENT" ||
+        t.source === "CALIBRATION"
+      ) {
+        return false;
+      }
       if (t.isSplit && t.splitItems && t.splitItems.length > 0) {
         return t.splitItems.some((s) =>
           selectedCategoryId === "uncategorized"
@@ -155,9 +201,9 @@ export default function StatsPage() {
     });
   }, [monthTransactions, selectedCategoryId]);
 
-  // Trend data for preceding 6 months
   const trendData = useMemo(() => {
-    const months: Array<{ key: string; label: string; totalMinor: number }> = [];
+    const months: Array<{ key: string; label: string; totalMinor: number }> =
+      [];
     const curY = currentDate.getFullYear();
     const curM = currentDate.getMonth();
 
@@ -170,18 +216,28 @@ export default function StatsPage() {
       for (const t of transactions) {
         if (t.deletedAt || t.excludeFromStats) continue;
         if (!t.transactionDate.startsWith(key)) continue;
-        if (t.type === "TRANSFER" || t.type === "ADJUSTMENT" || t.source === "CALIBRATION") continue;
+        if (
+          t.type === "TRANSFER" ||
+          t.type === "ADJUSTMENT" ||
+          t.source === "CALIBRATION"
+        ) {
+          continue;
+        }
 
         if (t.isSplit && t.splitItems && t.splitItems.length > 0) {
           for (const item of t.splitItems) {
             if (t.type === "EXPENSE") monthExp += item.amountMinor;
-            if (t.type === "REFUND") monthExp = Math.max(0, monthExp - item.amountMinor);
+            if (t.type === "REFUND") {
+              monthExp = Math.max(0, monthExp - item.amountMinor);
+            }
           }
           continue;
         }
 
         if (t.type === "EXPENSE") monthExp += t.amountMinor;
-        if (t.type === "REFUND") monthExp = Math.max(0, monthExp - t.amountMinor);
+        if (t.type === "REFUND") {
+          monthExp = Math.max(0, monthExp - t.amountMinor);
+        }
       }
 
       months.push({ key, label, totalMinor: monthExp });
@@ -191,247 +247,242 @@ export default function StatsPage() {
     return { months, maxMinor };
   }, [transactions, currentDate]);
 
+  // Split-Lens SVG Donut Ring Geometry
+  const ringGeometry = useMemo(() => {
+    const radius = 68;
+    const circumference = 2 * Math.PI * radius;
+    if (categoryStats.total <= 0) {
+      return { radius, circumference, arcs: [] };
+    }
+
+    let cumulativeFraction = 0;
+    const arcs = categoryStats.list.map((item) => {
+      const fraction = item.amount / categoryStats.total;
+      const gap = categoryStats.list.length > 1 ? 3.5 : 0;
+      const length = Math.max(2, fraction * circumference - gap);
+      const offset = -cumulativeFraction * circumference;
+      cumulativeFraction += fraction;
+      return {
+        ...item,
+        length,
+        offset,
+      };
+    });
+
+    return { radius, circumference, arcs };
+  }, [categoryStats]);
+
+  const activeCategoryStat = selectedCategoryId
+    ? categoryStats.list.find((c) => c.id === selectedCategoryId) || null
+    : null;
+
   return (
-    <main className="flex-1 max-w-4xl mx-auto w-full px-4 py-3 space-y-4">
-      {/* Top Header */}
-      <div className="flex items-center justify-between py-1">
-        <h1 data-testid="stats-title" className="text-base font-semibold tracking-tight text-[var(--text)]">
-          Statistics
-        </h1>
-      </div>
+    <main className="flex-1 max-w-4xl mx-auto w-full px-5 sm:px-7 pt-4 sm:pt-6 pb-8 space-y-6">
+      <AppHeader
+        testId="stats-title"
+        title="Analytics & Lens"
+        subtitle="Cashflow Breakdown"
+      />
 
       {/* Month Switcher */}
       <MonthSwitcher currentDate={currentDate} onChange={setCurrentDate} />
 
-      {/* Cashflow Summary Bar */}
-      <SummaryBar incomeMinor={totalIncome} expenseMinor={totalExpense} totalMinor={totalIncome - totalExpense} />
+      {/* Cashflow Summary Cards */}
+      <SummaryBar
+        incomeMinor={totalIncome}
+        expenseMinor={totalExpense}
+        totalMinor={totalIncome - totalExpense}
+      />
 
-      {/* Tab controls */}
-      <div className="flex rounded-lg border border-hairline p-0.5 bg-[var(--surface)] text-xs font-medium">
-        <button
-          type="button"
-          data-testid="stats-type-expense"
-          onClick={() => {
-            setActiveTab("expense");
-            setSelectedCategoryId(null);
-          }}
-          className={`flex-1 py-1.5 rounded text-center transition-all ${
-            activeTab === "expense"
-              ? "bg-[var(--bg)] text-[var(--text)] font-semibold shadow-xs"
-              : "text-[var(--text-muted)] hover:text-[var(--text)]"
-          }`}
-        >
-          Expense
-        </button>
-        <button
-          type="button"
-          data-testid="stats-type-income"
-          onClick={() => {
-            setActiveTab("income");
-            setSelectedCategoryId(null);
-          }}
-          className={`flex-1 py-1.5 rounded text-center transition-all ${
-            activeTab === "income"
-              ? "bg-[var(--bg)] text-[var(--text)] font-semibold shadow-xs"
-              : "text-[var(--text-muted)] hover:text-[var(--text)]"
-          }`}
-        >
-          Income
-        </button>
-        <button
-          type="button"
-          data-testid="stats-type-trend"
-          onClick={() => {
-            setActiveTab("trend");
-            setSelectedCategoryId(null);
-          }}
-          className={`flex-1 py-1.5 rounded text-center transition-all ${
-            activeTab === "trend"
-              ? "bg-[var(--bg)] text-[var(--text)] font-semibold shadow-xs"
-              : "text-[var(--text-muted)] hover:text-[var(--text)]"
-          }`}
-        >
-          Trend
-        </button>
+      {/* Mode Switcher */}
+      <div className="flex gap-1.5 p-1.5 rounded-2xl bg-[var(--surface)] border border-[var(--border)] text-xs sm:text-sm font-semibold">
+        {(
+          [
+            { id: "expense", label: "Expenses", testId: "stats-type-expense" },
+            { id: "income", label: "Income", testId: "stats-type-income" },
+            { id: "trend", label: "6M Trend", testId: "stats-type-trend" },
+          ] as const
+        ).map((tab) => {
+          const active = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              data-testid={tab.testId}
+              onClick={() => {
+                setActiveTab(tab.id);
+                setSelectedCategoryId(null);
+              }}
+              className={`flex-1 py-2.5 rounded-xl text-center transition-all cursor-pointer ${
+                active
+                  ? "bg-[var(--accent)] text-[var(--accent-fg)] shadow-xs font-bold"
+                  : "text-[var(--text-muted)] hover:text-[var(--text)]"
+              }`}
+            >
+              {tab.label}
+            </button>
+          );
+        })}
       </div>
 
-      {/* Trend View */}
+      {/* Content */}
       {activeTab === "trend" ? (
         <TrendSection months={trendData.months} maxMinor={trendData.maxMinor} />
       ) : categoryStats.list.length === 0 ? (
-        /* Empty State */
         <div data-testid="stats-empty-state">
           <EmptyState
-            title="No statistics available"
-            description={`No ${activeTab} transactions found for ${currentDate.toLocaleDateString("en-US", {
-              month: "long",
-              year: "numeric",
-            })}.`}
+            title="No analytics for this month"
+            description={`No ${activeTab} entries recorded in ${currentDate.toLocaleDateString(
+              "en-US",
+              {
+                month: "long",
+                year: "numeric",
+              }
+            )}.`}
             icon={<BarChart3 size={24} />}
           />
         </div>
       ) : (
-        /* Donut Chart & Ranked Category List */
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
-          {/* Flat SVG Donut Chart Card */}
-          <div className="p-4 bg-[var(--surface)] border border-hairline rounded-xl flex flex-col items-center justify-center space-y-4">
-            <div className="relative w-full max-w-[380px] aspect-[4/3]">
-              <svg viewBox="0 0 320 240" data-testid="donut-chart" className="w-full h-full overflow-visible">
-                {(() => {
-                  const cx = 160;
-                  const cy = 120;
-                  const r = 58;
-                  const stroke = 20;
-                  const circumference = 2 * Math.PI * r;
-                  const MIN_LABEL_PCT = 3; // tiny slices are left to the list below
-                  const LABEL_GAP = 22;
-
-                  // Slice geometry
-                  let acc = 0;
-                  const slices = categoryStats.list.map((item) => {
-                    const start = acc;
-                    acc += item.percent;
-                    const mid = ((start + item.percent / 2) / 100) * 2 * Math.PI - Math.PI / 2;
-                    return { item, start, mid };
-                  });
-
-                  // Callout label layout: anchor on ring edge -> elbow -> horizontal run to label
-                  type Label = { id: string; color: string; name: string; pct: number; ax: number; ay: number; ex: number; ey: number; right: boolean; y: number };
-                  const labels: Label[] = slices
-                    .filter((sl) => sl.item.percent >= MIN_LABEL_PCT)
-                    .map((sl) => {
-                      const cos = Math.cos(sl.mid);
-                      const sin = Math.sin(sl.mid);
-                      const outer = r + stroke / 2;
-                      return {
-                        id: sl.item.id,
-                        color: sl.item.color,
-                        name: sl.item.name.length > 14 ? sl.item.name.slice(0, 13) + "…" : sl.item.name,
-                        pct: sl.item.percent,
-                        ax: cx + (outer + 2) * cos,
-                        ay: cy + (outer + 2) * sin,
-                        ex: cx + (outer + 14) * cos,
-                        ey: cy + (outer + 14) * sin,
-                        right: cos >= 0,
-                        y: cy + (outer + 14) * sin,
-                      };
-                    });
-                  // De-overlap per side (top -> bottom), then clamp into the viewBox
-                  for (const side of [true, false]) {
-                    const group = labels.filter((l) => l.right === side).sort((a, b) => a.y - b.y);
-                    for (let i = 1; i < group.length; i++) {
-                      group[i].y = Math.max(group[i].y, group[i - 1].y + LABEL_GAP);
-                    }
-                    const overflow = (group.at(-1)?.y ?? 0) - (240 - 14);
-                    if (overflow > 0) group.forEach((l) => (l.y -= overflow));
-                    for (let i = 0; i < group.length; i++) {
-                      group[i].y = Math.max(group[i].y, 14 + i * LABEL_GAP);
-                    }
-                  }
-
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+          {/* Split-Lens Donut Card */}
+          <div className="lg:col-span-5 p-6 bg-[var(--surface)] border border-[var(--border)] rounded-3xl flex flex-col items-center justify-center space-y-5">
+            <div className="relative w-52 h-52 flex items-center justify-center">
+              <svg
+                viewBox="0 0 180 180"
+                data-testid="donut-chart"
+                className="w-full h-full -rotate-90"
+              >
+                <circle
+                  cx="90"
+                  cy="90"
+                  r={ringGeometry.radius}
+                  fill="none"
+                  stroke="var(--border)"
+                  strokeWidth="18"
+                />
+                {ringGeometry.arcs.map((arc) => {
+                  const isSelected = selectedCategoryId === arc.id;
+                  const isDimmed =
+                    selectedCategoryId !== null && !isSelected;
                   return (
-                    <>
-                      {/* Background ring */}
-                      <circle cx={cx} cy={cy} r={r} fill="none" stroke="var(--border)" strokeWidth={stroke} />
-
-                      {/* Slices (rotated so 0% starts at 12 o'clock) */}
-                      <g transform={`rotate(-90 ${cx} ${cy})`}>
-                        {slices.map(({ item, start }) => (
-                          <circle
-                            key={item.id}
-                            data-testid={`donut-slice-${item.id}`}
-                            aria-label={`${item.name}: ${item.percent}%`}
-                            cx={cx}
-                            cy={cy}
-                            r={r}
-                            fill="none"
-                            stroke={item.color}
-                            strokeWidth={selectedCategoryId === item.id ? stroke + 4 : stroke}
-                            strokeDasharray={`${(item.percent / 100) * circumference} ${circumference}`}
-                            strokeDashoffset={-((start / 100) * circumference)}
-                            className="transition-all duration-300 hover:opacity-85 cursor-pointer"
-                            onClick={() => setSelectedCategoryId(selectedCategoryId === item.id ? null : item.id)}
-                          />
-                        ))}
-                      </g>
-
-                      {/* Callouts */}
-                      {labels.map((l) => {
-                        const endX = l.right ? 304 : 16;
-                        const textX = l.right ? endX - 2 : endX + 2;
-                        return (
-                          <g
-                            key={`label-${l.id}`}
-                            data-testid={`donut-label-${l.id}`}
-                            className="cursor-pointer"
-                            onClick={() => setSelectedCategoryId(selectedCategoryId === l.id ? null : l.id)}
-                          >
-                            <polyline
-                              points={`${l.ax},${l.ay} ${l.ex},${l.y} ${endX},${l.y}`}
-                              fill="none"
-                              stroke={l.color}
-                              strokeWidth={1}
-                              strokeLinejoin="round"
-                            />
-                            <circle cx={l.ax} cy={l.ay} r={1.8} fill={l.color} />
-                            <text
-                              x={textX}
-                              y={l.y - 3.5}
-                              textAnchor={l.right ? "end" : "start"}
-                              className="fill-[var(--text)]"
-                              style={{ fontSize: 9.5, fontWeight: 600 }}
-                            >
-                              {l.name}
-                            </text>
-                            <text
-                              x={textX}
-                              y={l.y + 9}
-                              textAnchor={l.right ? "end" : "start"}
-                              className="fill-[var(--text-muted)]"
-                              style={{ fontSize: 8.5, fontFamily: "var(--font-mono, monospace)" }}
-                            >
-                              {l.pct}%
-                            </text>
-                          </g>
-                        );
-                      })}
-                    </>
+                    <circle
+                      key={arc.id}
+                      data-testid={`donut-slice-${arc.id}`}
+                      aria-label={`${arc.name}: ${arc.percent}%`}
+                      cx="90"
+                      cy="90"
+                      r={ringGeometry.radius}
+                      fill="none"
+                      stroke={arc.color}
+                      strokeWidth={isSelected ? "22" : "18"}
+                      strokeDasharray={`${arc.length} ${ringGeometry.circumference}`}
+                      strokeDashoffset={arc.offset}
+                      strokeLinecap={
+                        ringGeometry.arcs.length > 1 ? "round" : "butt"
+                      }
+                      style={{
+                        opacity: isDimmed ? 0.25 : 1,
+                        transition: "all 220ms ease",
+                      }}
+                      className="cursor-pointer"
+                      onClick={() =>
+                        setSelectedCategoryId(isSelected ? null : arc.id)
+                      }
+                    />
                   );
-                })()}
+                })}
               </svg>
 
-              {/* Donut Center Display */}
-              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none text-center">
-                <span className="text-[10px] uppercase font-semibold text-[var(--text-muted)] tracking-wider">
-                  {activeTab === "income" ? "Total Income" : "Total Expense"}
+              {/* Center Hero Display */}
+              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none text-center px-5">
+                <span className="text-2xs uppercase font-bold text-[var(--text-muted)] tracking-wider truncate max-w-[125px]">
+                  {activeCategoryStat
+                    ? `${activeCategoryStat.name} · ${activeCategoryStat.percent}%`
+                    : activeTab === "income"
+                      ? "Total Income"
+                      : "Total Expense"}
                 </span>
                 <span
                   data-testid="stat-total-expense"
-                  className="font-mono font-bold text-xs text-[var(--text)] tabular-nums mt-0.5"
+                  className="font-mono font-extrabold text-sm sm:text-base text-[var(--text)] tabular-nums mt-1 truncate max-w-[135px]"
                 >
-                  {formatMoney(categoryStats.total)}
+                  {formatMoney(
+                    activeCategoryStat
+                      ? activeCategoryStat.amount
+                      : categoryStats.total
+                  )}
                 </span>
               </div>
             </div>
 
-            <div className="text-[11px] text-[var(--text-muted)] text-center">
-              Tap a slice or category row to view transactions
+            {/* Split-Lens Category Focus Pills */}
+            <div className="w-full space-y-2 pt-3 border-t border-[var(--border)]">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-[var(--text-muted)] font-medium">
+                  Tap a ring slice or pill to focus
+                </span>
+                {selectedCategoryId && (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedCategoryId(null)}
+                    className="text-[var(--accent)] font-bold cursor-pointer"
+                  >
+                    Reset ×
+                  </button>
+                )}
+              </div>
+              <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
+                {categoryStats.list.map((cat) => {
+                  const selected = selectedCategoryId === cat.id;
+                  return (
+                    <button
+                      key={cat.id}
+                      type="button"
+                      data-testid={`donut-label-${cat.id}`}
+                      onClick={() =>
+                        setSelectedCategoryId(selected ? null : cat.id)
+                      }
+                      className={`shrink-0 px-3 py-2 rounded-2xl border text-xs font-semibold inline-flex items-center gap-2 transition-colors cursor-pointer ${
+                        selected
+                          ? "bg-[var(--text)] text-[var(--bg)] border-[var(--text)]"
+                          : "bg-[var(--bg)] text-[var(--text)] border-[var(--border)] hover:border-[var(--text-muted)]"
+                      }`}
+                    >
+                      <span
+                        className="w-2.5 h-2.5 rounded-full shrink-0"
+                        style={{ backgroundColor: cat.color }}
+                      />
+                      <span>{cat.name}</span>
+                      <span className="opacity-75 font-mono">
+                        {cat.percent}%
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </div>
 
-          <CategoryList
-            categories={categoryStats.list}
-            selectedId={selectedCategoryId}
-            onSelect={(id) => setSelectedCategoryId(id || null)}
-          />
+          {/* Ranked Category Breakdown Cards */}
+          <div className="lg:col-span-7">
+            <CategoryList
+              categories={categoryStats.list}
+              selectedId={selectedCategoryId}
+              onSelect={(id) => setSelectedCategoryId(id || null)}
+            />
+          </div>
         </div>
       )}
 
-      {/* Filtered Category Transactions List */}
+      {/* Filtered Category Transactions Drill-down */}
       {selectedCategoryId && selectedCategoryTransactions.length > 0 && (
         <CategoryTransactions
           category={{
-            name: categoryMap.get(selectedCategoryId)?.name || (selectedCategoryId === "uncategorized" ? "Uncategorized" : "Category"),
+            name:
+              categoryMap.get(selectedCategoryId)?.name ||
+              (selectedCategoryId === "uncategorized"
+                ? "Uncategorized"
+                : "Category"),
             color: categoryMap.get(selectedCategoryId)?.color || "#64748b",
           }}
           transactions={selectedCategoryTransactions}

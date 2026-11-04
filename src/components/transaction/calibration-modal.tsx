@@ -68,10 +68,9 @@ function CalibrationModalContent({
   const categories = useCategories();
 
   const isCreditCard = account.type === "CREDIT_CARD";
-  // For credit card: current debt basis
-  const currentDebtMinor = isCreditCard && currentBalanceMinor < 0 ? Math.abs(currentBalanceMinor) : 0;
+  const currentDebtMinor =
+    isCreditCard && currentBalanceMinor < 0 ? Math.abs(currentBalanceMinor) : 0;
 
-  // Initial expression defaults to current balance or current debt
   const initialValueStr = isCreditCard
     ? (currentDebtMinor / 100).toFixed(2)
     : (currentBalanceMinor / 100).toFixed(2);
@@ -129,15 +128,11 @@ function CalibrationModalContent({
     [onKeypadClick]
   );
 
-  // Parse entered real value into minor units
   const enteredRealMinor = useMemo(() => {
     if (!evalResult.isValid) return null;
     return Math.round(evalResult.value * 100);
   }, [evalResult]);
 
-  // Delta calculation:
-  // For standard accounts: real - current computed
-  // For credit cards: current debt - real debt (if real debt is lower, debt decreased => direction IN)
   const deltaMinor = useMemo(() => {
     if (enteredRealMinor === null) return 0;
     if (isCreditCard) {
@@ -160,7 +155,6 @@ function CalibrationModalContent({
     }
 
     try {
-      // Find or create "Balance Calibration" category
       let calibCat = categories.find(
         (c) =>
           c.name.toLowerCase() === "balance calibration" ||
@@ -207,38 +201,38 @@ function CalibrationModalContent({
   return (
     <div
       data-testid="calibration-sheet"
-      className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-end md:items-center justify-center p-0 md:p-4 select-none overflow-y-auto"
+      className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-end md:items-center justify-center p-0 md:p-4 select-none overflow-y-auto animate-in fade-in duration-150"
     >
       <div
         data-testid="calibration-dialog"
-        className="w-full md:max-w-md bg-[var(--surface)] border border-hairline rounded-t-2xl md:rounded-xl shadow-2xl flex flex-col modal-sheet-dialog overflow-hidden"
+        className="w-full md:max-w-md bg-[var(--surface)] border border-[var(--border)] rounded-t-3xl md:rounded-3xl shadow-2xl flex flex-col modal-sheet-dialog overflow-hidden"
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-hairline bg-[var(--surface)] shrink-0">
-          <div className="flex items-center gap-2">
-            <span className="p-1 rounded bg-[var(--border)] text-[var(--text)]">
-              <Scale size={16} />
+        <div className="flex items-center justify-between px-5 sm:px-6 py-4 border-b border-[var(--border)] bg-[var(--surface)] shrink-0">
+          <div className="flex items-center gap-3">
+            <span className="w-10 h-10 rounded-2xl bg-[var(--accent)]/12 border border-[var(--accent)]/25 flex items-center justify-center text-[var(--accent)]">
+              <Scale size={18} />
             </span>
             <div>
-              <h2 className="font-semibold text-sm text-[var(--text)]">Calibrate Balance</h2>
-              <p className="text-[10px] text-[var(--text-muted)]">{account.name}</p>
+              <h2 className="font-bold text-base text-[var(--text)]">Calibrate Balance</h2>
+              <p className="text-xs text-[var(--text-muted)]">{account.name}</p>
             </div>
           </div>
           <button
             type="button"
             data-testid="calibration-close"
             onClick={onClose}
-            className="p-1.5 rounded text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--border)] transition-colors"
+            className="w-9 h-9 rounded-xl flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--bg)] transition-colors cursor-pointer"
           >
             <X size={18} />
           </button>
         </div>
 
         {/* Content Body */}
-        <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-3">
+        <div className="flex-1 min-h-0 overflow-y-auto p-5 sm:p-6 space-y-4">
           {/* Current balance card */}
-          <div className="p-3 rounded-lg bg-[var(--bg)] border border-hairline flex items-center justify-between text-xs">
-            <span className="text-[var(--text-muted)]">
+          <div className="p-4 rounded-2xl bg-[var(--bg)] border border-[var(--border)] flex items-center justify-between text-xs">
+            <span className="font-semibold text-[var(--text-muted)]">
               {isCreditCard ? "Current Computed Debt" : "Current Computed Balance"}
             </span>
             <span
@@ -249,35 +243,48 @@ function CalibrationModalContent({
             </span>
           </div>
 
-          {/* Real Balance Input & Delta */}
-          <div className="p-3 rounded-lg border border-hairline bg-[var(--bg)] space-y-1.5">
-            <div className="flex items-baseline justify-between text-xs">
-              <span className="text-[11px] font-medium text-[var(--text-muted)] uppercase tracking-wider">
+          {/* Hero Real Balance Input & Delta */}
+          <div className="p-5 rounded-3xl border border-[var(--border)] bg-[var(--bg)] space-y-2">
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-2xs font-bold text-[var(--text-muted)] uppercase tracking-wider">
                 {isCreditCard ? "Real Outstanding Debt" : "Real Balance"}
               </span>
-              {/* Live Delta Display */}
-              <span
-                data-testid="calibration-delta"
-                className={`font-mono font-semibold tabular-nums ${
-                  deltaMinor > 0
-                    ? "text-income"
+              <div className="flex items-center gap-2">
+                <span
+                  data-testid="calibration-delta"
+                  className={`font-mono font-bold tabular-nums ${
+                    deltaMinor > 0
+                      ? "text-[var(--income)]"
+                      : deltaMinor < 0
+                        ? "text-[var(--expense)]"
+                        : "text-[var(--text-muted)]"
+                  }`}
+                >
+                  {deltaMinor > 0
+                    ? `+${(deltaMinor / 100).toFixed(2)}`
                     : deltaMinor < 0
-                    ? "text-expense"
-                    : "text-[var(--text-muted)]"
-                }`}
-              >
-                {deltaMinor > 0
-                  ? `+${(deltaMinor / 100).toFixed(2)}`
-                  : deltaMinor < 0
-                  ? `-${(Math.abs(deltaMinor) / 100).toFixed(2)}`
-                  : "+0.00"}
-              </span>
+                      ? `-${(Math.abs(deltaMinor) / 100).toFixed(2)}`
+                      : "+0.00"}
+                </span>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsKeypadOpen(!isKeypadOpen);
+                  }}
+                  className={`w-8 h-8 rounded-xl border flex items-center justify-center transition-colors cursor-pointer ${
+                    isKeypadOpen
+                      ? "bg-[var(--accent)] text-white border-[var(--accent)]"
+                      : "bg-[var(--surface)] border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text)]"
+                  }`}
+                  title="Toggle Calculator Keypad"
+                >
+                  <Calculator size={15} />
+                </button>
+              </div>
             </div>
 
-            <div
-              onClick={() => setIsKeypadOpen(true)}
-              className="flex items-center justify-between cursor-pointer"
-            >
+            <div onClick={() => setIsKeypadOpen(true)} className="cursor-pointer">
               <input
                 type="text"
                 data-testid="real-balance-input"
@@ -287,27 +294,11 @@ function CalibrationModalContent({
                 onClick={() => setIsKeypadOpen(true)}
                 onFocus={() => setIsKeypadOpen(true)}
                 readOnly
-                className="w-full text-2xl font-bold font-mono tracking-tight bg-transparent text-[var(--text)] focus:outline-none text-right tabular-nums cursor-pointer"
+                className="w-full text-3xl font-bold font-mono tracking-tight bg-transparent text-[var(--text)] focus:outline-none text-center tabular-nums cursor-pointer py-1"
               />
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setIsKeypadOpen(!isKeypadOpen);
-                }}
-                className={`ml-2 p-1.5 rounded border border-hairline transition-colors ${
-                  isKeypadOpen
-                    ? "bg-[var(--accent)] text-white border-[var(--accent)]"
-                    : "bg-[var(--surface)] text-[var(--text-muted)] hover:text-[var(--text)]"
-                }`}
-                title="Toggle Calculator Keypad"
-              >
-                <Calculator size={16} />
-              </button>
             </div>
           </div>
 
-          {/* On-Demand Pop-Up Arithmetic Keypad */}
           <NumberKeypadPopup
             isOpen={isKeypadOpen}
             onClose={() => setIsKeypadOpen(false)}
@@ -317,46 +308,45 @@ function CalibrationModalContent({
             title="Balance Keypad"
           />
 
-          {/* Optional Note */}
-          <div className="space-y-1">
-            <label className="text-[11px] font-medium text-[var(--text-muted)]">Note (optional)</label>
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold text-[var(--text-muted)] block">
+              Note (optional)
+            </label>
             <input
               type="text"
               data-testid="calibration-note"
               value={note}
               onChange={(e) => setNote(e.target.value)}
               placeholder="e.g. Monthly statement check, wallet count"
-              className="w-full px-3 py-2 rounded border border-hairline bg-[var(--bg)] text-[var(--text)] text-xs focus:outline-none focus:ring-1 focus:ring-[var(--text)]"
+              className="w-full h-11 px-4 rounded-2xl border border-[var(--border)] bg-[var(--bg)] text-[var(--text)] text-xs focus:outline-none focus:border-[var(--accent)]"
             />
           </div>
 
-          {/* Nothing to adjust message */}
           {isNothingToAdjust && (
             <div
               data-testid="nothing-to-adjust-msg"
-              className="p-2.5 rounded bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 text-xs font-medium text-center"
+              className="p-3.5 rounded-2xl bg-[var(--income)]/10 border border-[var(--income)]/25 text-[var(--income)] text-xs font-bold text-center"
             >
               Nothing to adjust
             </div>
           )}
 
-          {/* Error Message */}
           {errorMsg && (
-            <div className="flex items-center gap-1.5 text-xs text-red-500 font-medium py-1">
-              <AlertCircle size={14} className="shrink-0" />
+            <div className="flex items-center gap-2 p-3 rounded-2xl bg-[var(--expense)]/10 border border-[var(--expense)]/25 text-xs text-[var(--expense)] font-semibold">
+              <AlertCircle size={15} className="shrink-0" />
               <span>{errorMsg}</span>
             </div>
           )}
         </div>
 
         {/* Action Button */}
-        <div className="p-3 border-t border-hairline bg-[var(--surface)] pb-sheet-safe shrink-0">
+        <div className="px-5 sm:px-6 py-4 border-t border-[var(--border)] bg-[var(--surface)] pb-sheet-safe shrink-0">
           <button
             type="button"
             data-testid="calibration-save-btn"
             disabled={isNothingToAdjust || enteredRealMinor === null}
             onClick={handleSave}
-            className="w-full py-2.5 px-4 rounded bg-[var(--text)] text-[var(--bg)] font-semibold text-xs hover:opacity-90 active:scale-98 transition-all disabled:opacity-40 disabled:pointer-events-none"
+            className="w-full h-12 px-5 rounded-2xl bg-[var(--accent)] text-white font-bold text-xs hover:opacity-95 active:scale-[0.98] transition-all disabled:opacity-40 disabled:pointer-events-none cursor-pointer shadow-xs"
           >
             Save Calibration
           </button>

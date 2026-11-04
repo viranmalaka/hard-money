@@ -34,7 +34,9 @@ export function RegisterForm() {
     try {
       await registerMutation.mutateAsync({ name, email, password });
     } catch (mutationError) {
-      setError(mutationError instanceof Error ? mutationError.message : "Failed to register account");
+      setError(
+        mutationError instanceof Error ? mutationError.message : "Failed to register account"
+      );
     }
   };
 
@@ -44,17 +46,21 @@ export function RegisterForm() {
         <div
           data-testid="auth-error"
           role="alert"
-          className="p-3 text-xs rounded border border-red-200 bg-red-50 dark:bg-red-950/40 dark:border-red-800 text-red-600 dark:text-red-400 font-medium"
+          className="p-4 text-xs rounded-2xl border border-[var(--expense)]/30 bg-[var(--expense)]/10 text-[var(--expense)] font-semibold"
         >
           {error}
         </div>
       )}
 
-      <form action="javascript:void(0);" onSubmit={handleSubmit} className="flat-card p-5 space-y-4">
+      <form
+        action="javascript:void(0);"
+        onSubmit={handleSubmit}
+        className="rounded-3xl bg-[var(--surface)] border border-[var(--border)] p-6 sm:p-7 space-y-5 shadow-sm"
+      >
         <div className="space-y-1.5">
           <label
             htmlFor="register-name"
-            className="block text-xs font-medium text-[var(--text-muted)]"
+            className="block text-xs font-semibold text-[var(--text-muted)]"
           >
             Full name
           </label>
@@ -70,14 +76,14 @@ export function RegisterForm() {
             onChange={(e) => setName(e.target.value)}
             onFocus={handleFocus}
             placeholder="Jane Doe"
-            className="w-full px-3 py-2 rounded text-sm bg-[var(--surface)] border border-[var(--border)] text-[var(--text)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent)] transition-colors"
+            className="w-full h-12 px-4 rounded-2xl text-sm bg-[var(--bg)] border border-[var(--border)] text-[var(--text)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent)] transition-colors"
           />
         </div>
 
         <div className="space-y-1.5">
           <label
             htmlFor="register-email"
-            className="block text-xs font-medium text-[var(--text-muted)]"
+            className="block text-xs font-semibold text-[var(--text-muted)]"
           >
             Email address
           </label>
@@ -94,14 +100,14 @@ export function RegisterForm() {
             onChange={(e) => setEmail(e.target.value)}
             onFocus={handleFocus}
             placeholder="jane@example.com"
-            className="w-full px-3 py-2 rounded text-sm bg-[var(--surface)] border border-[var(--border)] text-[var(--text)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent)] transition-colors"
+            className="w-full h-12 px-4 rounded-2xl text-sm bg-[var(--bg)] border border-[var(--border)] text-[var(--text)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent)] transition-colors"
           />
         </div>
 
         <div className="space-y-1.5">
           <label
             htmlFor="register-password"
-            className="block text-xs font-medium text-[var(--text-muted)]"
+            className="block text-xs font-semibold text-[var(--text-muted)]"
           >
             Password
           </label>
@@ -118,7 +124,7 @@ export function RegisterForm() {
             onChange={(e) => setPassword(e.target.value)}
             onFocus={handleFocus}
             placeholder="At least 6 characters"
-            className="w-full px-3 py-2 rounded text-sm bg-[var(--surface)] border border-[var(--border)] text-[var(--text)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent)] transition-colors"
+            className="w-full h-12 px-4 rounded-2xl text-sm bg-[var(--bg)] border border-[var(--border)] text-[var(--text)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent)] transition-colors"
           />
         </div>
 
@@ -127,7 +133,7 @@ export function RegisterForm() {
           data-testid="register-submit"
           tabIndex={4}
           disabled={registerMutation.isPending}
-          className="w-full py-2.5 px-4 rounded text-sm font-semibold bg-[var(--accent)] text-white hover:opacity-95 active:scale-[0.98] transition-all disabled:opacity-50 cursor-pointer"
+          className="w-full h-12 px-5 rounded-2xl text-sm font-bold bg-[var(--accent)] text-white hover:opacity-95 active:scale-[0.98] transition-all disabled:opacity-50 cursor-pointer shadow-xs"
         >
           {registerMutation.isPending ? "Creating account…" : "Create Account"}
         </button>

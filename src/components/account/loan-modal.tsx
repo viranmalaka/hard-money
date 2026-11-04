@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { X } from "lucide-react";
+import { X, Building2 } from "lucide-react";
 import { LocalAccount } from "@/lib/db";
 import { useSync } from "@/components/sync-provider";
 import { parseMoneyToMinor } from "@/lib/finance-core/money";
@@ -136,32 +136,47 @@ export function LoanModal({ isOpen, onClose, accounts }: LoanModalProps) {
   return (
     <div
       data-testid="loan-modal-backdrop"
-      className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto"
+      className="fixed inset-0 z-50 bg-black/55 backdrop-blur-xs flex items-end md:items-center justify-center p-0 md:p-4 overflow-y-auto animate-in fade-in duration-150"
+      onClick={(e) => {
+        if (e.target === e.currentTarget && !submitting) onClose();
+      }}
     >
-      <div className="w-full max-w-md bg-[var(--surface)] border border-hairline rounded-xl shadow-2xl p-5 space-y-4 my-auto modal-sheet-dialog overflow-y-auto">
-        <div className="flex items-center justify-between pb-2 border-b border-hairline">
-          <h2 className="text-sm font-semibold text-[var(--text)]">Add Loan / Lease</h2>
+      <div className="w-full md:max-w-lg bg-[var(--surface)] border border-hairline rounded-t-3xl md:rounded-3xl shadow-2xl p-5 sm:p-6 pb-sheet-safe md:pb-6 space-y-5 my-auto modal-sheet-dialog overflow-y-auto">
+        <div className="flex items-center justify-between pb-3.5 border-b border-hairline">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-[var(--accent)]/10 text-[var(--accent)] flex items-center justify-center shrink-0">
+              <Building2 size={18} />
+            </div>
+            <div>
+              <h2 className="text-base font-semibold text-[var(--text)]">Add Loan / Lease</h2>
+              <p className="text-xs text-[var(--text-muted)]">Track amortization & monthly EMI schedule</p>
+            </div>
+          </div>
           <button
             type="button"
             onClick={onClose}
-            className="p-1 rounded text-[var(--text-muted)] hover:text-[var(--text)] transition-colors"
+            className="w-9 h-9 rounded-xl flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--surface-hover)] transition-colors"
           >
-            <X size={16} />
+            <X size={18} />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} noValidate className="space-y-3 text-xs">
-          {errors.form && <p className="text-red-500 text-xs">{errors.form}</p>}
+        <form onSubmit={handleSubmit} noValidate className="space-y-4 text-xs">
+          {errors.form && (
+            <div className="p-3 rounded-2xl bg-red-500/10 border border-red-500/25 text-xs text-red-500 font-medium">
+              {errors.form}
+            </div>
+          )}
 
           {/* Kind Toggle */}
-          <div className="grid grid-cols-2 gap-2 p-1 bg-[var(--bg)] rounded-lg border border-hairline">
+          <div className="grid grid-cols-2 gap-2 p-1.5 bg-[var(--bg)] rounded-2xl border border-hairline">
             <button
               type="button"
               data-testid="loan-kind-loan"
               onClick={() => setKind("LOAN")}
-              className={`py-1 rounded text-center font-medium transition-all ${
+              className={`h-10 rounded-xl text-center font-semibold transition-all ${
                 kind === "LOAN"
-                  ? "bg-[var(--accent)] text-white shadow-xs font-semibold"
+                  ? "bg-[var(--accent)] text-white shadow-sm"
                   : "text-[var(--text-muted)] hover:text-[var(--text)]"
               }`}
             >
@@ -171,9 +186,9 @@ export function LoanModal({ isOpen, onClose, accounts }: LoanModalProps) {
               type="button"
               data-testid="loan-kind-lease"
               onClick={() => setKind("LEASE")}
-              className={`py-1 rounded text-center font-medium transition-all ${
+              className={`h-10 rounded-xl text-center font-semibold transition-all ${
                 kind === "LEASE"
-                  ? "bg-[var(--accent)] text-white shadow-xs font-semibold"
+                  ? "bg-[var(--accent)] text-white shadow-sm"
                   : "text-[var(--text-muted)] hover:text-[var(--text)]"
               }`}
             >
@@ -182,7 +197,7 @@ export function LoanModal({ isOpen, onClose, accounts }: LoanModalProps) {
           </div>
 
           {/* Lender Name */}
-          <div className="space-y-1">
+          <div className="space-y-1.5">
             <label className="block text-xs font-medium text-[var(--text-muted)]">
               Lender / Financial Institution
             </label>
@@ -192,26 +207,48 @@ export function LoanModal({ isOpen, onClose, accounts }: LoanModalProps) {
               value={lenderName}
               onChange={(e) => setLenderName(e.target.value)}
               placeholder="e.g. Commercial Bank, Central Finance, LOLC"
-              className="w-full h-8 px-2.5 rounded bg-[var(--bg)] border border-hairline text-xs text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
+              className="w-full h-11 px-3.5 rounded-2xl bg-[var(--bg)] border border-hairline text-sm text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
             />
             {errors.lenderName && (
               <p className="text-[11px] text-[var(--expense)]">{errors.lenderName}</p>
             )}
           </div>
-          <div className="space-y-1">
-            <label className="block text-xs font-medium text-[var(--text-muted)]">Started Date</label>
-            <input type="date" data-testid="loan-form-start-date" value={startDateStr} onChange={(e) => setStartDateStr(e.target.value)} className="w-full h-8 px-2 rounded bg-[var(--bg)] border border-hairline text-xs text-[var(--text)]" />
-          </div>
-          <div className="space-y-1">
-            <label className="block text-xs font-medium text-[var(--text-muted)]">Monthly EMI Due Day</label>
-            <input type="number" min="1" max="31" data-testid="loan-form-payment-due-day" value={paymentDueDayStr} onChange={(e) => setPaymentDueDayStr(e.target.value)} className="w-full h-8 px-2 rounded bg-[var(--bg)] border border-hairline text-xs text-[var(--text)]" />
-            <p className="text-[10px] text-[var(--text-muted)]">For shorter months, the due date uses the last day of that month.</p>
-            {errors.paymentDueDay && <p className="text-[11px] text-[var(--expense)]">{errors.paymentDueDay}</p>}
+
+          {/* Started Date & Due Day */}
+          <div className="grid grid-cols-2 gap-3.5">
+            <div className="space-y-1.5">
+              <label className="block text-xs font-medium text-[var(--text-muted)]">Started Date</label>
+              <input
+                type="date"
+                data-testid="loan-form-start-date"
+                value={startDateStr}
+                onChange={(e) => setStartDateStr(e.target.value)}
+                className="w-full h-11 px-3.5 rounded-2xl bg-[var(--bg)] border border-hairline text-sm text-[var(--text)] font-mono focus:outline-none focus:border-[var(--accent)]"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="block text-xs font-medium text-[var(--text-muted)]">
+                Monthly EMI Due Day
+              </label>
+              <input
+                type="number"
+                min="1"
+                max="31"
+                data-testid="loan-form-payment-due-day"
+                value={paymentDueDayStr}
+                onChange={(e) => setPaymentDueDayStr(e.target.value)}
+                className="w-full h-11 px-3.5 rounded-2xl bg-[var(--bg)] border border-hairline text-sm text-[var(--text)] font-mono focus:outline-none focus:border-[var(--accent)]"
+              />
+              {errors.paymentDueDay && (
+                <p className="text-[11px] text-[var(--expense)]">{errors.paymentDueDay}</p>
+              )}
+            </div>
           </div>
 
-          {/* Principal & Residual */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1">
+          {/* Principal & Residual / Rate */}
+          <div className="grid grid-cols-2 gap-3.5">
+            <div className="space-y-1.5">
               <label className="block text-xs font-medium text-[var(--text-muted)]">
                 {kind === "LEASE" ? "Financed Amount (LKR)" : "Principal (LKR)"}
               </label>
@@ -221,7 +258,7 @@ export function LoanModal({ isOpen, onClose, accounts }: LoanModalProps) {
                 value={principalStr}
                 onChange={(e) => setPrincipalStr(e.target.value)}
                 placeholder="1,200,000.00"
-                className="w-full h-8 px-2.5 rounded bg-[var(--bg)] border border-hairline text-xs text-[var(--text)] focus:outline-none focus:border-[var(--accent)] font-mono"
+                className="w-full h-11 px-3.5 rounded-2xl bg-[var(--bg)] border border-hairline text-sm text-[var(--text)] focus:outline-none focus:border-[var(--accent)] font-mono tabular-nums"
               />
               {errors.principal && (
                 <p className="text-[11px] text-[var(--expense)]">{errors.principal}</p>
@@ -229,7 +266,7 @@ export function LoanModal({ isOpen, onClose, accounts }: LoanModalProps) {
             </div>
 
             {kind === "LEASE" ? (
-              <div className="space-y-1">
+              <div className="space-y-1.5">
                 <label className="block text-xs font-medium text-[var(--text-muted)]">
                   Residual / Balloon (LKR)
                 </label>
@@ -239,14 +276,14 @@ export function LoanModal({ isOpen, onClose, accounts }: LoanModalProps) {
                   value={residualStr}
                   onChange={(e) => setResidualStr(e.target.value)}
                   placeholder="200,000.00"
-                  className="w-full h-8 px-2.5 rounded bg-[var(--bg)] border border-hairline text-xs text-[var(--text)] focus:outline-none focus:border-[var(--accent)] font-mono"
+                  className="w-full h-11 px-3.5 rounded-2xl bg-[var(--bg)] border border-hairline text-sm text-[var(--text)] focus:outline-none focus:border-[var(--accent)] font-mono tabular-nums"
                 />
                 {errors.residual && (
                   <p className="text-[11px] text-[var(--expense)]">{errors.residual}</p>
                 )}
               </div>
             ) : (
-              <div className="space-y-1">
+              <div className="space-y-1.5">
                 <label className="block text-xs font-medium text-[var(--text-muted)]">
                   Interest Rate (APR %)
                 </label>
@@ -257,19 +294,19 @@ export function LoanModal({ isOpen, onClose, accounts }: LoanModalProps) {
                   value={aprStr}
                   onChange={(e) => setAprStr(e.target.value)}
                   placeholder="12.00"
-                  className="w-full h-8 px-2.5 rounded bg-[var(--bg)] border border-hairline text-xs text-[var(--text)] focus:outline-none focus:border-[var(--accent)] font-mono"
+                  className="w-full h-11 px-3.5 rounded-2xl bg-[var(--bg)] border border-hairline text-sm text-[var(--text)] focus:outline-none focus:border-[var(--accent)] font-mono"
                 />
                 {errors.rate && <p className="text-[11px] text-[var(--expense)]">{errors.rate}</p>}
               </div>
             )}
           </div>
 
-          {/* Rate (if Lease) & Tenure */}
-          <div className="grid grid-cols-2 gap-3">
+          {/* Rate (if Lease), Tenure & Calculation Type */}
+          <div className={`grid gap-3.5 ${kind === "LEASE" ? "grid-cols-3" : "grid-cols-2"}`}>
             {kind === "LEASE" && (
-              <div className="space-y-1">
+              <div className="space-y-1.5">
                 <label className="block text-xs font-medium text-[var(--text-muted)]">
-                  Interest Rate (APR %)
+                  APR %
                 </label>
                 <input
                   type="number"
@@ -278,13 +315,13 @@ export function LoanModal({ isOpen, onClose, accounts }: LoanModalProps) {
                   value={aprStr}
                   onChange={(e) => setAprStr(e.target.value)}
                   placeholder="12.00"
-                  className="w-full h-8 px-2.5 rounded bg-[var(--bg)] border border-hairline text-xs text-[var(--text)] focus:outline-none focus:border-[var(--accent)] font-mono"
+                  className="w-full h-11 px-3 rounded-2xl bg-[var(--bg)] border border-hairline text-sm text-[var(--text)] focus:outline-none focus:border-[var(--accent)] font-mono"
                 />
                 {errors.rate && <p className="text-[11px] text-[var(--expense)]">{errors.rate}</p>}
               </div>
             )}
 
-            <div className="space-y-1">
+            <div className="space-y-1.5">
               <label className="block text-xs font-medium text-[var(--text-muted)]">
                 Tenure (Months)
               </label>
@@ -294,14 +331,14 @@ export function LoanModal({ isOpen, onClose, accounts }: LoanModalProps) {
                 value={tenureMonthsStr}
                 onChange={(e) => setTenureMonthsStr(e.target.value)}
                 min="1"
-                className="w-full h-8 px-2.5 rounded bg-[var(--bg)] border border-hairline text-xs text-[var(--text)] focus:outline-none focus:border-[var(--accent)] font-mono"
+                className="w-full h-11 px-3.5 rounded-2xl bg-[var(--bg)] border border-hairline text-sm text-[var(--text)] focus:outline-none focus:border-[var(--accent)] font-mono"
               />
               {errors.tenure && (
                 <p className="text-[11px] text-[var(--expense)]">{errors.tenure}</p>
               )}
             </div>
 
-            <div className="space-y-1">
+            <div className="space-y-1.5">
               <label className="block text-xs font-medium text-[var(--text-muted)]">
                 Calculation Type
               </label>
@@ -311,7 +348,7 @@ export function LoanModal({ isOpen, onClose, accounts }: LoanModalProps) {
                 onChange={(e) =>
                   setCalculationType(e.target.value as "REDUCING_BALANCE" | "FLAT_RATE")
                 }
-                className="w-full h-8 px-2 rounded bg-[var(--bg)] border border-hairline text-xs text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
+                className="w-full h-11 px-3 rounded-2xl bg-[var(--bg)] border border-hairline text-xs sm:text-sm text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
               >
                 <option value="REDUCING_BALANCE">Reducing Balance</option>
                 <option value="FLAT_RATE">Flat Rate</option>
@@ -320,7 +357,7 @@ export function LoanModal({ isOpen, onClose, accounts }: LoanModalProps) {
           </div>
 
           {/* Disbursement Account */}
-          <div className="space-y-1">
+          <div className="space-y-1.5">
             <label className="block text-xs font-medium text-[var(--text-muted)]">
               Disbursement Account (Optional)
             </label>
@@ -328,7 +365,7 @@ export function LoanModal({ isOpen, onClose, accounts }: LoanModalProps) {
               data-testid="loan-form-disbursement-account"
               value={disbursementAccountId}
               onChange={(e) => setDisbursementAccountId(e.target.value)}
-              className="w-full h-8 px-2 rounded bg-[var(--bg)] border border-hairline text-xs text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
+              className="w-full h-11 px-3.5 rounded-2xl bg-[var(--bg)] border border-hairline text-sm text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
             >
               <option value="">None (No disbursement transaction)</option>
               {eligibleSavings.map((a) => (
@@ -337,17 +374,17 @@ export function LoanModal({ isOpen, onClose, accounts }: LoanModalProps) {
                 </option>
               ))}
             </select>
-            <p className="text-[10px] text-[var(--text-muted)]">
+            <p className="text-[11px] text-[var(--text-muted)] leading-relaxed">
               If selected, creates a stats-excluded LOAN_DISBURSEMENT income row in this account.
             </p>
           </div>
 
           {/* Form Actions */}
-          <div className="flex items-center justify-end gap-2 pt-2 border-t border-hairline">
+          <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-hairline">
             <button
               type="button"
               onClick={onClose}
-              className="px-3 py-1.5 rounded border border-hairline text-xs font-medium hover:bg-[var(--border)] transition-colors"
+              className="h-11 px-4 rounded-2xl border border-hairline text-xs font-semibold text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--surface-hover)] transition-colors"
             >
               Cancel
             </button>
@@ -355,7 +392,7 @@ export function LoanModal({ isOpen, onClose, accounts }: LoanModalProps) {
               type="submit"
               data-testid="loan-form-submit"
               disabled={submitting}
-              className="px-4 py-1.5 rounded bg-[var(--accent)] text-white text-xs font-semibold hover:opacity-90 active:scale-95 transition-all disabled:opacity-50"
+              className="h-11 px-6 rounded-2xl bg-[var(--accent)] text-white text-xs font-semibold hover:opacity-95 active:scale-[0.99] transition-all disabled:opacity-50 shadow-sm"
             >
               {submitting ? "Creating..." : "Create"}
             </button>

@@ -8,15 +8,24 @@ import { usePathname } from "next/navigation";
  * so by default every screen inherits the previous screen's scroll offset.
  * This remembers the scroll position per route and restores it on return,
  * like a native tab bar. New screens start at the top.
- *
- * Component state itself is preserved by Next's Cache Components (<Activity>).
  */
 const positions = new Map<string, number>();
 
-export function ScrollContainer({ className, children }: { className?: string; children: React.ReactNode }) {
+export function ScrollContainer({
+  className,
+  children,
+}: {
+  className?: string;
+  children: React.ReactNode;
+}) {
   const ref = useRef<HTMLDivElement>(null);
   const pathname = usePathname();
   const currentPath = useRef(pathname);
+
+  const isMobileFooterEnabled =
+    pathname !== "/login" &&
+    pathname !== "/register" &&
+    pathname !== "/offline";
 
   useLayoutEffect(() => {
     currentPath.current = pathname;
@@ -37,6 +46,13 @@ export function ScrollContainer({ className, children }: { className?: string; c
       }}
     >
       {children}
+      {isMobileFooterEnabled && (
+        <div
+          aria-hidden="true"
+          data-testid="mobile-footer-scroll-spacer"
+          className="mobile-footer-spacer"
+        />
+      )}
     </div>
   );
 }

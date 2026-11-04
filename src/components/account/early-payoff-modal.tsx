@@ -31,7 +31,6 @@ export function EarlyPayoffModal({
     setSubmitting(true);
     try {
       const effectiveUserId = plan.userId || userId || "current-user";
-      // 1. Post CC_INSTALLMENT_PAYOFF transaction for remaining principal
       await localCreateTransaction(db, {
         userId: effectiveUserId,
         accountId: plan.accountId,
@@ -51,7 +50,6 @@ export function EarlyPayoffModal({
         installmentPlanId: plan.id,
       });
 
-      // 2. Mark plan COMPLETED
       await localUpdateInstallmentPlan(db, plan.id, {
         status: "COMPLETED",
       });
@@ -67,57 +65,63 @@ export function EarlyPayoffModal({
   return (
     <div
       data-testid="early-payoff-modal"
-      className="fixed inset-0 z-50 bg-black/50 flex items-end md:items-center justify-center p-0 md:p-4 backdrop-blur-xs select-none overflow-y-auto"
+      className="fixed inset-0 z-50 bg-black/50 flex items-end md:items-center justify-center p-0 md:p-4 backdrop-blur-xs select-none overflow-y-auto animate-in fade-in duration-150"
+      onClick={(e) => {
+        if (e.target === e.currentTarget && !submitting) onClose();
+      }}
     >
-      <div className="w-full md:max-w-md bg-[var(--surface)] border border-hairline rounded-t-xl md:rounded-lg shadow-xl p-5 pb-sheet-safe md:pb-5 space-y-4 modal-sheet-dialog overflow-y-auto">
-        <div className="flex items-center justify-between pb-2 border-b border-hairline">
-          <h2 className="text-sm font-semibold text-[var(--text)]">Early Payoff Confirmation</h2>
+      <div className="w-full md:max-w-md bg-[var(--surface)] border border-hairline rounded-t-3xl md:rounded-3xl shadow-2xl p-5 sm:p-6 pb-sheet-safe md:pb-6 space-y-5 modal-sheet-dialog overflow-y-auto">
+        <div className="flex items-center justify-between pb-3.5 border-b border-hairline">
+          <h2 className="text-base font-semibold text-[var(--text)]">Early Payoff Confirmation</h2>
           <button
             type="button"
             data-testid="early-payoff-cancel"
             onClick={onClose}
-            className="p-1 rounded text-[var(--text-muted)] hover:text-[var(--text)]"
+            className="w-9 h-9 rounded-xl flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--surface-hover)] transition-colors"
           >
-            <X size={16} />
+            <X size={18} />
           </button>
         </div>
 
-        <div className="space-y-3 text-xs">
-          <div className="flex items-start gap-2 p-3 rounded bg-amber-500/10 border border-amber-500/20 text-amber-700 dark:text-amber-400">
-            <AlertCircle size={16} className="shrink-0 mt-0.5" />
-            <div>
-              <p className="font-semibold">{plan.merchantName}</p>
-              <p className="text-[11px] opacity-90">
+        <div className="space-y-4 text-xs">
+          <div className="rounded-3xl bg-[var(--bg)] border border-hairline px-4 py-5 text-center space-y-1">
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+              Remaining Principal
+            </span>
+            <p
+              data-testid="early-payoff-amount"
+              className="text-2xl sm:text-3xl font-bold font-mono tabular-nums text-[var(--text)]"
+            >
+              {formatMoney(remainingPrincipalMinor)}
+            </p>
+          </div>
+
+          <div className="flex items-start gap-3 p-4 rounded-2xl bg-amber-500/10 border border-amber-500/25 text-amber-700 dark:text-amber-400">
+            <AlertCircle size={18} className="shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <p className="font-semibold text-sm">{plan.merchantName}</p>
+              <p className="text-xs leading-relaxed opacity-90">
                 Confirming early payoff will post the remaining principal onto your card balance as a single expense and complete this installment plan. Blocked principal will drop to 0.
               </p>
             </div>
           </div>
 
-          <div className="p-3 rounded border border-hairline bg-[var(--bg)] space-y-1.5">
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-[var(--text-muted)]">Remaining Principal:</span>
-              <span data-testid="early-payoff-amount" className="font-mono font-bold text-sm text-[var(--text)] tabular-nums">
-                {formatMoney(remainingPrincipalMinor)}
-              </span>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2 pt-2">
+          <div className="flex items-center gap-2.5 pt-2 border-t border-hairline">
+            <button
+              type="button"
+              onClick={onClose}
+              className="h-11 px-4 rounded-2xl border border-hairline text-xs font-semibold text-[var(--text)] hover:bg-[var(--surface-hover)] transition-colors"
+            >
+              Cancel
+            </button>
             <button
               type="button"
               data-testid="confirm-early-payoff-btn"
               disabled={submitting}
               onClick={handleConfirm}
-              className="flex-1 py-2.5 px-4 rounded bg-red-600 text-white font-semibold text-xs hover:bg-red-700 active:scale-98 transition-all disabled:opacity-50"
+              className="flex-1 h-11 px-4 rounded-2xl bg-red-600 text-white font-semibold text-xs hover:bg-red-700 active:scale-[0.99] transition-all disabled:opacity-50 shadow-sm"
             >
               {submitting ? "Processing..." : "Confirm Payoff"}
-            </button>
-            <button
-              type="button"
-              onClick={onClose}
-              className="py-2.5 px-4 rounded border border-hairline text-xs hover:bg-[var(--border)] transition-colors"
-            >
-              Cancel
             </button>
           </div>
         </div>

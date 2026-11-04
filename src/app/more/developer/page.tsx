@@ -3,8 +3,8 @@
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import {
-  ArrowLeft,
   Check,
+  ChevronRight,
   Copy,
   Key,
   Save,
@@ -12,6 +12,7 @@ import {
   Smartphone,
   Sparkles,
 } from "lucide-react";
+import { AppHeader } from "@/components/navigation/app-header";
 import { parseBankSmsTemplate } from "@/lib/sms/template-parser";
 import type { TemplateParseResult } from "@/lib/sms/types";
 import { ConfirmationModal } from "@/components/ui/confirmation-modal";
@@ -179,51 +180,41 @@ export default function DeveloperPage() {
   };
 
   return (
-    <main className="flex-1 max-w-4xl mx-auto w-full px-4 py-3 space-y-4">
-      {/* Header */}
-      <div className="flex items-center justify-between py-1">
-        <div className="flex items-center gap-2">
-          <Link
-            href="/more" transitionTypes={["nav-back"]}
-            className="p-1.5 rounded text-[var(--text-muted)] hover:text-[var(--text)] transition-colors"
-          >
-            <ArrowLeft size={16} />
-          </Link>
-          <div>
-            <h1 className="text-base font-semibold tracking-tight text-[var(--text)]">
-              Developer & API Integrations
-            </h1>
-            <p className="text-[11px] text-[var(--text-muted)]">
-              Manage webhook ingress keys, Google Gemini parsing and automated workflows
-            </p>
-          </div>
-        </div>
-      </div>
+    <main className="flex-1 max-w-4xl mx-auto w-full px-5 sm:px-7 pt-4 sm:pt-6 pb-8 space-y-6">
+      <AppHeader
+        title="Developer & API Keys"
+        subtitle="SMS Webhook Ingress & Gemini Parser"
+        backHref="/more"
+        backLabel="Back to More"
+      />
 
       {/* Webhook API Key Card */}
-      <div className="space-y-1">
-        <span className="text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wider px-1">
+      <section className="space-y-2.5">
+        <h2 className="text-2xs font-bold text-[var(--text-muted)] uppercase tracking-wider px-1">
           SMS Webhook Ingress
-        </span>
-        <div className="flat-card p-4 space-y-3">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="space-y-0.5">
-              <div className="flex items-center gap-2">
-                <Key size={15} className="text-[var(--accent)]" />
-                <span className="text-xs font-semibold text-[var(--text)]">Webhook API Key</span>
+        </h2>
+        <div className="rounded-3xl bg-[var(--surface)] border border-[var(--border)] p-5 sm:p-6 space-y-4 shadow-xs">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-start gap-3.5 min-w-0">
+              <div className="w-11 h-11 rounded-2xl bg-[var(--accent)]/12 border border-[var(--accent)]/25 flex items-center justify-center text-[var(--accent)] shrink-0">
+                <Key size={19} />
               </div>
-              <p className="text-[11px] text-[var(--text-muted)]">
-                Use this key in the <code>x-api-key</code> header to forward incoming SMS alerts to HardMoney.
-              </p>
+              <div className="space-y-1 min-w-0">
+                <span className="text-base font-bold text-[var(--text)] block">Webhook API Key</span>
+                <p className="text-xs text-[var(--text-muted)] leading-relaxed">
+                  Use this key in the <code className="font-mono text-[var(--text)]">x-api-key</code>{" "}
+                  header to forward incoming SMS alerts to HardMoney.
+                </p>
+              </div>
             </div>
 
-            <div>
+            <div className="shrink-0">
               {hasKey ? (
                 <button
                   type="button"
                   data-testid="regenerate-webhook-key-btn"
                   onClick={promptGenerateKey}
-                  className="px-3 py-1.5 rounded border border-hairline hover:bg-surface text-xs font-medium text-[var(--text)] transition-colors"
+                  className="h-11 px-4 rounded-2xl border border-[var(--border)] bg-[var(--bg)] hover:bg-[var(--surface-hover)] text-xs font-semibold text-[var(--text)] transition-colors cursor-pointer"
                 >
                   Regenerate Key
                 </button>
@@ -232,7 +223,7 @@ export default function DeveloperPage() {
                   type="button"
                   data-testid="generate-webhook-key-btn"
                   onClick={handleGenerateKey}
-                  className="px-3 py-1.5 rounded bg-[var(--accent)] text-white text-xs font-semibold hover:opacity-90 transition-all shadow-xs"
+                  className="h-11 px-5 rounded-2xl bg-[var(--accent)] text-white text-xs font-bold hover:opacity-95 transition-all shadow-xs cursor-pointer"
                 >
                   Generate Webhook Key
                 </button>
@@ -240,16 +231,15 @@ export default function DeveloperPage() {
             </div>
           </div>
 
-          {/* When newly generated, display full key once with copy button */}
           {justGeneratedKey && (
-            <div className="p-3 rounded bg-[var(--surface-hover)] border border-[var(--income)]/30 space-y-2">
-              <span className="text-[11px] font-semibold text-[var(--income)] block">
+            <div className="p-4 rounded-2xl bg-[var(--income)]/8 border border-[var(--income)]/30 space-y-2.5">
+              <span className="text-xs font-bold text-[var(--income)] block">
                 New Key Generated — Copy it now! It will not be shown again:
               </span>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2.5">
                 <code
                   data-testid="webhook-key-display"
-                  className="flex-1 p-2 rounded bg-[var(--bg)] border border-hairline font-mono text-xs text-[var(--text)] break-all select-all"
+                  className="flex-1 p-3 rounded-xl bg-[var(--bg)] border border-[var(--border)] font-mono text-xs text-[var(--text)] break-all select-all"
                 >
                   {justGeneratedKey}
                 </code>
@@ -257,51 +247,53 @@ export default function DeveloperPage() {
                   type="button"
                   data-testid="copy-webhook-key-btn"
                   onClick={handleCopyKey}
-                  className="flex items-center gap-1.5 px-3 py-2 rounded bg-[var(--accent)] text-white text-xs font-semibold hover:opacity-90 active:scale-95 transition-all flex-shrink-0"
+                  className="h-11 px-4 inline-flex items-center justify-center gap-2 rounded-2xl bg-[var(--accent)] text-white text-xs font-bold hover:opacity-95 active:scale-[0.98] transition-all shrink-0 cursor-pointer"
                 >
-                  {copied ? <Check size={14} /> : <Copy size={14} />}
+                  {copied ? <Check size={15} /> : <Copy size={15} />}
                   <span>{copied ? "Copied" : "Copy Key"}</span>
                 </button>
               </div>
             </div>
           )}
 
-          {/* When key exists and not newly generated in this view, display prefix */}
           {hasKey && !justGeneratedKey && (
-            <div className="flex items-center gap-2 p-2.5 rounded bg-[var(--surface-hover)]/40 border border-hairline">
-              <span className="text-[11px] text-[var(--text-muted)]">Active Key:</span>
+            <div className="flex items-center gap-2.5 p-3.5 rounded-2xl bg-[var(--bg)] border border-[var(--border)]">
+              <span className="text-xs text-[var(--text-muted)]">Active Key:</span>
               <code
                 data-testid="webhook-key-prefix"
-                className="font-mono text-xs font-semibold text-[var(--text)]"
+                className="font-mono text-xs font-bold text-[var(--text)]"
               >
                 {apiKeyPrefix}
               </code>
             </div>
           )}
         </div>
-      </div>
+      </section>
 
       {/* AI & Gemini Parser Settings Card */}
-      <div className="space-y-1">
-        <span className="text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wider px-1">
+      <section className="space-y-2.5">
+        <h2 className="text-2xs font-bold text-[var(--text-muted)] uppercase tracking-wider px-1">
           AI & Gemini Parsing
-        </span>
-        <form onSubmit={handleSaveGeminiSettings} className="flat-card p-4 space-y-4">
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
+        </h2>
+        <form
+          onSubmit={handleSaveGeminiSettings}
+          className="rounded-3xl bg-[var(--surface)] border border-[var(--border)] p-5 sm:p-6 space-y-5 shadow-xs"
+        >
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <label
                 htmlFor="gemini-key-input"
-                className="text-xs font-semibold text-[var(--text)] flex items-center gap-1.5"
+                className="text-sm font-bold text-[var(--text)] flex items-center gap-2"
               >
-                <Sparkles size={14} className="text-[var(--accent)]" />
+                <Sparkles size={16} className="text-[var(--accent)]" />
                 <span>Google Gemini API Key</span>
               </label>
               {hasGeminiKey && maskedGeminiKey && (
-                <div className="flex items-center gap-1.5">
-                  <span className="text-[11px] text-[var(--text-muted)]">Saved Key:</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-[var(--text-muted)]">Saved Key:</span>
                   <code
                     data-testid="gemini-masked-key"
-                    className="font-mono text-xs font-semibold text-[var(--income)] bg-[var(--surface-hover)] px-2 py-0.5 rounded border border-hairline"
+                    className="font-mono text-xs font-bold text-[var(--income)] bg-[var(--bg)] px-2.5 py-1 rounded-xl border border-[var(--border)]"
                   >
                     {maskedGeminiKey}
                   </code>
@@ -316,26 +308,28 @@ export default function DeveloperPage() {
               value={geminiApiKeyInput}
               onChange={(e) => setGeminiApiKeyInput(e.target.value)}
               placeholder={hasGeminiKey ? "Enter new key to replace existing..." : "AIzaSy..."}
-              className="w-full h-8 px-2.5 rounded bg-[var(--bg)] border border-hairline text-xs text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
+              className="w-full h-12 px-4 rounded-2xl bg-[var(--bg)] border border-[var(--border)] text-sm text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
             />
 
             {/* Privacy Disclosure */}
             <div
               data-testid="gemini-privacy-disclosure"
-              className="flex items-start gap-2 p-2.5 rounded bg-[var(--surface-hover)]/40 border border-hairline text-[11px] text-[var(--text-muted)] leading-relaxed"
+              className="flex items-start gap-2.5 p-3.5 rounded-2xl bg-[var(--bg)] border border-[var(--border)] text-xs text-[var(--text-muted)] leading-relaxed"
             >
-              <Shield size={14} className="text-[var(--accent)] flex-shrink-0 mt-0.5" />
+              <Shield size={16} className="text-[var(--accent)] shrink-0 mt-0.5" />
               <span>
-                SMS messages not matching standard templates are processed using Google Gemini. Account and card numbers longer than 4 digits are masked prior to submission for your privacy.
+                SMS messages not matching standard templates are processed using Google Gemini.
+                Account and card numbers longer than 4 digits are masked prior to submission for
+                your privacy.
               </span>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-            <div className="space-y-1">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-1.5">
               <label
                 htmlFor="gemini-model-select"
-                className="block text-xs font-medium text-[var(--text-muted)]"
+                className="block text-xs font-semibold text-[var(--text-muted)]"
               >
                 Gemini Model
               </label>
@@ -344,7 +338,7 @@ export default function DeveloperPage() {
                 data-testid="gemini-model-select"
                 value={geminiModel}
                 onChange={(e) => setGeminiModel(e.target.value)}
-                className="w-full h-8 px-2.5 rounded bg-[var(--bg)] border border-hairline text-xs text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
+                className="w-full h-12 px-4 rounded-2xl bg-[var(--bg)] border border-[var(--border)] text-sm text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
               >
                 <option value="gemini-2.5-flash">gemini-2.5-flash (Fast & Recommended)</option>
                 <option value="gemini-1.5-flash">gemini-1.5-flash</option>
@@ -352,10 +346,10 @@ export default function DeveloperPage() {
               </select>
             </div>
 
-            <div className="space-y-1">
+            <div className="space-y-1.5">
               <label
                 htmlFor="sms-auto-post-mode"
-                className="block text-xs font-medium text-[var(--text-muted)]"
+                className="block text-xs font-semibold text-[var(--text-muted)]"
               >
                 SMS Auto-Post Mode
               </label>
@@ -364,7 +358,7 @@ export default function DeveloperPage() {
                 data-testid="sms-auto-post-mode"
                 value={smsAutoPostMode}
                 onChange={(e) => setSmsAutoPostMode(e.target.value)}
-                className="w-full h-8 px-2.5 rounded bg-[var(--bg)] border border-hairline text-xs text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
+                className="w-full h-12 px-4 rounded-2xl bg-[var(--bg)] border border-[var(--border)] text-sm text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
               >
                 <option value="AUTO_VALIDATED">Auto-post High Confidence</option>
                 <option value="ALWAYS_REVIEW_GEMINI" data-testid="mode-always-review">
@@ -374,7 +368,7 @@ export default function DeveloperPage() {
             </div>
           </div>
 
-          <div className="flex items-center justify-between pt-1">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 border-t border-[var(--border)]">
             {geminiSavedNotice ? (
               <span
                 data-testid="gemini-settings-saved"
@@ -383,102 +377,108 @@ export default function DeveloperPage() {
                 Gemini settings saved successfully
               </span>
             ) : (
-              <span />
+              <span className="text-xs text-[var(--text-muted)]">
+                Keys are encrypted server-side before storage
+              </span>
             )}
 
             <button
               type="submit"
               data-testid="save-gemini-key-btn"
               disabled={geminiSaving}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-[var(--accent)] text-white text-xs font-semibold hover:opacity-90 active:scale-95 transition-all disabled:opacity-50"
+              className="h-11 px-5 inline-flex items-center justify-center gap-2 rounded-2xl bg-[var(--accent)] text-white text-xs font-bold hover:opacity-95 active:scale-[0.98] transition-all disabled:opacity-50 cursor-pointer shrink-0"
             >
-              <Save size={14} />
+              <Save size={15} />
               <span>{geminiSaving ? "Saving..." : "Save Gemini Settings"}</span>
             </button>
           </div>
         </form>
-      </div>
+      </section>
 
       {/* Integration Shortcuts Guide Card */}
-      <div className="flat-card p-4 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-[var(--surface-hover)] border border-hairline flex items-center justify-center text-[var(--accent)]">
-            <Smartphone size={16} />
+      <Link
+        href="/more/shortcuts"
+        transitionTypes={["nav-forward"]}
+        data-testid="shortcuts-guide-link"
+        className="rounded-3xl bg-[var(--surface)] border border-[var(--border)] p-5 flex items-center justify-between gap-4 hover:bg-[var(--surface-hover)] transition-colors group shadow-xs"
+      >
+        <div className="flex items-center gap-3.5 min-w-0">
+          <div className="w-11 h-11 rounded-2xl bg-[var(--accent)]/12 border border-[var(--accent)]/25 flex items-center justify-center text-[var(--accent)] shrink-0">
+            <Smartphone size={19} />
           </div>
-          <div>
-            <span className="text-xs font-semibold text-[var(--text)] block">
+          <div className="min-w-0">
+            <span className="text-sm font-bold text-[var(--text)] block">
               iOS Shortcuts & Automation
             </span>
-            <span className="text-[11px] text-[var(--text-muted)]">
+            <span className="text-xs text-[var(--text-muted)] block mt-0.5">
               Forward bank SMS automatically using Apple Shortcuts
             </span>
           </div>
         </div>
-        <Link
-          href="/more/shortcuts" transitionTypes={["nav-forward"]}
-          data-testid="shortcuts-guide-link"
-          className="px-3 py-1.5 text-xs font-medium rounded border border-hairline hover:bg-surface text-[var(--text)] transition-colors"
-        >
-          View Guide
-        </Link>
-      </div>
+        <span className="h-10 px-4 inline-flex items-center gap-1 text-xs font-semibold rounded-2xl border border-[var(--border)] bg-[var(--bg)] text-[var(--text)] shrink-0">
+          View Guide <ChevronRight size={15} />
+        </span>
+      </Link>
 
       {/* SMS Template Tester */}
-      <div className="space-y-1">
-        <span className="text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wider px-1">
+      <section className="space-y-2.5">
+        <h2 className="text-2xs font-bold text-[var(--text-muted)] uppercase tracking-wider px-1">
           SMS Template Tester
-        </span>
-        <form onSubmit={handleTestSms} className="flat-card p-4 space-y-3">
-          <p className="text-[11px] text-[var(--text-muted)]">
-            Test the standard bank SMS parser locally, or send the SMS through the real authenticated ingress endpoint.
+        </h2>
+        <form
+          onSubmit={handleTestSms}
+          className="rounded-3xl bg-[var(--surface)] border border-[var(--border)] p-5 sm:p-6 space-y-4 shadow-xs"
+        >
+          <p className="text-xs text-[var(--text-muted)] leading-relaxed">
+            Test the standard bank SMS parser locally, or send the SMS through the real
+            authenticated ingress endpoint.
           </p>
 
-          <div className="space-y-1">
-            <label
-              htmlFor="sms-test-api-key"
-              className="block text-xs font-medium text-[var(--text-muted)]"
-            >
-              Webhook API key
-            </label>
-            <input
-              id="sms-test-api-key"
-              data-testid="sms-test-api-key-input"
-              type="password"
-              value={smsTestApiKey}
-              onChange={(e) => setSmsTestApiKey(e.target.value)}
-              placeholder="hm_live_..."
-              autoComplete="off"
-              className="w-full h-8 px-2.5 rounded bg-[var(--bg)] border border-hairline text-xs text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
-            />
-            <p className="text-[10px] text-[var(--text-muted)]">
-              Used only for this request as the <code>x-api-key</code> header and never saved or decrypted.
-            </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <label
+                htmlFor="sms-test-api-key"
+                className="block text-xs font-semibold text-[var(--text-muted)]"
+              >
+                Webhook API Key (for live ingress test)
+              </label>
+              <input
+                id="sms-test-api-key"
+                data-testid="sms-test-api-key-input"
+                type="password"
+                value={smsTestApiKey}
+                onChange={(e) => setSmsTestApiKey(e.target.value)}
+                placeholder="hm_live_..."
+                autoComplete="off"
+                className="w-full h-12 px-4 rounded-2xl bg-[var(--bg)] border border-[var(--border)] text-sm text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label
+                htmlFor="sms-test-sender"
+                className="block text-xs font-semibold text-[var(--text-muted)]"
+              >
+                Sender
+              </label>
+              <input
+                id="sms-test-sender"
+                data-testid="sms-test-sender-input"
+                type="text"
+                value={smsTestSender}
+                onChange={(e) => setSmsTestSender(e.target.value)}
+                placeholder="e.g. COMBANK"
+                className="w-full h-12 px-4 rounded-2xl bg-[var(--bg)] border border-[var(--border)] text-sm text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
+              />
+            </div>
           </div>
 
-          <div className="space-y-1">
-            <label
-              htmlFor="sms-test-sender"
-              className="block text-xs font-medium text-[var(--text-muted)]"
-            >
-              Sender
-            </label>
-            <input
-              id="sms-test-sender"
-              data-testid="sms-test-sender-input"
-              type="text"
-              value={smsTestSender}
-              onChange={(e) => setSmsTestSender(e.target.value)}
-              placeholder="e.g. COMBANK"
-              className="w-full h-8 px-2.5 rounded bg-[var(--bg)] border border-hairline text-xs text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
-            />
-          </div>
-
-          <div className="space-y-1">
+          <div className="space-y-1.5">
             <label
               htmlFor="sms-test-message"
-              className="block text-xs font-medium text-[var(--text-muted)]"
+              className="block text-xs font-semibold text-[var(--text-muted)]"
             >
-              Message content
+              Message Content
             </label>
             <textarea
               id="sms-test-message"
@@ -486,19 +486,19 @@ export default function DeveloperPage() {
               value={smsTestMessage}
               onChange={(e) => setSmsTestMessage(e.target.value)}
               placeholder="Paste the bank SMS message here..."
-              rows={5}
-              className="w-full px-2.5 py-2 rounded bg-[var(--bg)] border border-hairline text-xs text-[var(--text)] resize-y focus:outline-none focus:border-[var(--accent)]"
+              rows={4}
+              className="w-full p-4 rounded-2xl bg-[var(--bg)] border border-[var(--border)] text-sm font-mono text-[var(--text)] resize-y focus:outline-none focus:border-[var(--accent)]"
             />
           </div>
 
-          <div className="flex flex-wrap justify-end gap-2">
+          <div className="flex flex-wrap justify-end gap-2.5 pt-2 border-t border-[var(--border)]">
             <button
               type="submit"
               data-testid="sms-test-submit"
               disabled={!smsTestSender.trim() || !smsTestMessage.trim()}
-              className="px-3 py-1.5 rounded bg-[var(--accent)] text-white text-xs font-semibold hover:opacity-90 active:scale-95 transition-all disabled:opacity-50"
+              className="h-11 px-5 rounded-2xl bg-[var(--accent)] text-white text-xs font-bold hover:opacity-95 active:scale-[0.98] transition-all disabled:opacity-50 cursor-pointer"
             >
-              Test SMS
+              Test SMS Locally
             </button>
             <button
               type="button"
@@ -510,7 +510,7 @@ export default function DeveloperPage() {
                 !smsTestSender.trim() ||
                 !smsTestMessage.trim()
               }
-              className="px-3 py-1.5 rounded bg-[var(--income)] text-white text-xs font-semibold hover:opacity-90 active:scale-95 transition-all disabled:opacity-50"
+              className="h-11 px-5 rounded-2xl bg-[var(--income)] text-white text-xs font-bold hover:opacity-95 active:scale-[0.98] transition-all disabled:opacity-50 cursor-pointer"
             >
               {smsIngressSending ? "Sending..." : "Send to Ingress"}
             </button>
@@ -519,7 +519,7 @@ export default function DeveloperPage() {
           {smsIngressResult && (
             <div
               data-testid="sms-ingress-result"
-              className={`p-3 rounded border text-[11px] ${
+              className={`p-3.5 rounded-2xl border text-xs font-medium ${
                 smsIngressResult.status >= 200 && smsIngressResult.status < 300
                   ? "bg-[var(--income)]/10 border-[var(--income)]/30 text-[var(--income)]"
                   : "bg-[var(--expense)]/10 border-[var(--expense)]/30 text-[var(--expense)]"
@@ -533,15 +533,15 @@ export default function DeveloperPage() {
           {smsTestResult && (
             <div
               data-testid="sms-test-result"
-              className="p-3 rounded bg-[var(--surface-hover)]/40 border border-hairline space-y-2"
+              className="p-4 rounded-2xl bg-[var(--bg)] border border-[var(--border)] space-y-2.5"
             >
               <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-[var(--text)]">Parser result</span>
+                <span className="text-xs font-bold text-[var(--text)]">Parser Result</span>
                 <span
-                  className={`text-[10px] font-semibold ${
+                  className={`px-2.5 py-0.5 rounded-full text-2xs font-bold ${
                     smsTestResult.matched
-                      ? "text-[var(--income)]"
-                      : "text-[var(--text-muted)]"
+                      ? "bg-[var(--income)]/12 text-[var(--income)]"
+                      : "bg-[var(--surface)] text-[var(--text-muted)]"
                   }`}
                 >
                   {smsTestResult.matched ? "MATCHED" : "NO MATCH"}
@@ -549,7 +549,7 @@ export default function DeveloperPage() {
               </div>
 
               {smsTestResult.payload ? (
-                <pre className="overflow-x-auto rounded bg-[var(--bg)] border border-hairline p-2 text-[11px] leading-relaxed text-[var(--text)]">
+                <pre className="overflow-x-auto rounded-xl bg-[var(--surface)] border border-[var(--border)] p-3 text-xs font-mono leading-relaxed text-[var(--text)]">
                   {JSON.stringify(
                     { bank: smsTestResult.bank, ...smsTestResult.payload },
                     null,
@@ -557,14 +557,14 @@ export default function DeveloperPage() {
                   )}
                 </pre>
               ) : (
-                <p className="text-[11px] text-[var(--text-muted)]">
+                <p className="text-xs text-[var(--text-muted)]">
                   No known bank template matched this sender and message.
                 </p>
               )}
             </div>
           )}
         </form>
-      </div>
+      </section>
 
       <ConfirmationModal
         isOpen={showRegenerateConfirm}

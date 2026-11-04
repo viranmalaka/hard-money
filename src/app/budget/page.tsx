@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useState, useMemo, useCallback } from "react";
-import { Plus, Trash2, PieChart, AlertTriangle, ArrowUpRight, ArrowDownRight } from "lucide-react";
+import { Plus, Trash2, PieChart, X } from "lucide-react";
+import { AppHeader } from "@/components/navigation/app-header";
 import { MonthSwitcher } from "@/components/ui/month-switcher";
 import { EmptyState } from "@/components/ui/empty-state";
 import { useModalHistory } from "@/hooks/use-modal-history";
@@ -17,7 +18,7 @@ import {
   localUpdateBudget,
   localDeleteBudget,
 } from "@/lib/sync/client";
-import { formatMoney, parseMoneyToMinor } from "@/lib/finance-core/money";
+import { parseMoneyToMinor } from "@/lib/finance-core/money";
 import { getRemainingDaysInMonth } from "@/lib/finance-core/budget";
 import { LocalBudget } from "@/lib/db";
 import { BudgetCard, BudgetViewModel } from "@/components/budget/budget-card";
@@ -43,7 +44,6 @@ export default function BudgetPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingBudget, setEditingBudget] = useState<LocalBudget | null>(null);
 
-  // Form states
   const [formCategoryId, setFormCategoryId] = useState("");
   const [formLimitInput, setFormLimitInput] = useState("");
   const [formEnableRollover, setFormEnableRollover] = useState(false);
@@ -51,7 +51,6 @@ export default function BudgetPage() {
 
   const monthStr = useMemo(() => getMonthString(currentDate), [currentDate]);
 
-  // Map category by ID
   const categoryMap = useMemo(() => {
     const map = new Map<string, (typeof categories)[0]>();
     for (const c of categories) {
@@ -60,27 +59,32 @@ export default function BudgetPage() {
     return map;
   }, [categories]);
 
-  // Expense categories available for budget (exclude already budgeted if not editing)
   const availableCategories = useMemo(() => {
     const budgetedCatIds = new Set(
-      budgets.filter((b) => !editingBudget || b.id !== editingBudget.id).map((b) => b.categoryId)
+      budgets
+        .filter((b) => !editingBudget || b.id !== editingBudget.id)
+        .map((b) => b.categoryId)
     );
     return categories.filter(
       (c) =>
         c.type !== "INCOME" &&
-        (!budgetedCatIds.has(c.id) || (editingBudget && editingBudget.categoryId === c.id))
+        (!budgetedCatIds.has(c.id) ||
+          (editingBudget && editingBudget.categoryId === c.id))
     );
   }, [categories, budgets, editingBudget]);
 
-  // Calculate spent per category in the current month
-  // Spent = non-excluded expenses (split-aware) - refunds in month.
-  // Excluded-from-budget and calibration rows do not count.
   const categorySpentMap = useMemo(() => {
     const rawMap = new Map<string, number>();
 
     for (const t of transactions) {
       if (t.deletedAt || t.excludeFromBudget) continue;
-      if (t.type === "TRANSFER" || t.type === "ADJUSTMENT" || t.source === "CALIBRATION") continue;
+      if (
+        t.type === "TRANSFER" ||
+        t.type === "ADJUSTMENT" ||
+        t.source === "CALIBRATION"
+      ) {
+        continue;
+      }
       if (!t.transactionDate.startsWith(monthStr)) continue;
 
       if (t.isSplit && t.splitItems && t.splitItems.length > 0) {
@@ -110,29 +114,33 @@ export default function BudgetPage() {
     return spentMap;
   }, [transactions, monthStr]);
 
-  // Calculate remaining days for safe-to-spend
   const now = new Date();
   const remainingDays =
-    now.getFullYear() === currentDate.getFullYear() && now.getMonth() === currentDate.getMonth()
+    now.getFullYear() === currentDate.getFullYear() &&
+    now.getMonth() === currentDate.getMonth()
       ? getRemainingDaysInMonth(now)
       : getRemainingDaysInMonth(currentDate);
 
-  // Build budget view models with rollover snapshots
   const budgetViewModels = useMemo<BudgetViewModel[]>(() => {
     return budgets.map((b) => {
       const category = categoryMap.get(b.categoryId);
       const categoryName = category?.name || "Uncategorized";
 
-      // Snapshot for this budget in this month
-      const snap = snapshots.find((s) => s.budgetId === b.id && s.month === monthStr);
-      const carriedInMinor = b.enableRollover && snap ? snap.carriedInMinor : 0;
+      const snap = snapshots.find(
+        (s) => s.budgetId === b.id && s.month === monthStr
+      );
+      const carriedInMinor =
+        b.enableRollover && snap ? snap.carriedInMinor : 0;
       const availableMinor = b.monthlyLimitMinor + carriedInMinor;
 
       const spentMinor = categorySpentMap.get(b.categoryId) || 0;
       const remainingMinor = availableMinor - spentMinor;
       const isOverBudget = remainingMinor < 0;
 
-      const percent = availableMinor > 0 ? Math.round((spentMinor / availableMinor) * 100) : 0;
+      const percent =
+        availableMinor > 0
+          ? Math.round((spentMinor / availableMinor) * 100)
+          : 0;
       const barPercent = Math.min(100, Math.max(0, percent));
 
       let status: "ok" | "warning" | "over" = "ok";
@@ -149,7 +157,7 @@ export default function BudgetPage() {
       return {
         budget: b,
         categoryName,
-        categoryIcon: category?.icon || "📁",
+        categoryIcon: category?.icon || "Tag",
         categoryColor: category?.color || "#6b7280",
         monthlyLimitMinor: b.monthlyLimitMinor,
         carriedInMinor,
@@ -165,7 +173,6 @@ export default function BudgetPage() {
     });
   }, [budgets, snapshots, monthStr, categoryMap, categorySpentMap, remainingDays]);
 
-  // Overall totals
   const overall = useMemo(() => {
     let totalAvailable = 0;
     let totalSpent = 0;
@@ -177,7 +184,9 @@ export default function BudgetPage() {
 
     const totalRemaining = totalAvailable - totalSpent;
     const isOverallOver = totalRemaining < 0;
-    const overallDailySafe = isOverallOver ? 0 : Math.floor(totalRemaining / remainingDays);
+    const overallDailySafe = isOverallOver
+      ? 0
+      : Math.floor(totalRemaining / remainingDays);
 
     return {
       totalAvailable,
@@ -247,7 +256,9 @@ export default function BudgetPage() {
       }
       closeModal();
     } catch (err: unknown) {
-      setFormError(err instanceof Error ? err.message : "Failed to save budget");
+      setFormError(
+        err instanceof Error ? err.message : "Failed to save budget"
+      );
     }
   };
 
@@ -257,33 +268,34 @@ export default function BudgetPage() {
       await localDeleteBudget(db, editingBudget.id);
       closeModal();
     } catch (err: unknown) {
-      setFormError(err instanceof Error ? err.message : "Failed to delete budget");
+      setFormError(
+        err instanceof Error ? err.message : "Failed to delete budget"
+      );
     }
   };
 
   return (
-    <main className="flex-1 max-w-4xl mx-auto w-full px-4 py-3 space-y-4">
-      {/* Header */}
-      <div className="flex items-center justify-between py-1">
-        <div>
-          <h1 className="text-xl font-bold tracking-tight text-[var(--text)]">Budgets</h1>
-          <p className="text-xs text-[var(--text-muted)]">Monthly limits, safe-to-spend burn rate & rollover</p>
-        </div>
-        <button
-          type="button"
-          data-testid="add-budget-btn"
-          onClick={openCreateModal}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-[var(--primary)] text-white hover:opacity-90 transition-opacity cursor-pointer shadow-sm"
-        >
-          <Plus size={14} />
-          <span>Add Budget</span>
-        </button>
-      </div>
+    <main className="flex-1 max-w-4xl mx-auto w-full px-5 sm:px-7 pt-4 sm:pt-6 pb-8 space-y-6">
+      <AppHeader
+        title="Monthly Budgets"
+        subtitle="Spending Envelopes & Safe Burn Rate"
+        backHref="/more"
+        backLabel="Back to More"
+        rightSlot={
+          <button
+            type="button"
+            data-testid="add-budget-btn"
+            onClick={openCreateModal}
+            className="inline-flex items-center gap-1.5 h-10 px-4 text-xs font-bold rounded-2xl bg-[var(--accent)] text-[var(--accent-fg)] hover:opacity-95 transition-opacity cursor-pointer shadow-xs"
+          >
+            <Plus size={16} strokeWidth={2.5} />
+            <span>Add Budget</span>
+          </button>
+        }
+      />
 
       {/* Month Switcher */}
-      <div className="flat-panel">
-        <MonthSwitcher currentDate={currentDate} onChange={setCurrentDate} />
-      </div>
+      <MonthSwitcher currentDate={currentDate} onChange={setCurrentDate} />
 
       {/* Overview Card */}
       {budgetViewModels.length > 0 && (
@@ -302,136 +314,19 @@ export default function BudgetPage() {
           <EmptyState
             title="No budgets set for this month"
             description="Create monthly category budgets to keep your expenses under control and track daily safe-to-spend."
-            icon={<PieChart size={32} />}
+            icon={<PieChart size={28} />}
             actionLabel="Add Budget"
             onAction={openCreateModal}
           />
         </div>
       ) : (
-        <div className="space-y-3" data-testid="budget-list">
+        <div className="space-y-3.5" data-testid="budget-list">
           {budgetViewModels.map((item) => (
             <BudgetCard
               key={item.budget.id}
               item={item}
               onEdit={handleEditBudget}
-            >
-              {/* Row Header */}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="text-base">{item.categoryIcon}</span>
-                  <div>
-                    <span
-                      data-testid="budget-category-name"
-                      className="text-sm font-semibold text-[var(--text)]"
-                    >
-                      {item.categoryName}
-                    </span>
-                    {item.budget.enableRollover && item.carriedInMinor !== 0 && (
-                      <span
-                        data-testid="budget-carried-chip"
-                        className={`ml-2 inline-flex items-center gap-0.5 text-[10px] font-semibold px-1.5 py-0.5 rounded ${
-                          item.carriedInMinor > 0
-                            ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
-                            : "bg-red-500/15 text-red-600 dark:text-red-400"
-                        }`}
-                      >
-                        {item.carriedInMinor > 0 ? (
-                          <ArrowUpRight size={10} />
-                        ) : (
-                          <ArrowDownRight size={10} />
-                        )}
-                        <span>
-                          Carried: {item.carriedInMinor > 0 ? "+" : ""}
-                          {formatMoney(item.carriedInMinor)}
-                        </span>
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                <div className="text-right">
-                  <span
-                    data-testid="budget-daily-safe-to-spend"
-                    className="text-xs font-medium text-[var(--text-muted)]"
-                  >
-                    {item.isOverBudget
-                      ? "Rs. 0.00 / day"
-                      : `${formatMoney(item.dailySafeToSpendMinor)} / day`}
-                  </span>
-                </div>
-              </div>
-
-              {/* Progress Bar */}
-              <div
-                data-testid="budget-progress-bar"
-                data-status={item.status}
-                className="w-full h-2 rounded-full bg-surface overflow-hidden"
-              >
-                <div
-                  data-testid="budget-progress-fill"
-                  data-percentage={item.percent}
-                  style={{ width: `${item.barPercent}%` }}
-                  className={`h-full transition-all duration-300 rounded-full ${
-                    item.status === "over"
-                      ? "bg-[var(--expense)]"
-                      : item.status === "warning"
-                      ? "bg-[var(--warning)]"
-                      : "bg-blue-500"
-                  }`}
-                />
-              </div>
-
-              {/* Details footer */}
-              <div className="flex items-center justify-between text-xs tabular-nums">
-                <div>
-                  <span className="text-[var(--text-muted)]">Spent </span>
-                  <span
-                    data-testid="budget-spent-amount"
-                    className="font-medium text-[var(--text)]"
-                  >
-                    {formatMoney(item.spentMinor)}
-                  </span>
-                  <span className="text-[var(--text-muted)]"> of </span>
-                  <span
-                    data-testid="budget-limit-amount"
-                    className="font-medium text-[var(--text)]"
-                  >
-                    {formatMoney(item.monthlyLimitMinor)}
-                  </span>
-                  {item.carriedInMinor !== 0 && (
-                    <span
-                      data-testid="budget-available-amount"
-                      className="text-[var(--text-muted)] ml-1"
-                    >
-                      (Avail: {formatMoney(item.availableMinor)})
-                    </span>
-                  )}
-                </div>
-
-                <div className="text-right">
-                  {item.isOverBudget ? (
-                    <span
-                      data-testid="budget-remaining-amount"
-                      className="font-semibold text-[var(--expense)] inline-flex items-center gap-1"
-                    >
-                      <AlertTriangle size={12} />
-                      Over budget by {formatMoney(Math.abs(item.remainingMinor))}
-                    </span>
-                  ) : (
-                    <span
-                      data-testid="budget-remaining-amount"
-                      className={`font-medium ${
-                        item.status === "warning"
-                          ? "text-[var(--warning)]"
-                          : "text-[var(--text-muted)]"
-                      }`}
-                    >
-                      Remaining: {formatMoney(item.remainingMinor)} ({100 - item.percent}%)
-                    </span>
-                  )}
-                </div>
-              </div>
-            </BudgetCard>
+            />
           ))}
         </div>
       )}
@@ -440,57 +335,64 @@ export default function BudgetPage() {
       {modalOpen && (
         <div
           data-testid="budget-modal"
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs overflow-y-auto"
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-xs overflow-y-auto"
+          onClick={closeModal}
         >
-          <div className="flat-panel w-full max-w-md p-5 space-y-4 bg-app border border-hairline shadow-lg modal-sheet-dialog overflow-y-auto">
-            <div className="flex items-center justify-between border-b border-hairline pb-2">
-              <h2 className="text-base font-semibold text-[var(--text)]">
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-md p-6 space-y-5 bg-[var(--surface)] border-t sm:border border-[var(--border)] rounded-t-3xl sm:rounded-3xl shadow-2xl modal-sheet-dialog overflow-y-auto pb-sheet-safe"
+          >
+            <div className="flex items-center justify-between border-b border-[var(--border)] pb-3.5">
+              <h2 className="text-base sm:text-lg font-bold text-[var(--text)]">
                 {editingBudget ? "Edit Category Budget" : "Set Category Budget"}
               </h2>
               <button
                 type="button"
                 data-testid="budget-cancel-btn"
                 onClick={closeModal}
-                className="text-xs text-[var(--text-muted)] hover:text-[var(--text)] cursor-pointer"
+                aria-label="Close"
+                className="w-9 h-9 rounded-full bg-[var(--bg)] border border-[var(--border)] flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text)] cursor-pointer"
               >
-                Close
+                <X size={17} />
               </button>
             </div>
 
             {formError && (
               <div
                 data-testid="budget-form-error"
-                className="p-2 text-xs rounded bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20"
+                className="p-3.5 text-xs font-medium rounded-2xl bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/25"
               >
                 {formError}
               </div>
             )}
 
-            <form onSubmit={handleSaveBudget} className="space-y-4">
+            <form onSubmit={handleSaveBudget} className="space-y-5">
               {/* Category Select */}
-              <div className="space-y-1">
-                <label className="text-xs font-medium text-[var(--text-muted)]">Category</label>
+              <div className="space-y-2">
+                <label className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+                  Category
+                </label>
                 <select
                   data-testid="budget-category-select"
                   value={formCategoryId}
                   onChange={(e) => setFormCategoryId(e.target.value)}
                   disabled={Boolean(editingBudget)}
-                  className="w-full px-3 py-2 text-sm rounded border border-hairline bg-surface text-[var(--text)] focus:outline-none focus:ring-1 focus:ring-primary"
+                  className="w-full h-12 px-4 text-sm rounded-2xl border border-[var(--border)] bg-[var(--bg)] text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
                 >
                   <option value="" disabled>
                     Select Expense Category
                   </option>
                   {availableCategories.map((c) => (
                     <option key={c.id} value={c.id}>
-                      {c.icon} {c.name}
+                      {c.name}
                     </option>
                   ))}
                 </select>
               </div>
 
               {/* Monthly Limit */}
-              <div className="space-y-1">
-                <label className="text-xs font-medium text-[var(--text-muted)]">
+              <div className="space-y-2">
+                <label className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
                   Monthly Limit (LKR)
                 </label>
                 <input
@@ -501,19 +403,19 @@ export default function BudgetPage() {
                   placeholder="e.g. 30000"
                   value={formLimitInput}
                   onChange={(e) => setFormLimitInput(e.target.value)}
-                  className="w-full px-3 py-2 text-sm rounded border border-hairline bg-surface text-[var(--text)] focus:outline-none focus:ring-1 focus:ring-primary tabular-nums"
+                  className="w-full h-12 px-4 text-sm font-mono font-bold rounded-2xl border border-[var(--border)] bg-[var(--bg)] text-[var(--text)] focus:outline-none focus:border-[var(--accent)] tabular-nums"
                   required
                 />
               </div>
 
               {/* Rollover Toggle */}
-              <div className="flex items-center justify-between py-2 border-t border-hairline">
+              <label className="flex items-center justify-between gap-3 p-4 rounded-2xl bg-[var(--bg)] border border-[var(--border)] cursor-pointer">
                 <div>
-                  <span className="text-xs font-medium text-[var(--text)] block">
-                    Enable Symmetric Rollover
+                  <span className="text-sm font-semibold text-[var(--text)] block">
+                    Symmetric Rollover
                   </span>
-                  <span className="text-[11px] text-[var(--text-muted)] block">
-                    Carries over surpluses or deficits into the next month
+                  <span className="text-xs text-[var(--text-muted)] block mt-0.5">
+                    Carries surpluses or deficits into next month
                   </span>
                 </div>
                 <input
@@ -521,38 +423,38 @@ export default function BudgetPage() {
                   data-testid="budget-rollover-toggle"
                   checked={formEnableRollover}
                   onChange={(e) => setFormEnableRollover(e.target.checked)}
-                  className="w-4 h-4 rounded border-hairline text-primary focus:ring-primary cursor-pointer"
+                  className="w-5 h-5 rounded accent-[var(--accent)] cursor-pointer shrink-0"
                 />
-              </div>
+              </label>
 
               {/* Actions */}
-              <div className="flex items-center justify-between pt-2">
+              <div className="flex items-center justify-between gap-3 pt-2">
                 {editingBudget ? (
                   <button
                     type="button"
                     data-testid="budget-delete-btn"
                     onClick={handleDeleteBudget}
-                    className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded text-red-600 hover:bg-red-500/10 transition-colors cursor-pointer"
+                    className="inline-flex items-center gap-1.5 h-11 px-4 text-xs font-bold rounded-2xl text-rose-600 dark:text-rose-400 bg-rose-500/10 hover:bg-rose-500/15 transition-colors cursor-pointer"
                   >
-                    <Trash2 size={13} />
+                    <Trash2 size={15} />
                     <span>Delete</span>
                   </button>
                 ) : (
                   <div />
                 )}
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2.5">
                   <button
                     type="button"
                     onClick={closeModal}
-                    className="px-3 py-1.5 text-xs font-medium rounded border border-hairline text-[var(--text-muted)] hover:bg-surface transition-colors cursor-pointer"
+                    className="h-11 px-4 text-xs font-semibold rounded-2xl border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--bg)] transition-colors cursor-pointer"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
                     data-testid="budget-save-btn"
-                    className="px-4 py-1.5 text-xs font-semibold rounded bg-[var(--primary)] text-white hover:opacity-90 transition-opacity cursor-pointer shadow-sm"
+                    className="h-11 px-5 text-xs font-bold rounded-2xl bg-[var(--accent)] text-[var(--accent-fg)] hover:opacity-95 transition-opacity cursor-pointer shadow-xs"
                   >
                     Save Budget
                   </button>

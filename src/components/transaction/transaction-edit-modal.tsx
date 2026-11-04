@@ -4,7 +4,11 @@ import { groupCategoriesByType } from "@/lib/categories-data";
 import React, { useState, useMemo } from "react";
 import { X, Trash2, Split, Plus, AlertCircle, Ban } from "lucide-react";
 import { useAccounts, useCategories, useTransactions, useSync } from "@/components/sync-provider";
-import { localUpdateTransaction, localDeleteTransaction, localCreateInstallmentPlan } from "@/lib/sync/client";
+import {
+  localUpdateTransaction,
+  localDeleteTransaction,
+  localCreateInstallmentPlan,
+} from "@/lib/sync/client";
 import { LocalTransaction, LocalSplitItem } from "@/lib/db";
 import { formatMoney, parseMoneyToMinor } from "@/lib/finance-core/money";
 import { useModalHistory } from "@/hooks/use-modal-history";
@@ -55,25 +59,24 @@ function TransactionEditContent({
   const categoryGroups = useMemo(() => groupCategoriesByType(categories), [categories]);
   const transactions = useTransactions();
 
-  const [amountStr, setAmountStr] = useState(
-    (transaction.amountMinor / 100).toFixed(2)
-  );
+  const [amountStr, setAmountStr] = useState((transaction.amountMinor / 100).toFixed(2));
   const [accountId, setAccountId] = useState(transaction.accountId);
   const [toAccountId, setToAccountId] = useState(transaction.toAccountId || "");
   const [destinationAmountStr, setDestinationAmountStr] = useState(
-    transaction.destinationAmountMinor ? (transaction.destinationAmountMinor / 100).toFixed(2) : "",
+    transaction.destinationAmountMinor
+      ? (transaction.destinationAmountMinor / 100).toFixed(2)
+      : ""
   );
   const [exchangeRateStr, setExchangeRateStr] = useState(
-    transaction.exchangeRateMicros ? rateMicrosToNumber(transaction.exchangeRateMicros).toFixed(6) : "",
+    transaction.exchangeRateMicros
+      ? rateMicrosToNumber(transaction.exchangeRateMicros).toFixed(6)
+      : ""
   );
   const [categoryId, setCategoryId] = useState(transaction.categoryId || "");
   const [date, setDate] = useState(transaction.transactionDate.slice(0, 10));
   const [note, setNote] = useState(transaction.note || "");
-  const [excludeFromBudget, setExcludeFromBudget] = useState(
-    transaction.excludeFromBudget
-  );
+  const [excludeFromBudget, setExcludeFromBudget] = useState(transaction.excludeFromBudget);
 
-  // Split state
   const [isSplit, setIsSplit] = useState(transaction.isSplit || false);
   const [splitItems, setSplitItems] = useState<LocalSplitItem[]>(() => {
     if (transaction.splitItems && transaction.splitItems.length > 0) {
@@ -95,14 +98,27 @@ function TransactionEditContent({
   const [convertTenure, setConvertTenure] = useState(12);
 
   const activeAccounts = useMemo(() => accounts.filter((a) => !a.isArchived), [accounts]);
-  const targetAccount = useMemo(() => accounts.find((a) => a.id === transaction.accountId), [accounts, transaction.accountId]);
-  const selectedSourceAccount = useMemo(() => accounts.find((a) => a.id === accountId), [accounts, accountId]);
-  const selectedDestinationAccount = useMemo(() => accounts.find((a) => a.id === toAccountId), [accounts, toAccountId]);
+  const targetAccount = useMemo(
+    () => accounts.find((a) => a.id === transaction.accountId),
+    [accounts, transaction.accountId]
+  );
+  const selectedSourceAccount = useMemo(
+    () => accounts.find((a) => a.id === accountId),
+    [accounts, accountId]
+  );
+  const selectedDestinationAccount = useMemo(
+    () => accounts.find((a) => a.id === toAccountId),
+    [accounts, toAccountId]
+  );
   const isUsdToLkrTransfer =
     transaction.type === "TRANSFER" &&
     selectedSourceAccount?.currency === "USD" &&
     selectedDestinationAccount?.currency === "LKR";
-  const isCardExpense = targetAccount?.type === "CREDIT_CARD" && transaction.type === "EXPENSE" && transaction.subType !== "CC_INSTALLMENT" && !transaction.excludeFromBalance;
+  const isCardExpense =
+    targetAccount?.type === "CREDIT_CARD" &&
+    transaction.type === "EXPENSE" &&
+    transaction.subType !== "CC_INSTALLMENT" &&
+    !transaction.excludeFromBalance;
   const isSystemInstallment = transaction.subType === "CC_INSTALLMENT";
 
   const handleConvertConfirm = async () => {
@@ -152,7 +168,6 @@ function TransactionEditContent({
     onClose();
   };
 
-  // Check if active reversal exists
   const hasActiveReversal = useMemo(() => {
     return transactions.some(
       (t) => !t.deletedAt && t.reversalOfTransactionId === transaction.id
@@ -163,7 +178,6 @@ function TransactionEditContent({
     return parseMoneyToMinor(amountStr);
   }, [amountStr]);
 
-  // Split calculation
   const splitSumMinor = useMemo(() => {
     return splitItems.reduce((sum, item) => sum + (item.amountMinor || 0), 0);
   }, [splitItems]);
@@ -239,7 +253,10 @@ function TransactionEditContent({
           destinationAmountMinor = calculateConvertedMinor(targetAmountMinor, exchangeRateMicros);
         } else {
           destinationAmountMinor = enteredDestinationMinor;
-          exchangeRateMicros = calculateExchangeRateMicros(targetAmountMinor, destinationAmountMinor);
+          exchangeRateMicros = calculateExchangeRateMicros(
+            targetAmountMinor,
+            destinationAmountMinor
+          );
         }
       }
       await localUpdateTransaction(db, transaction.id, {
@@ -248,10 +265,10 @@ function TransactionEditContent({
         toAccountId: transaction.type === "TRANSFER" ? toAccountId : null,
         destinationAmountMinor: isUsdToLkrTransfer
           ? destinationAmountMinor
-          : transaction.destinationAmountMinor ?? null,
+          : (transaction.destinationAmountMinor ?? null),
         exchangeRateMicros: isUsdToLkrTransfer
           ? exchangeRateMicros
-          : transaction.exchangeRateMicros ?? null,
+          : (transaction.exchangeRateMicros ?? null),
         categoryId: isSplit ? null : categoryId,
         transactionDate: date,
         note: note.trim() || null,
@@ -284,20 +301,20 @@ function TransactionEditContent({
   return (
     <div
       data-testid="transaction-edit-sheet"
-      className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-end md:items-center justify-center p-0 md:p-4 select-none overflow-y-auto"
+      className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-end md:items-center justify-center p-0 md:p-4 select-none overflow-y-auto animate-in fade-in duration-150"
     >
       <div
         role="dialog"
         aria-modal="true"
         aria-label="Edit Transaction"
         data-testid="transaction-edit-modal"
-        className="w-full md:max-w-md bg-[var(--surface)] border border-hairline rounded-t-2xl md:rounded-xl shadow-2xl flex flex-col modal-sheet-dialog overflow-hidden"
+        className="w-full md:max-w-lg bg-[var(--surface)] border border-[var(--border)] rounded-t-3xl md:rounded-3xl shadow-2xl flex flex-col modal-sheet-dialog overflow-hidden"
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-hairline bg-[var(--surface)] shrink-0">
-          <div className="flex items-center gap-2">
-            <span className="font-semibold text-sm text-[var(--text)]">Edit Transaction</span>
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--border)] text-[var(--text-muted)] font-mono uppercase">
+        <div className="flex items-center justify-between px-5 sm:px-6 py-4 border-b border-[var(--border)] bg-[var(--surface)] shrink-0">
+          <div className="flex items-center gap-2.5">
+            <span className="font-bold text-base text-[var(--text)]">Edit Transaction</span>
+            <span className="text-2xs px-2.5 py-0.5 rounded-full bg-[var(--bg)] border border-[var(--border)] text-[var(--text-muted)] font-mono font-bold uppercase">
               {transaction.type}
             </span>
           </div>
@@ -305,17 +322,17 @@ function TransactionEditContent({
             type="button"
             data-testid="transaction-edit-close"
             onClick={onClose}
-            className="p-1 rounded text-[var(--text-muted)] hover:text-[var(--text)]"
+            className="w-9 h-9 rounded-xl flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--bg)] transition-colors cursor-pointer"
           >
             <X size={18} />
           </button>
         </div>
 
         {/* Form Body */}
-        <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-3.5 text-xs">
-          {/* Amount input */}
-          <div className="space-y-1">
-            <label className="text-[11px] font-medium text-[var(--text-muted)]">
+        <div className="flex-1 min-h-0 overflow-y-auto p-5 sm:p-6 space-y-4 text-xs">
+          {/* Hero Amount input */}
+          <div className="p-4 rounded-3xl bg-[var(--bg)] border border-[var(--border)] space-y-1.5">
+            <label className="text-2xs font-bold uppercase tracking-wider text-[var(--text-muted)] block text-center">
               Amount ({selectedSourceAccount?.currency || "LKR"})
             </label>
             <input
@@ -323,36 +340,54 @@ function TransactionEditContent({
               data-testid="transaction-edit-amount"
               value={amountStr}
               onChange={(e) => setAmountStr(e.target.value)}
-              className="w-full px-3 py-2 rounded border border-hairline bg-[var(--bg)] text-[var(--text)] font-mono text-base font-bold tabular-nums focus:outline-none focus:ring-1 focus:ring-[var(--text)]"
+              className="w-full bg-transparent text-[var(--text)] font-mono text-3xl font-bold tabular-nums text-center focus:outline-none py-1"
             />
           </div>
 
-          {/* Account select */}
-          <div className="space-y-1">
-            <label className="text-[11px] font-medium text-[var(--text-muted)]">Account</label>
-            <select
-              data-testid="transaction-edit-account"
-              value={accountId}
-              onChange={(e) => setAccountId(e.target.value)}
-              className="w-full px-3 py-2 rounded border border-hairline bg-[var(--bg)] text-[var(--text)] focus:outline-none focus:ring-1 focus:ring-[var(--text)]"
-            >
-              {activeAccounts.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.name} ({a.currency})
-                </option>
-              ))}
-            </select>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* Account select */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-[var(--text-muted)] block">
+                Account
+              </label>
+              <select
+                data-testid="transaction-edit-account"
+                value={accountId}
+                onChange={(e) => setAccountId(e.target.value)}
+                className="w-full h-11 px-3.5 rounded-2xl border border-[var(--border)] bg-[var(--bg)] text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
+              >
+                {activeAccounts.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.name} ({a.currency})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Date input */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-[var(--text-muted)] block">Date</label>
+              <input
+                type="date"
+                data-testid="transaction-edit-date"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+                className="w-full h-11 px-3.5 rounded-2xl border border-[var(--border)] bg-[var(--bg)] text-[var(--text)] font-mono focus:outline-none focus:border-[var(--accent)]"
+              />
+            </div>
           </div>
 
           {/* Transfer Destination Account */}
           {transaction.type === "TRANSFER" && (
-            <div className="space-y-1">
-              <label className="text-[11px] font-medium text-[var(--text-muted)]">To Account</label>
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-[var(--text-muted)] block">
+                To Account
+              </label>
               <select
                 data-testid="transaction-edit-to-account"
                 value={toAccountId}
                 onChange={(e) => setToAccountId(e.target.value)}
-                className="w-full px-3 py-2 rounded border border-hairline bg-[var(--bg)] text-[var(--text)] focus:outline-none focus:ring-1 focus:ring-[var(--text)]"
+                className="w-full h-11 px-3.5 rounded-2xl border border-[var(--border)] bg-[var(--bg)] text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
               >
                 {activeAccounts
                   .filter((a) => a.id !== accountId)
@@ -366,9 +401,11 @@ function TransactionEditContent({
           )}
 
           {isUsdToLkrTransfer && (
-            <div className="grid grid-cols-2 gap-2">
-              <label className="space-y-1">
-                <span className="text-[11px] font-medium text-[var(--text-muted)]">Final LKR amount</span>
+            <div className="grid grid-cols-2 gap-3">
+              <label className="space-y-1.5 block">
+                <span className="text-xs font-semibold text-[var(--text-muted)]">
+                  Final LKR amount
+                </span>
                 <input
                   type="number"
                   min="0"
@@ -379,15 +416,20 @@ function TransactionEditContent({
                     const destinationMinor = Math.round(Number(e.target.value) * 100);
                     setExchangeRateStr(
                       targetAmountMinor > 0 && destinationMinor > 0
-                        ? (calculateExchangeRateMicros(targetAmountMinor, destinationMinor) / 1_000_000).toFixed(6)
-                        : "",
+                        ? (
+                            calculateExchangeRateMicros(targetAmountMinor, destinationMinor) /
+                            1_000_000
+                          ).toFixed(6)
+                        : ""
                     );
                   }}
-                  className="w-full px-3 py-2 rounded border border-hairline bg-[var(--bg)] text-[var(--text)] font-mono focus:outline-none focus:ring-1 focus:ring-[var(--text)]"
+                  className="w-full h-11 px-3.5 rounded-2xl border border-[var(--border)] bg-[var(--bg)] text-[var(--text)] font-mono focus:outline-none focus:border-[var(--accent)]"
                 />
               </label>
-              <label className="space-y-1">
-                <span className="text-[11px] font-medium text-[var(--text-muted)]">Rate (LKR / USD)</span>
+              <label className="space-y-1.5 block">
+                <span className="text-xs font-semibold text-[var(--text-muted)]">
+                  Rate (LKR / USD)
+                </span>
                 <input
                   type="number"
                   min="0"
@@ -397,46 +439,23 @@ function TransactionEditContent({
                     setExchangeRateStr(e.target.value);
                     setDestinationAmountStr("");
                   }}
-                  className="w-full px-3 py-2 rounded border border-hairline bg-[var(--bg)] text-[var(--text)] font-mono focus:outline-none focus:ring-1 focus:ring-[var(--text)]"
+                  className="w-full h-11 px-3.5 rounded-2xl border border-[var(--border)] bg-[var(--bg)] text-[var(--text)] font-mono focus:outline-none focus:border-[var(--accent)]"
                 />
               </label>
             </div>
           )}
 
-          {/* Date input */}
-          <div className="space-y-1">
-            <label className="text-[11px] font-medium text-[var(--text-muted)]">Date</label>
-            <input
-              type="date"
-              data-testid="transaction-edit-date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              className="w-full px-3 py-2 rounded border border-hairline bg-[var(--bg)] text-[var(--text)] font-mono focus:outline-none focus:ring-1 focus:ring-[var(--text)]"
-            />
-          </div>
-
-          {/* Note input */}
-          <div className="space-y-1">
-            <label className="text-[11px] font-medium text-[var(--text-muted)]">Note</label>
-            <input
-              type="text"
-              data-testid="transaction-edit-note"
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              placeholder="Add note..."
-              className="w-full px-3 py-2 rounded border border-hairline bg-[var(--bg)] text-[var(--text)] focus:outline-none focus:ring-1 focus:ring-[var(--text)]"
-            />
-          </div>
-
-          {/* Category Picker (if not split and not transfer) */}
+          {/* Category Picker */}
           {transaction.type !== "TRANSFER" && !isSplit && (
-            <div className="space-y-1">
-              <label className="text-[11px] font-medium text-[var(--text-muted)]">Category</label>
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-[var(--text-muted)] block">
+                Category
+              </label>
               <select
                 data-testid="transaction-edit-category"
                 value={categoryId}
                 onChange={(e) => setCategoryId(e.target.value)}
-                className="w-full px-3 py-2 rounded border border-hairline bg-[var(--bg)] text-[var(--text)] focus:outline-none focus:ring-1 focus:ring-[var(--text)]"
+                className="w-full h-11 px-3.5 rounded-2xl border border-[var(--border)] bg-[var(--bg)] text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
               >
                 {(["EXPENSE", "INCOME"] as const).map((g) => {
                   const items = g === "EXPENSE" ? categoryGroups.expense : categoryGroups.income;
@@ -444,7 +463,9 @@ function TransactionEditContent({
                   return (
                     <optgroup key={g} label={g === "EXPENSE" ? "Expense" : "Income"}>
                       {items.map((c) => (
-                        <option key={c.id} value={c.id}>{c.name}</option>
+                        <option key={c.id} value={c.id}>
+                          {c.name}
+                        </option>
                       ))}
                     </optgroup>
                   );
@@ -453,40 +474,51 @@ function TransactionEditContent({
             </div>
           )}
 
+          {/* Note input */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold text-[var(--text-muted)] block">Note</label>
+            <input
+              type="text"
+              data-testid="transaction-edit-note"
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder="Add note..."
+              className="w-full h-11 px-3.5 rounded-2xl border border-[var(--border)] bg-[var(--bg)] text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
+            />
+          </div>
+
           {/* Split Transaction Section */}
           {transaction.type !== "TRANSFER" && (
-            <div className="pt-2 border-t border-hairline space-y-2">
+            <div className="pt-3 border-t border-[var(--border)] space-y-3">
               <div className="flex items-center justify-between">
-                <span className="font-medium text-xs flex items-center gap-1.5 text-[var(--text)]">
-                  <Split size={14} />
+                <span className="font-semibold text-xs flex items-center gap-2 text-[var(--text)]">
+                  <Split size={15} className="text-[var(--accent)]" />
                   <span>Split into multiple categories</span>
                 </span>
                 <button
                   type="button"
                   data-testid="split-toggle"
                   onClick={() => setIsSplit(!isSplit)}
-                  className={`w-9 h-5 rounded-full transition-colors relative ${
-                    isSplit ? "bg-[var(--text)]" : "bg-[var(--border)]"
+                  className={`w-11 h-6 rounded-full transition-colors relative cursor-pointer ${
+                    isSplit ? "bg-[var(--accent)]" : "bg-[var(--border)]"
                   }`}
                 >
                   <span
-                    className={`block w-3.5 h-3.5 rounded-full bg-[var(--bg)] transition-transform absolute top-0.5 ${
-                      isSplit ? "left-4.5" : "left-0.5"
+                    className={`block w-5 h-5 rounded-full bg-white transition-transform absolute top-0.5 ${
+                      isSplit ? "left-5.5" : "left-0.5"
                     }`}
                   />
                 </button>
               </div>
 
               {isSplit && (
-                <div className="p-2.5 rounded bg-[var(--bg)] border border-hairline space-y-2">
-                  <div className="flex items-center justify-between text-[11px]">
-                    <span className="text-[var(--text-muted)]">Split breakdown</span>
+                <div className="p-4 rounded-2xl bg-[var(--bg)] border border-[var(--border)] space-y-3">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-[var(--text-muted)] font-semibold">Split breakdown</span>
                     <span
                       data-testid="split-remaining"
-                      className={`font-mono font-semibold tabular-nums ${
-                        splitRemainingMinor === 0
-                          ? "text-income"
-                          : "text-amber-500 font-bold"
+                      className={`font-mono font-bold tabular-nums ${
+                        splitRemainingMinor === 0 ? "text-[var(--income)]" : "text-amber-500"
                       }`}
                     >
                       {splitRemainingMinor === 0
@@ -496,20 +528,23 @@ function TransactionEditContent({
                   </div>
 
                   {splitItems.map((item, idx) => (
-                    <div key={item.id} className="grid grid-cols-12 gap-1.5 items-center">
+                    <div key={item.id} className="grid grid-cols-12 gap-2 items-center">
                       <select
                         data-testid={`split-category-${idx}`}
                         value={item.categoryId}
                         onChange={(e) => handleUpdateSplitItem(idx, { categoryId: e.target.value })}
-                        className="col-span-6 px-2 py-1.5 rounded border border-hairline bg-[var(--surface)] text-[var(--text)] text-[11px]"
+                        className="col-span-6 h-10 px-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] text-[var(--text)] text-xs"
                       >
                         {(["EXPENSE", "INCOME"] as const).map((g) => {
-                          const items = g === "EXPENSE" ? categoryGroups.expense : categoryGroups.income;
+                          const items =
+                            g === "EXPENSE" ? categoryGroups.expense : categoryGroups.income;
                           if (items.length === 0) return null;
                           return (
                             <optgroup key={g} label={g === "EXPENSE" ? "Expense" : "Income"}>
                               {items.map((c) => (
-                                <option key={c.id} value={c.id}>{c.name}</option>
+                                <option key={c.id} value={c.id}>
+                                  {c.name}
+                                </option>
                               ))}
                             </optgroup>
                           );
@@ -528,16 +563,16 @@ function TransactionEditContent({
                             prev.map((val, i) => (i === idx ? (minor / 100).toFixed(2) : val))
                           );
                         }}
-                        className="col-span-5 px-2 py-1.5 min-h-[36px] rounded border border-hairline bg-[var(--surface)] text-[var(--text)] font-mono text-xs tabular-nums text-right"
+                        className="col-span-5 h-10 px-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] text-[var(--text)] font-mono text-xs tabular-nums text-right"
                       />
 
                       <button
                         type="button"
                         onClick={() => handleRemoveSplitItem(idx)}
                         disabled={splitItems.length <= 1}
-                        className="col-span-1 p-1 text-[var(--text-muted)] hover:text-red-500 disabled:opacity-20"
+                        className="col-span-1 w-8 h-8 rounded-lg flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--expense)] disabled:opacity-20 cursor-pointer"
                       >
-                        <X size={13} />
+                        <X size={14} />
                       </button>
                     </div>
                   ))}
@@ -546,9 +581,9 @@ function TransactionEditContent({
                     type="button"
                     data-testid="add-split-item-btn"
                     onClick={handleAddSplitItem}
-                    className="w-full py-1 rounded border border-dashed border-hairline text-[11px] text-[var(--text-muted)] hover:text-[var(--text)] flex items-center justify-center gap-1 font-medium"
+                    className="w-full h-10 rounded-xl border border-dashed border-[var(--border)] text-xs text-[var(--text-muted)] hover:text-[var(--text)] flex items-center justify-center gap-1.5 font-semibold cursor-pointer"
                   >
-                    <Plus size={12} />
+                    <Plus size={14} />
                     <span>Add Split Item</span>
                   </button>
                 </div>
@@ -557,82 +592,84 @@ function TransactionEditContent({
           )}
 
           {/* Exclude from Budget Toggle */}
-          <div className="flex items-center justify-between py-1 border-t border-hairline">
-            <span className="text-xs text-[var(--text)] flex items-center gap-1.5">
-              <Ban size={14} className="text-[var(--text-muted)]" />
+          <div className="flex items-center justify-between pt-2 border-t border-[var(--border)]">
+            <span className="text-xs font-semibold text-[var(--text)] flex items-center gap-2">
+              <Ban size={15} className="text-[var(--text-muted)]" />
               <span>Exclude from budget calculations</span>
             </span>
             <button
               type="button"
               data-testid="exclude-budget-toggle"
               onClick={() => setExcludeFromBudget(!excludeFromBudget)}
-              className={`w-9 h-5 rounded-full transition-colors relative ${
-                excludeFromBudget ? "bg-[var(--text)]" : "bg-[var(--border)]"
+              className={`w-11 h-6 rounded-full transition-colors relative cursor-pointer ${
+                excludeFromBudget ? "bg-[var(--accent)]" : "bg-[var(--border)]"
               }`}
             >
               <span
-                className={`block w-3.5 h-3.5 rounded-full bg-[var(--bg)] transition-transform absolute top-0.5 ${
-                  excludeFromBudget ? "left-4.5" : "left-0.5"
+                className={`block w-5 h-5 rounded-full bg-white transition-transform absolute top-0.5 ${
+                  excludeFromBudget ? "left-5.5" : "left-0.5"
                 }`}
               />
             </button>
           </div>
 
-          {/* Inline Error Message */}
           {errorMsg && (
-            <div className="flex items-center gap-1.5 text-xs text-red-500 font-medium py-1">
-              <AlertCircle size={14} className="shrink-0" />
+            <div className="flex items-center gap-2 p-3 rounded-2xl bg-[var(--expense)]/10 border border-[var(--expense)]/25 text-xs text-[var(--expense)] font-semibold">
+              <AlertCircle size={15} className="shrink-0" />
               <span>{errorMsg}</span>
             </div>
           )}
 
           {/* Convert to 0% Installment Option */}
           {isCardExpense && (
-            <div className="pt-2 border-t border-hairline space-y-2">
+            <div className="pt-2 border-t border-[var(--border)] space-y-2.5">
               {!showConvertForm ? (
                 <button
                   type="button"
                   data-testid="convert-to-installment-btn"
                   onClick={() => setShowConvertForm(true)}
-                  className="w-full py-1.5 px-3 rounded border border-purple-500/30 bg-purple-500/10 text-purple-600 font-semibold text-xs hover:bg-purple-500/20 active:scale-98 transition-all flex items-center justify-center gap-1.5"
+                  className="w-full h-11 px-4 rounded-2xl border border-[var(--accent)]/30 bg-[var(--accent)]/10 text-[var(--accent)] font-bold text-xs hover:bg-[var(--accent)]/15 active:scale-[0.98] transition-all flex items-center justify-center gap-2 cursor-pointer"
                 >
                   Convert to 0% Installment
                 </button>
               ) : (
                 <div
                   data-testid="convert-section"
-                  className="p-3 rounded border border-purple-500/30 bg-purple-500/5 space-y-2.5"
+                  className="p-4 rounded-2xl border border-[var(--accent)]/30 bg-[var(--accent)]/6 space-y-3"
                 >
-                  <div className="font-semibold text-xs text-[var(--text)]">Convert to 0% Installment Plan</div>
-                  <div className="space-y-1">
-                    <label className="text-[11px] text-[var(--text-muted)]">Tenure</label>
+                  <div className="font-bold text-xs text-[var(--text)]">
+                    Convert to 0% Installment Plan
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-[var(--text-muted)] block">
+                      Tenure
+                    </label>
                     <select
                       data-testid="convert-tenure-select"
                       value={convertTenure}
                       onChange={(e) => setConvertTenure(Number(e.target.value))}
-                      className="w-full px-2 py-1.5 rounded border border-hairline bg-[var(--bg)] text-xs"
+                      className="w-full h-11 px-3.5 rounded-2xl border border-[var(--border)] bg-[var(--surface)] text-xs text-[var(--text)]"
                     >
-                      <option value={3}>3 Months ({formatMoney(Math.floor(transaction.amountMinor / 3))}/mo)</option>
-                      <option value={6}>6 Months ({formatMoney(Math.floor(transaction.amountMinor / 6))}/mo)</option>
-                      <option value={12}>12 Months ({formatMoney(Math.floor(transaction.amountMinor / 12))}/mo)</option>
-                      <option value={18}>18 Months ({formatMoney(Math.floor(transaction.amountMinor / 18))}/mo)</option>
-                      <option value={24}>24 Months ({formatMoney(Math.floor(transaction.amountMinor / 24))}/mo)</option>
-                      <option value={36}>36 Months ({formatMoney(Math.floor(transaction.amountMinor / 36))}/mo)</option>
+                      {[3, 6, 12, 18, 24, 36].map((m) => (
+                        <option key={m} value={m}>
+                          {m} Months ({formatMoney(Math.floor(transaction.amountMinor / m))}/mo)
+                        </option>
+                      ))}
                     </select>
                   </div>
-                  <div className="flex items-center gap-2 pt-1">
+                  <div className="flex items-center gap-2.5 pt-1">
                     <button
                       type="button"
                       data-testid="confirm-convert-btn"
                       onClick={handleConvertConfirm}
-                      className="flex-1 py-1.5 px-3 rounded bg-purple-600 text-white font-semibold text-xs hover:bg-purple-700 active:scale-98 transition-all"
+                      className="flex-1 h-10 px-4 rounded-2xl bg-[var(--accent)] text-white font-bold text-xs hover:opacity-95 active:scale-[0.98] transition-all cursor-pointer"
                     >
                       Confirm Conversion
                     </button>
                     <button
                       type="button"
                       onClick={() => setShowConvertForm(false)}
-                      className="py-1.5 px-3 rounded border border-hairline text-xs hover:bg-[var(--border)] transition-colors"
+                      className="h-10 px-4 rounded-2xl border border-[var(--border)] bg-[var(--surface)] text-xs font-semibold hover:bg-[var(--surface-hover)] transition-colors cursor-pointer"
                     >
                       Cancel
                     </button>
@@ -642,21 +679,19 @@ function TransactionEditContent({
             </div>
           )}
 
-          {/* Blocking message if system installment */}
           {isSystemInstallment && (
             <div
               data-testid="cannot-delete-installment-msg"
-              className="p-2 rounded bg-amber-500/10 border border-amber-500/20 text-amber-600 text-[11px]"
+              className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/25 text-amber-600 dark:text-amber-400 text-xs"
             >
               System-generated installment rows cannot be deleted manually.
             </div>
           )}
 
-          {/* Blocking message if reversal exists */}
           {hasActiveReversal && (
             <div
               data-testid="delete-blocked-msg"
-              className="p-2 rounded bg-amber-500/10 border border-amber-500/20 text-amber-600 text-[11px]"
+              className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/25 text-amber-600 dark:text-amber-400 text-xs"
             >
               Cannot delete transaction: an active reversal exists.
             </div>
@@ -664,14 +699,14 @@ function TransactionEditContent({
         </div>
 
         {/* Footer Actions */}
-        <div className="p-3 border-t border-hairline bg-[var(--surface)] flex items-center justify-between gap-2 pb-sheet-safe shrink-0">
+        <div className="px-5 sm:px-6 py-4 border-t border-[var(--border)] bg-[var(--surface)] flex items-center justify-between gap-3 pb-sheet-safe shrink-0">
           {showConfirmDelete ? (
-            <div className="flex items-center gap-2 w-full">
+            <div className="flex items-center gap-2.5 w-full">
               <button
                 type="button"
                 data-testid="confirm-delete-btn"
                 onClick={handleDelete}
-                className="flex-1 py-2 px-3 rounded bg-red-600 text-white font-semibold text-xs hover:bg-red-700 active:scale-98 transition-all"
+                className="flex-1 h-12 px-4 rounded-2xl bg-[var(--expense)] text-white font-bold text-xs hover:opacity-95 active:scale-[0.98] transition-all cursor-pointer"
               >
                 Confirm Delete
               </button>
@@ -679,7 +714,7 @@ function TransactionEditContent({
                 type="button"
                 data-testid="cancel-delete-btn"
                 onClick={() => setShowConfirmDelete(false)}
-                className="py-2 px-3 rounded border border-hairline text-xs hover:bg-[var(--border)] transition-colors"
+                className="h-12 px-5 rounded-2xl border border-[var(--border)] bg-[var(--bg)] text-xs font-semibold hover:bg-[var(--surface-hover)] transition-colors cursor-pointer"
               >
                 Cancel
               </button>
@@ -692,10 +727,10 @@ function TransactionEditContent({
                   data-testid="transaction-delete-btn"
                   disabled={hasActiveReversal || isSystemInstallment}
                   onClick={() => setShowConfirmDelete(true)}
-                  className="p-2 rounded text-red-500 hover:bg-red-500/10 active:scale-95 transition-all disabled:opacity-30 disabled:pointer-events-none"
+                  className="w-12 h-12 rounded-2xl border border-[var(--expense)]/25 bg-[var(--expense)]/8 flex items-center justify-center text-[var(--expense)] hover:bg-[var(--expense)]/15 active:scale-95 transition-all disabled:opacity-30 disabled:pointer-events-none cursor-pointer shrink-0"
                   title="Delete transaction"
                 >
-                  <Trash2 size={16} />
+                  <Trash2 size={17} />
                 </button>
               )}
 
@@ -704,7 +739,7 @@ function TransactionEditContent({
                 data-testid="transaction-save-btn"
                 disabled={isSplitMismatch}
                 onClick={handleSave}
-                className="flex-1 py-2 px-4 rounded bg-[var(--text)] text-[var(--bg)] font-semibold text-xs hover:opacity-90 active:scale-98 transition-all disabled:opacity-40 disabled:pointer-events-none"
+                className="flex-1 h-12 px-5 rounded-2xl bg-[var(--accent)] text-white font-bold text-xs hover:opacity-95 active:scale-[0.98] transition-all disabled:opacity-40 disabled:pointer-events-none cursor-pointer shadow-xs"
               >
                 Save Changes
               </button>

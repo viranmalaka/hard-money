@@ -2,8 +2,8 @@
 
 import React, { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import Link from "next/link";
-import { ArrowLeft, Users, UserPlus, Shield, Trash2, ArrowRightLeft, LogOut, Check } from "lucide-react";
+import { Users, UserPlus, Shield, Trash2, ArrowRightLeft, LogOut, Check, X } from "lucide-react";
+import { AppHeader } from "@/components/navigation/app-header";
 import { useSync } from "@/components/sync-provider";
 import { queryKeys } from "@/lib/api/query-keys";
 import {
@@ -24,7 +24,6 @@ export default function HouseholdPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  // Confirmation modal state
   const [confirmModal, setConfirmModal] = useState<{
     isOpen: boolean;
     title: string;
@@ -41,12 +40,9 @@ export default function HouseholdPage() {
     onConfirm: async () => {},
   });
 
-  // Create household state
   const [newHouseholdName, setNewHouseholdName] = useState("");
-  // Invite member state
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<"CO_OWNER" | "CONTRIBUTOR_ADD_ONLY" | "VIEWER">("CO_OWNER");
-  // Mobile bottom-sheet role picker state
   const [selectedMemberForSheet, setSelectedMemberForSheet] = useState<Member | null>(null);
 
   const queryClient = useQueryClient();
@@ -261,55 +257,51 @@ export default function HouseholdPage() {
   const activeHousehold = households[0] || null;
 
   return (
-    <main className="flex-1 max-w-4xl mx-auto w-full px-4 py-4 space-y-5">
-      <div className="flex items-center gap-3">
-        <Link
-          href="/more" transitionTypes={["nav-back"]}
-          className="p-1 rounded hover:bg-[var(--surface-hover)] text-[var(--text-muted)] hover:text-[var(--text)] transition-colors"
-        >
-          <ArrowLeft size={18} />
-        </Link>
-        <div>
-          <h1 className="text-base font-semibold tracking-tight text-[var(--text)] flex items-center gap-2">
-            <Users size={18} className="text-[var(--accent)]" />
-            <span>Household Collaboration</span>
-          </h1>
-          <p className="text-xs text-[var(--text-muted)]">
-            Share finances with family members with granular role privacy.
-          </p>
-        </div>
-      </div>
+    <main className="flex-1 max-w-4xl mx-auto w-full px-5 sm:px-7 pt-4 sm:pt-6 pb-8 space-y-6">
+      <AppHeader
+        title="Household Collaboration"
+        subtitle="Shared Family Treasury & Granular Roles"
+        backHref="/more"
+        backLabel="Back to More"
+      />
 
       {error && (
-        <div className="p-3 rounded bg-[var(--expense)]/10 border border-[var(--expense)]/30 text-xs text-[var(--expense)]">
+        <div className="p-4 rounded-2xl bg-[var(--expense)]/10 border border-[var(--expense)]/30 text-xs font-medium text-[var(--expense)]">
           {error}
         </div>
       )}
 
       {success && (
-        <div className="p-3 rounded bg-[var(--income)]/10 border border-[var(--income)]/30 text-xs text-[var(--income)] flex items-center gap-1.5">
-          <Check size={14} />
+        <div className="p-4 rounded-2xl bg-[var(--income)]/10 border border-[var(--income)]/30 text-xs font-semibold text-[var(--income)] flex items-center gap-2">
+          <Check size={16} />
           <span>{success}</span>
         </div>
       )}
 
       {loading ? (
-        <div className="p-8 text-center text-xs text-[var(--text-muted)]">Loading household data...</div>
+        <div className="rounded-3xl bg-[var(--surface)] border border-[var(--border)] p-10 text-center text-xs text-[var(--text-muted)]">
+          Loading household data...
+        </div>
       ) : !activeHousehold ? (
         /* Create Household Form */
-        <div className="flat-card p-5 space-y-4">
-          <div className="space-y-1">
-            <h2 className="text-sm font-semibold text-[var(--text)]">Create a Household</h2>
-            <p className="text-xs text-[var(--text-muted)]">
-              Start sharing accounts and budgets with family members. You will be the household OWNER.
-            </p>
+        <div className="rounded-3xl bg-[var(--surface)] border border-[var(--border)] p-5 sm:p-6 space-y-5 shadow-xs">
+          <div className="flex items-start gap-3.5">
+            <div className="w-11 h-11 rounded-2xl bg-[var(--accent)]/12 border border-[var(--accent)]/25 flex items-center justify-center text-[var(--accent)] shrink-0">
+              <Users size={20} />
+            </div>
+            <div className="space-y-1">
+              <h2 className="text-base font-bold text-[var(--text)]">Create a Household</h2>
+              <p className="text-xs text-[var(--text-muted)] leading-relaxed">
+                Start sharing accounts and budgets with family members. You will be the household OWNER.
+              </p>
+            </div>
           </div>
 
-          <form onSubmit={handleCreateHousehold} className="space-y-3">
-            <div>
+          <form onSubmit={handleCreateHousehold} className="space-y-4">
+            <div className="space-y-1.5">
               <label
                 htmlFor="household-name-input"
-                className="block text-xs font-medium text-[var(--text-muted)] mb-1"
+                className="block text-xs font-semibold text-[var(--text-muted)]"
               >
                 Household Name
               </label>
@@ -320,7 +312,7 @@ export default function HouseholdPage() {
                 value={newHouseholdName}
                 onChange={(e) => setNewHouseholdName(e.target.value)}
                 placeholder="e.g. Silva Family Treasury"
-                className="w-full h-9 px-3 rounded bg-[var(--bg)] border border-hairline text-xs text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
+                className="w-full h-12 px-4 rounded-2xl bg-[var(--bg)] border border-[var(--border)] text-sm text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
               />
             </div>
 
@@ -328,7 +320,7 @@ export default function HouseholdPage() {
               type="submit"
               data-testid="household-create-btn"
               disabled={creating || !newHouseholdName.trim()}
-              className="px-4 py-2 rounded bg-[var(--accent)] text-white text-xs font-semibold hover:opacity-90 active:scale-95 transition-all disabled:opacity-50"
+              className="h-11 px-5 rounded-2xl bg-[var(--accent)] text-white text-xs font-bold hover:opacity-95 active:scale-[0.98] transition-all disabled:opacity-50 cursor-pointer"
             >
               {creating ? "Creating..." : "Create Household"}
             </button>
@@ -336,42 +328,48 @@ export default function HouseholdPage() {
         </div>
       ) : (
         /* Household Overview & Member Management */
-        <div className="space-y-5">
-          <div className="flat-card p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div>
-              <div className="flex items-center gap-2">
-                <span data-testid="household-name" className="text-sm font-semibold text-[var(--text)]">
-                  {activeHousehold.name}
-                </span>
-                <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-[var(--accent)]/15 text-[var(--accent)] border border-[var(--accent)]/30">
-                  My Role: {activeHousehold.myRole}
-                </span>
+        <div className="space-y-6">
+          <div className="rounded-3xl bg-[var(--surface)] border border-[var(--border)] p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xs">
+            <div className="flex items-center gap-3.5 min-w-0">
+              <div className="w-12 h-12 rounded-2xl bg-[var(--accent)]/12 border border-[var(--accent)]/25 flex items-center justify-center text-[var(--accent)] shrink-0">
+                <Users size={21} />
               </div>
-              <p className="text-xs text-[var(--text-muted)] mt-0.5">
-                {activeHousehold.members.length} {activeHousehold.members.length === 1 ? "member" : "members"}
-              </p>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2.5 flex-wrap">
+                  <span data-testid="household-name" className="text-base font-bold text-[var(--text)]">
+                    {activeHousehold.name}
+                  </span>
+                  <span className="px-2.5 py-0.5 rounded-full text-2xs font-bold bg-[var(--accent)]/15 text-[var(--accent)] border border-[var(--accent)]/30">
+                    My Role: {activeHousehold.myRole}
+                  </span>
+                </div>
+                <p className="text-xs text-[var(--text-muted)] mt-0.5">
+                  {activeHousehold.members.length}{" "}
+                  {activeHousehold.members.length === 1 ? "member" : "members"}
+                </p>
+              </div>
             </div>
 
             <button
               type="button"
               data-testid="household-leave-btn"
               onClick={() => promptLeaveHousehold(activeHousehold)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded border border-hairline hover:bg-[var(--expense)]/10 text-[var(--expense)] text-xs font-medium transition-colors self-start sm:self-auto"
+              className="h-11 px-4 inline-flex items-center justify-center gap-2 rounded-2xl border border-[var(--expense)]/25 bg-[var(--expense)]/8 hover:bg-[var(--expense)]/15 text-[var(--expense)] text-xs font-semibold transition-colors self-start sm:self-auto cursor-pointer shrink-0"
             >
-              <LogOut size={13} />
+              <LogOut size={15} />
               <span>Leave Household</span>
             </button>
           </div>
 
           {/* Members List */}
-          <div className="space-y-2">
-            <span className="text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wider px-1">
+          <section className="space-y-2.5">
+            <h2 className="text-2xs font-bold text-[var(--text-muted)] uppercase tracking-wider px-1">
               Household Members
-            </span>
+            </h2>
 
             <div
               data-testid="household-member-list"
-              className="flat-card divide-y divide-hairline overflow-hidden"
+              className="rounded-3xl bg-[var(--surface)] border border-[var(--border)] divide-y divide-[var(--border)] overflow-hidden shadow-xs"
             >
               {activeHousehold.members.map((member) => {
                 const isSelf = member.userId === userId;
@@ -388,33 +386,36 @@ export default function HouseholdPage() {
                   <div
                     key={member.id}
                     data-testid="household-member-row"
-                    className="p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                    className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
                   >
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-[var(--surface-hover)] border border-hairline flex items-center justify-center text-xs font-semibold text-[var(--text)]">
+                    <div className="flex items-center gap-3.5 min-w-0">
+                      <div className="w-10 h-10 rounded-2xl bg-[var(--bg)] border border-[var(--border)] flex items-center justify-center text-xs font-bold text-[var(--accent)] shrink-0">
                         {member.user.name ? member.user.name.charAt(0).toUpperCase() : "U"}
                       </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs font-semibold text-[var(--text)]">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-sm font-bold text-[var(--text)]">
                             {member.user.name}
                           </span>
                           {isSelf && (
-                            <span className="text-[10px] text-[var(--text-muted)]">(You)</span>
+                            <span className="text-2xs font-medium text-[var(--text-muted)]">
+                              (You)
+                            </span>
                           )}
                           <span
                             data-testid="member-role-badge"
-                            className="px-1.5 py-0.2 rounded text-[10px] font-mono font-medium bg-[var(--surface-hover)] text-[var(--text-muted)] border border-hairline"
+                            className="px-2 py-0.5 rounded-full text-2xs font-mono font-semibold bg-[var(--bg)] text-[var(--text-muted)] border border-[var(--border)]"
                           >
                             {member.role}
                           </span>
                         </div>
-                        <p className="text-[11px] text-[var(--text-muted)]">{member.user.email}</p>
+                        <p className="text-xs text-[var(--text-muted)] truncate mt-0.5">
+                          {member.user.email}
+                        </p>
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2 self-end sm:self-auto">
-                      {/* Desktop Role Selector */}
+                    <div className="flex items-center gap-2 self-end sm:self-auto flex-wrap">
                       {canManageRoles ? (
                         <>
                           <div className="hidden sm:block">
@@ -424,7 +425,7 @@ export default function HouseholdPage() {
                               onChange={(e) =>
                                 handleChangeRole(activeHousehold.id, member.id, e.target.value)
                               }
-                              className="h-7 px-2 rounded bg-[var(--bg)] border border-hairline text-xs text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
+                              className="h-9 px-3 rounded-xl bg-[var(--bg)] border border-[var(--border)] text-xs font-medium text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
                             >
                               <option value="CO_OWNER">CO_OWNER</option>
                               <option value="CONTRIBUTOR_ADD_ONLY">CONTRIBUTOR_ADD_ONLY</option>
@@ -432,13 +433,12 @@ export default function HouseholdPage() {
                             </select>
                           </div>
 
-                          {/* Mobile button to open bottom-sheet role picker */}
                           <div className="sm:hidden">
                             <button
                               type="button"
                               data-testid="member-role-sheet-btn"
                               onClick={() => setSelectedMemberForSheet(member)}
-                              className="h-7 px-2.5 rounded bg-[var(--surface-hover)] border border-hairline text-xs font-medium text-[var(--text)]"
+                              className="h-9 px-3 rounded-xl bg-[var(--bg)] border border-[var(--border)] text-xs font-semibold text-[var(--text)] cursor-pointer"
                             >
                               Role: {member.role}
                             </button>
@@ -446,7 +446,6 @@ export default function HouseholdPage() {
                         </>
                       ) : null}
 
-                      {/* Transfer Ownership Button */}
                       {canTransfer && (
                         <button
                           type="button"
@@ -455,23 +454,22 @@ export default function HouseholdPage() {
                           onClick={() =>
                             promptTransferOwnership(activeHousehold.id, member.userId)
                           }
-                          className="h-7 px-2 rounded border border-hairline hover:bg-surface text-xs font-medium text-[var(--text)] flex items-center gap-1"
+                          className="h-9 px-3 rounded-xl border border-[var(--border)] bg-[var(--bg)] hover:bg-[var(--surface-hover)] text-xs font-semibold text-[var(--text)] inline-flex items-center gap-1.5 cursor-pointer"
                         >
-                          <ArrowRightLeft size={12} />
+                          <ArrowRightLeft size={13} />
                           <span className="hidden sm:inline">Transfer</span>
                         </button>
                       )}
 
-                      {/* Remove Member Button */}
                       {canRemove && (
                         <button
                           type="button"
                           data-testid="member-remove-btn"
                           title="Remove Member"
                           onClick={() => promptRemoveMember(activeHousehold.id, member.id)}
-                          className="h-7 px-2 rounded border border-hairline hover:bg-[var(--expense)]/10 text-xs font-medium text-[var(--expense)] flex items-center gap-1"
+                          className="h-9 px-3 rounded-xl border border-[var(--expense)]/25 bg-[var(--expense)]/8 hover:bg-[var(--expense)]/15 text-xs font-semibold text-[var(--expense)] inline-flex items-center gap-1.5 cursor-pointer"
                         >
-                          <Trash2 size={12} />
+                          <Trash2 size={13} />
                           <span className="hidden sm:inline">Remove</span>
                         </button>
                       )}
@@ -480,28 +478,28 @@ export default function HouseholdPage() {
                 );
               })}
             </div>
-          </div>
+          </section>
 
-          {/* Add / Invite Member (Visible to OWNER & CO_OWNER) */}
+          {/* Add / Invite Member */}
           {(activeHousehold.myRole === "OWNER" || activeHousehold.myRole === "CO_OWNER") && (
-            <div className="space-y-2">
-              <span className="text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wider px-1">
+            <section className="space-y-2.5">
+              <h2 className="text-2xs font-bold text-[var(--text-muted)] uppercase tracking-wider px-1">
                 Add Household Member
-              </span>
+              </h2>
 
               <form
                 onSubmit={(e) => handleInviteMember(activeHousehold.id, e)}
-                className="flat-card p-4 space-y-3"
+                className="rounded-3xl bg-[var(--surface)] border border-[var(--border)] p-5 sm:p-6 space-y-4 shadow-xs"
               >
-                <p className="text-xs text-[var(--text-muted)]">
+                <p className="text-xs text-[var(--text-muted)] leading-relaxed">
                   Enter a registered user&apos;s email address to assign them a role directly.
                 </p>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div className="sm:col-span-2 space-y-1">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div className="sm:col-span-2 space-y-1.5">
                     <label
                       htmlFor="household-invite-email"
-                      className="block text-xs font-medium text-[var(--text-muted)]"
+                      className="block text-xs font-semibold text-[var(--text-muted)]"
                     >
                       User Email
                     </label>
@@ -512,14 +510,14 @@ export default function HouseholdPage() {
                       value={inviteEmail}
                       onChange={(e) => setInviteEmail(e.target.value)}
                       placeholder="e.g. spouse@example.com"
-                      className="w-full h-8 px-2.5 rounded bg-[var(--bg)] border border-hairline text-xs text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
+                      className="w-full h-12 px-4 rounded-2xl bg-[var(--bg)] border border-[var(--border)] text-sm text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
                     />
                   </div>
 
-                  <div className="space-y-1">
+                  <div className="space-y-1.5">
                     <label
                       htmlFor="household-invite-role"
-                      className="block text-xs font-medium text-[var(--text-muted)]"
+                      className="block text-xs font-semibold text-[var(--text-muted)]"
                     >
                       Assigned Role
                     </label>
@@ -532,7 +530,7 @@ export default function HouseholdPage() {
                           e.target.value as "CO_OWNER" | "CONTRIBUTOR_ADD_ONLY" | "VIEWER"
                         )
                       }
-                      className="w-full h-8 px-2.5 rounded bg-[var(--bg)] border border-hairline text-xs text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
+                      className="w-full h-12 px-4 rounded-2xl bg-[var(--bg)] border border-[var(--border)] text-xs font-medium text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
                     >
                       <option value="CO_OWNER">CO_OWNER (Full Read/Write)</option>
                       <option value="CONTRIBUTOR_ADD_ONLY">
@@ -547,33 +545,34 @@ export default function HouseholdPage() {
                   type="submit"
                   data-testid="household-invite-btn"
                   disabled={inviting || !inviteEmail.trim()}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-[var(--accent)] text-white text-xs font-semibold hover:opacity-90 active:scale-95 transition-all disabled:opacity-50"
+                  className="h-11 px-5 inline-flex items-center gap-2 rounded-2xl bg-[var(--accent)] text-white text-xs font-bold hover:opacity-95 active:scale-[0.98] transition-all disabled:opacity-50 cursor-pointer"
                 >
-                  <UserPlus size={14} />
+                  <UserPlus size={15} />
                   <span>{inviting ? "Adding..." : "Add Member"}</span>
                 </button>
               </form>
-            </div>
+            </section>
           )}
 
           {/* Capability Matrix Reference Card */}
-          <div className="p-4 rounded bg-[var(--surface-hover)]/30 border border-hairline space-y-2">
-            <span className="text-xs font-semibold text-[var(--text)] flex items-center gap-1.5">
-              <Shield size={14} className="text-[var(--accent)]" />
+          <div className="p-5 rounded-3xl bg-[var(--surface)] border border-[var(--border)] space-y-2.5 shadow-xs">
+            <span className="text-xs font-bold text-[var(--text)] flex items-center gap-2">
+              <Shield size={16} className="text-[var(--accent)]" />
               <span>Role Permissions & Privacy</span>
             </span>
-            <ul className="text-[11px] text-[var(--text-muted)] space-y-1 leading-relaxed list-disc list-inside">
+            <ul className="text-xs text-[var(--text-muted)] space-y-1.5 leading-relaxed list-disc list-inside">
               <li>
-                <strong>OWNER / CO_OWNER:</strong> Full read & write on shared accounts, transactions,
-                FDs, loans, and budgets.
+                <strong className="text-[var(--text)]">OWNER / CO_OWNER:</strong> Full read & write
+                on shared accounts, transactions, FDs, loans, and budgets.
               </li>
               <li>
-                <strong>VIEWER:</strong> Read-only access to shared finances. Write mutations are
-                blocked.
+                <strong className="text-[var(--text)]">VIEWER:</strong> Read-only access to shared
+                finances. Write mutations are blocked.
               </li>
               <li>
-                <strong>CONTRIBUTOR_ADD_ONLY:</strong> Can record transactions on shared accounts, but
-                never sees account balances, opening balances, or other members&apos; transactions.
+                <strong className="text-[var(--text)]">CONTRIBUTOR_ADD_ONLY:</strong> Can record
+                transactions on shared accounts, but never sees account balances, opening balances,
+                or other members&apos; transactions.
               </li>
             </ul>
           </div>
@@ -584,27 +583,27 @@ export default function HouseholdPage() {
       {selectedMemberForSheet && activeHousehold && (
         <div
           data-testid="member-role-sheet"
-          className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 overflow-y-auto"
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-xs overflow-y-auto"
           onClick={() => setSelectedMemberForSheet(null)}
         >
           <div
-            className="w-full max-w-lg bg-[var(--surface)] border-t border-hairline rounded-t-xl p-4 pb-sheet-safe md:pb-4 space-y-3 animate-in slide-in-from-bottom modal-sheet-dialog overflow-y-auto"
+            className="w-full max-w-lg bg-[var(--surface)] border-t border-[var(--border)] rounded-t-3xl p-5 pb-sheet-safe md:pb-5 space-y-4 animate-in slide-in-from-bottom modal-sheet-dialog overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-[var(--text)]">
+              <span className="text-sm font-bold text-[var(--text)]">
                 Assign Role to {selectedMemberForSheet.user.name}
               </span>
               <button
                 type="button"
                 onClick={() => setSelectedMemberForSheet(null)}
-                className="text-xs text-[var(--text-muted)]"
+                className="w-9 h-9 rounded-xl flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--bg)] cursor-pointer"
               >
-                Close
+                <X size={18} />
               </button>
             </div>
 
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               {(["CO_OWNER", "CONTRIBUTOR_ADD_ONLY", "VIEWER"] as const).map((r) => (
                 <button
                   key={r}
@@ -612,21 +611,21 @@ export default function HouseholdPage() {
                   onClick={() =>
                     handleChangeRole(activeHousehold.id, selectedMemberForSheet.id, r)
                   }
-                  className={`w-full p-2.5 rounded text-left text-xs font-medium border flex items-center justify-between transition-colors ${
+                  className={`w-full p-3.5 rounded-2xl text-left text-xs font-bold border flex items-center justify-between transition-colors cursor-pointer ${
                     selectedMemberForSheet.role === r
-                      ? "border-[var(--accent)] bg-[var(--accent)]/10 text-[var(--accent)]"
-                      : "border-hairline bg-[var(--bg)] text-[var(--text)] hover:bg-[var(--surface-hover)]"
+                      ? "border-[var(--accent)] bg-[var(--accent)]/12 text-[var(--accent)]"
+                      : "border-[var(--border)] bg-[var(--bg)] text-[var(--text)] hover:bg-[var(--surface-hover)]"
                   }`}
                 >
                   <span>{r}</span>
-                  {selectedMemberForSheet.role === r && <Check size={14} />}
+                  {selectedMemberForSheet.role === r && <Check size={16} />}
                 </button>
               ))}
             </div>
           </div>
         </div>
       )}
-      {/* Confirmation Modal */}
+
       <ConfirmationModal
         isOpen={confirmModal.isOpen}
         onClose={() => setConfirmModal((prev) => ({ ...prev, isOpen: false }))}

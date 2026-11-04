@@ -2,9 +2,7 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import Link from "next/link";
 import {
-  ArrowLeft,
   ArrowRightLeft,
   CheckCircle2,
   CreditCard,
@@ -13,16 +11,37 @@ import {
   AlertCircle,
   ShieldAlert,
 } from "lucide-react";
+import { AppHeader } from "@/components/navigation/app-header";
 import { EmptyState } from "@/components/ui/empty-state";
 import { queryKeys } from "@/lib/api/query-keys";
 import { getAccounts, getCategories } from "@/services/user-service";
-import { ignoreInboxItem, listInbox, mergeTransferInboxItem, postInboxItem, retryInboxItem } from "@/services/inbox-service";
-import { InboxAccount, InboxCategory, InboxFormValues, MobileInboxItem, InboxMasterItem } from "@/components/inbox/inbox-items";
+import {
+  ignoreInboxItem,
+  listInbox,
+  mergeTransferInboxItem,
+  postInboxItem,
+  retryInboxItem,
+} from "@/services/inbox-service";
+import {
+  InboxAccount,
+  InboxCategory,
+  InboxFormValues,
+  MobileInboxItem,
+  InboxMasterItem,
+} from "@/components/inbox/inbox-items";
+
+const EMPTY_FORM: InboxFormValues = {
+  accountId: "",
+  amount: "",
+  categoryId: "",
+  note: "",
+  toAccountId: "",
+  destinationAmount: "",
+  exchangeRate: "",
+};
 
 export default function SmsReviewInboxPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
-
-  // Form states per item
   const [formValues, setFormValues] = useState<Record<string, InboxFormValues>>({});
   const [submitting, setSubmitting] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -49,7 +68,10 @@ export default function SmsReviewInboxPage() {
               | undefined;
             const isSettlement = item.reviewReason === "CREDIT_CARD_SETTLEMENT";
             const accountLast4 = typeof payload.accountLast4 === "string" ? payload.accountLast4 : null;
-            const creditCardAccountId = typeof payload.creditCardAccountId === "string" ? payload.creditCardAccountId : undefined;
+            const creditCardAccountId =
+              typeof payload.creditCardAccountId === "string"
+                ? payload.creditCardAccountId
+                : undefined;
             const defaultCreditCardId =
               creditCardAccountId ||
               suggestedTransfer?.toAccountId ||
@@ -61,17 +83,15 @@ export default function SmsReviewInboxPage() {
               )?.id ?? "");
 
             next[item.id] = {
-              accountId: isSettlement
-                ? suggestedTransfer?.fromAccountId || ""
-                : "",
+              accountId: isSettlement ? suggestedTransfer?.fromAccountId || "" : "",
               amount: typeof payload.amountText === "string" ? payload.amountText : "",
               categoryId: "",
               note:
                 typeof payload.merchantOrEntity === "string"
                   ? payload.merchantOrEntity
                   : isSettlement
-                  ? "Credit Card Settlement"
-                  : item.sender,
+                    ? "Credit Card Settlement"
+                    : item.sender,
               toAccountId: isSettlement
                 ? defaultCreditCardId
                 : suggestedTransfer?.toAccountId || "",
@@ -94,16 +114,31 @@ export default function SmsReviewInboxPage() {
     return previous;
   };
   const postMutation = useMutation({
-    mutationFn: ({ itemId, input }: { itemId: string; input: { accountId: string; amount?: string; categoryId?: string; note?: string; toAccountId?: string; destinationAmount?: string; exchangeRate?: string } }) =>
-      postInboxItem(itemId, input),
+    mutationFn: ({
+      itemId,
+      input,
+    }: {
+      itemId: string;
+      input: {
+        accountId: string;
+        amount?: string;
+        categoryId?: string;
+        note?: string;
+        toAccountId?: string;
+        destinationAmount?: string;
+        exchangeRate?: string;
+      };
+    }) => postInboxItem(itemId, input),
     onMutate: ({ itemId }) => removeOptimistically(itemId),
-    onError: (_error, _variables, previous) => queryClient.setQueryData(queryKeys.inbox.all(), previous),
+    onError: (_error, _variables, previous) =>
+      queryClient.setQueryData(queryKeys.inbox.all(), previous),
     onSettled: () => queryClient.invalidateQueries({ queryKey: queryKeys.inbox.all() }),
   });
   const ignoreMutation = useMutation({
     mutationFn: ignoreInboxItem,
     onMutate: removeOptimistically,
-    onError: (_error, _itemId, previous) => queryClient.setQueryData(queryKeys.inbox.all(), previous),
+    onError: (_error, _itemId, previous) =>
+      queryClient.setQueryData(queryKeys.inbox.all(), previous),
     onSettled: () => queryClient.invalidateQueries({ queryKey: queryKeys.inbox.all() }),
   });
   const retryMutation = useMutation({
@@ -113,114 +148,129 @@ export default function SmsReviewInboxPage() {
   const mergeTransferMutation = useMutation({
     mutationFn: (itemId: string) => mergeTransferInboxItem(itemId),
     onMutate: removeOptimistically,
-    onError: (_error, _itemId, previous) => queryClient.setQueryData(queryKeys.inbox.all(), previous),
+    onError: (_error, _itemId, previous) =>
+      queryClient.setQueryData(queryKeys.inbox.all(), previous),
     onSettled: () => queryClient.invalidateQueries({ queryKey: queryKeys.inbox.all() }),
   });
 
-  const handleFieldChange = useCallback((
-    itemId: string,
-    field: "accountId" | "amount" | "categoryId" | "note" | "toAccountId" | "destinationAmount" | "exchangeRate",
-    value: string
-  ) => {
-    setFormValues((prev) => ({
-      ...prev,
-      [itemId]: {
-        ...(prev[itemId] || { accountId: "", amount: "", categoryId: "", note: "" }),
-        [field]: value,
-      },
-    }));
-  }, []);
-
-  const handlePost = useCallback(async (itemId: string) => {
-    setSubmitting(itemId);
-    setErrorMessage(null);
-
-    const values = formValues[itemId] || {
-      accountId: "",
-      amount: "",
-      categoryId: "",
-      note: "",
-      toAccountId: "",
-      destinationAmount: "",
-      exchangeRate: "",
-    };
-
-    if (!values.accountId) {
-      setErrorMessage("Please select an account");
-      setSubmitting(null);
-      return;
-    }
-
-    try {
-      await postMutation.mutateAsync({
-        itemId,
-        input: {
-          accountId: values.accountId,
-          amount: values.amount ? values.amount : undefined,
-          categoryId: values.categoryId || undefined,
-          note: values.note || undefined,
-          toAccountId: values.toAccountId || undefined,
-          destinationAmount: values.destinationAmount || undefined,
-          exchangeRate: values.exchangeRate || undefined,
+  const handleFieldChange = useCallback(
+    (
+      itemId: string,
+      field:
+        | "accountId"
+        | "amount"
+        | "categoryId"
+        | "note"
+        | "toAccountId"
+        | "destinationAmount"
+        | "exchangeRate",
+      value: string
+    ) => {
+      setFormValues((prev) => ({
+        ...prev,
+        [itemId]: {
+          ...(prev[itemId] || EMPTY_FORM),
+          [field]: value,
         },
-      });
-      if (selectedId === itemId) {
-        const remaining = items.filter((it) => it.id !== itemId);
-        setSelectedId(remaining.length > 0 ? remaining[0].id : null);
+      }));
+    },
+    []
+  );
+
+  const handlePost = useCallback(
+    async (itemId: string) => {
+      setSubmitting(itemId);
+      setErrorMessage(null);
+
+      const values = formValues[itemId] || EMPTY_FORM;
+
+      if (!values.accountId) {
+        setErrorMessage("Please select an account");
+        setSubmitting(null);
+        return;
       }
-    } catch {
-      setErrorMessage("Network error posting transaction");
-    } finally {
-      setSubmitting(null);
-    }
-  }, [formValues, items, postMutation, selectedId]);
 
-  const handleIgnore = useCallback(async (itemId: string) => {
-    setSubmitting(itemId);
-    setErrorMessage(null);
-
-    try {
-      await ignoreMutation.mutateAsync(itemId);
-      if (selectedId === itemId) {
-        const remaining = items.filter((it) => it.id !== itemId);
-        setSelectedId(remaining.length > 0 ? remaining[0].id : null);
+      try {
+        await postMutation.mutateAsync({
+          itemId,
+          input: {
+            accountId: values.accountId,
+            amount: values.amount ? values.amount : undefined,
+            categoryId: values.categoryId || undefined,
+            note: values.note || undefined,
+            toAccountId: values.toAccountId || undefined,
+            destinationAmount: values.destinationAmount || undefined,
+            exchangeRate: values.exchangeRate || undefined,
+          },
+        });
+        if (selectedId === itemId) {
+          const remaining = items.filter((it) => it.id !== itemId);
+          setSelectedId(remaining.length > 0 ? remaining[0].id : null);
+        }
+      } catch {
+        setErrorMessage("Network error posting transaction");
+      } finally {
+        setSubmitting(null);
       }
-    } catch {
-      setErrorMessage("Failed to ignore SMS");
-    } finally {
-      setSubmitting(null);
-    }
-  }, [ignoreMutation, items, selectedId]);
+    },
+    [formValues, items, postMutation, selectedId]
+  );
 
-  const handleRetry = useCallback(async (itemId: string) => {
-    setSubmitting(itemId);
-    setErrorMessage(null);
+  const handleIgnore = useCallback(
+    async (itemId: string) => {
+      setSubmitting(itemId);
+      setErrorMessage(null);
 
-    try {
-      await retryMutation.mutateAsync(itemId);
-    } catch {
-      setErrorMessage("Failed to retry SMS");
-    } finally {
-      setSubmitting(null);
-    }
-  }, [retryMutation]);
-
-  const handleMergeTransfer = useCallback(async (itemId: string) => {
-    setSubmitting(itemId);
-    setErrorMessage(null);
-
-    try {
-      await mergeTransferMutation.mutateAsync(itemId);
-      if (selectedId === itemId) {
-        const remaining = items.filter((it) => it.id !== itemId);
-        setSelectedId(remaining.length > 0 ? remaining[0].id : null);
+      try {
+        await ignoreMutation.mutateAsync(itemId);
+        if (selectedId === itemId) {
+          const remaining = items.filter((it) => it.id !== itemId);
+          setSelectedId(remaining.length > 0 ? remaining[0].id : null);
+        }
+      } catch {
+        setErrorMessage("Failed to ignore SMS");
+      } finally {
+        setSubmitting(null);
       }
-    } catch {
-      setErrorMessage("Failed to merge transfer");
-    } finally {
-      setSubmitting(null);
-    }
-  }, [items, mergeTransferMutation, selectedId]);
+    },
+    [ignoreMutation, items, selectedId]
+  );
+
+  const handleRetry = useCallback(
+    async (itemId: string) => {
+      setSubmitting(itemId);
+      setErrorMessage(null);
+
+      try {
+        await retryMutation.mutateAsync(itemId);
+      } catch {
+        setErrorMessage("Failed to retry SMS");
+      } finally {
+        setSubmitting(null);
+      }
+    },
+    [retryMutation]
+  );
+
+  const handleMergeTransfer = useCallback(
+    async (itemId: string) => {
+      setSubmitting(itemId);
+      setErrorMessage(null);
+
+      try {
+        await mergeTransferMutation.mutateAsync(itemId);
+        if (selectedId === itemId) {
+          const remaining = items.filter((it) => it.id !== itemId);
+          setSelectedId(remaining.length > 0 ? remaining[0].id : null);
+        }
+      } catch {
+        setErrorMessage("Failed to merge transfer");
+      } finally {
+        setSubmitting(null);
+      }
+    },
+    [items, mergeTransferMutation, selectedId]
+  );
 
   const itemActions = useMemo(
     () => ({
@@ -259,41 +309,27 @@ export default function SmsReviewInboxPage() {
   const selectedItem = items.find((it) => it.id === selectedId) || items[0] || null;
 
   return (
-    <main className="flex-1 max-w-5xl mx-auto w-full px-4 py-3 space-y-4">
-      {/* Top Header */}
-      <div className="flex items-center justify-between py-1">
-        <div className="flex items-center gap-2">
-          <Link
-            href="/more" transitionTypes={["nav-back"]}
-            className="p-1 rounded hover:bg-surface text-[var(--text-muted)] transition-colors"
+    <main className="flex-1 max-w-6xl mx-auto w-full px-5 sm:px-7 pt-4 sm:pt-6 pb-8 space-y-6">
+      <AppHeader
+        title="SMS Review Inbox"
+        subtitle={items.length > 0 ? `${items.length} Pending Review` : "Automated Alert Matching"}
+        backHref="/more"
+        backLabel="Back to More"
+        rightSlot={
+          <button
+            type="button"
+            onClick={() => void inboxQuery.refetch()}
+            className="h-10 px-4 inline-flex items-center gap-1.5 text-xs rounded-2xl border border-[var(--border)] bg-[var(--surface)] font-semibold hover:bg-[var(--surface-hover)] text-[var(--text)] transition-colors cursor-pointer"
           >
-            <ArrowLeft size={18} />
-          </Link>
-          <div className="flex items-center gap-2">
-            <h1 className="text-base font-semibold tracking-tight text-[var(--text)]">
-              SMS Review Inbox
-            </h1>
-            {items.length > 0 && (
-              <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-[var(--accent)] text-white">
-                {items.length}
-              </span>
-            )}
-          </div>
-        </div>
-
-        <button
-          type="button"
-          onClick={() => void inboxQuery.refetch()}
-          className="flex items-center gap-1.5 px-2.5 py-1 text-xs rounded border border-hairline font-medium hover:bg-surface text-[var(--text)] transition-colors"
-        >
-          <RefreshCw size={13} className={loading ? "animate-spin" : ""} />
-          <span>Refresh</span>
-        </button>
-      </div>
+            <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
+            <span className="hidden sm:inline">Refresh</span>
+          </button>
+        }
+      />
 
       {errorMessage && (
-        <div className="p-3 rounded bg-[var(--expense)]/10 border border-[var(--expense)]/30 text-xs font-medium text-[var(--expense)] flex items-center gap-2">
-          <AlertCircle size={15} />
+        <div className="p-4 rounded-2xl bg-[var(--expense)]/10 border border-[var(--expense)]/30 text-xs font-semibold text-[var(--expense)] flex items-center gap-2.5">
+          <AlertCircle size={16} />
           <span>{errorMessage}</span>
         </div>
       )}
@@ -308,13 +344,13 @@ export default function SmsReviewInboxPage() {
         </div>
       )}
 
-      {/* Mobile View: Full-screen vertical list with actions */}
-      <div className="block md:hidden space-y-3">
+      {/* Mobile View */}
+      <div className="block md:hidden space-y-4">
         {items.map((item) => (
           <MobileInboxItem
             key={item.id}
             item={item}
-            form={formValues[item.id] || { accountId: "", amount: "", categoryId: "", note: "" }}
+            form={formValues[item.id] || EMPTY_FORM}
             accounts={accounts}
             categories={categories}
             submitting={submitting === item.id}
@@ -323,19 +359,19 @@ export default function SmsReviewInboxPage() {
         ))}
       </div>
 
-      {/* Desktop View: Side panel / Master-Detail layout */}
+      {/* Desktop View: Master-Detail layout */}
       {items.length > 0 && (
-        <div className="hidden md:grid md:grid-cols-12 gap-4 items-start">
+        <div className="hidden md:grid md:grid-cols-12 gap-5 items-start">
           {/* Master List */}
-          <div className="col-span-5 flat-card divide-y divide-hairline overflow-hidden">
-            <div className="p-3 bg-[var(--surface-hover)] border-b border-hairline flex items-center justify-between">
-              <span className="text-xs font-semibold text-[var(--text)]">Pending Review</span>
-              <span className="text-[11px] text-[var(--text-muted)]">
+          <div className="col-span-5 rounded-3xl bg-[var(--surface)] border border-[var(--border)] divide-y divide-[var(--border)] overflow-hidden shadow-xs">
+            <div className="p-4 bg-[var(--bg)] border-b border-[var(--border)] flex items-center justify-between">
+              <span className="text-xs font-bold text-[var(--text)]">Pending Review</span>
+              <span className="text-xs text-[var(--text-muted)]">
                 {items.length} {items.length === 1 ? "item" : "items"}
               </span>
             </div>
 
-            <div className="max-h-[600px] overflow-y-auto divide-y divide-hairline">
+            <div className="max-h-[620px] overflow-y-auto divide-y divide-[var(--border)]">
               {items.map((item) => (
                 <InboxMasterItem
                   key={item.id}
@@ -349,13 +385,11 @@ export default function SmsReviewInboxPage() {
 
           {/* Detail / Action Side Panel */}
           {selectedItem && (
-            <div className="col-span-7 flat-card p-4 space-y-4">
-              <div className="flex items-center justify-between border-b border-hairline pb-3">
+            <div className="col-span-7 rounded-3xl bg-[var(--surface)] border border-[var(--border)] p-5 sm:p-6 space-y-5 shadow-xs">
+              <div className="flex items-center justify-between gap-3 border-b border-[var(--border)] pb-4">
                 <div>
-                  <h3 className="text-sm font-semibold text-[var(--text)]">
-                    Review & Post
-                  </h3>
-                  <span className="text-xs text-[var(--text-muted)]">
+                  <h3 className="text-base font-bold text-[var(--text)]">Review & Post</h3>
+                  <span className="text-xs text-[var(--text-muted)] block mt-0.5">
                     From {selectedItem.sender} • Received{" "}
                     {new Date(selectedItem.receivedAt).toLocaleString()}
                   </span>
@@ -364,20 +398,20 @@ export default function SmsReviewInboxPage() {
                 <span
                   data-testid="inbox-review-reason"
                   data-reason={selectedItem.reviewReason}
-                  className="px-2.5 py-1 rounded text-xs font-semibold bg-amber-500/10 text-amber-500 border border-amber-500/20"
+                  className="px-3 py-1 rounded-full text-xs font-bold bg-amber-500/12 text-amber-600 dark:text-amber-400 border border-amber-500/25 shrink-0"
                 >
                   {formatReviewReason(selectedItem.reviewReason)}
                 </span>
               </div>
 
               {/* Raw message */}
-              <div className="space-y-1">
-                <span className="text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">
+              <div className="space-y-1.5">
+                <span className="text-2xs font-bold text-[var(--text-muted)] uppercase tracking-wider block">
                   Raw SMS Content
                 </span>
                 <div
                   data-testid="inbox-item-raw"
-                  className="p-3 rounded bg-[var(--bg)] border border-hairline font-mono text-xs text-[var(--text)] whitespace-pre-wrap leading-relaxed select-all"
+                  className="p-4 rounded-2xl bg-[var(--bg)] border border-[var(--border)] font-mono text-xs text-[var(--text)] whitespace-pre-wrap leading-relaxed select-all"
                 >
                   {selectedItem.rawMessage}
                 </div>
@@ -386,9 +420,9 @@ export default function SmsReviewInboxPage() {
               {selectedItem.failureReason && (
                 <div
                   data-testid="inbox-failure-info"
-                  className="p-2.5 rounded bg-[var(--expense)]/10 border border-[var(--expense)]/30 text-xs font-medium text-[var(--expense)] flex items-center gap-2"
+                  className="p-3.5 rounded-2xl bg-[var(--expense)]/10 border border-[var(--expense)]/30 text-xs font-semibold text-[var(--expense)] flex items-center gap-2.5"
                 >
-                  <ShieldAlert size={14} className="flex-shrink-0" />
+                  <ShieldAlert size={15} className="shrink-0" />
                   <span>{selectedItem.failureReason}</span>
                 </div>
               )}
@@ -398,9 +432,9 @@ export default function SmsReviewInboxPage() {
                 Boolean(
                   (selectedItem.parsedPayload as Record<string, unknown> | null)?.suggestedTransfer
                 ) && (
-                  <div className="p-3.5 rounded bg-[var(--accent)]/10 border border-[var(--accent)]/30 space-y-2">
-                    <div className="flex items-center gap-2 text-xs font-semibold text-[var(--accent)]">
-                      <ArrowRightLeft size={15} />
+                  <div className="p-4 rounded-2xl bg-[var(--accent)]/10 border border-[var(--accent)]/30 space-y-2.5">
+                    <div className="flex items-center gap-2 text-xs font-bold text-[var(--accent)]">
+                      <ArrowRightLeft size={16} />
                       <span>
                         {selectedItem.reviewReason === "CREDIT_CARD_SETTLEMENT"
                           ? "Matching Settlement Debit Found"
@@ -418,7 +452,7 @@ export default function SmsReviewInboxPage() {
                         data-testid="inbox-merge-transfer-btn"
                         disabled={submitting === selectedItem.id}
                         onClick={() => handleMergeTransfer(selectedItem.id)}
-                        className="flex items-center justify-center gap-2 px-4 py-2 rounded bg-[var(--accent)] text-white text-xs font-semibold hover:opacity-90 active:scale-95 transition-all disabled:opacity-50"
+                        className="h-10 px-4 inline-flex items-center justify-center gap-2 rounded-2xl bg-[var(--accent)] text-white text-xs font-bold hover:opacity-95 active:scale-[0.98] transition-all disabled:opacity-50 cursor-pointer"
                       >
                         <ArrowRightLeft size={14} />
                         <span>Merge as Transfer</span>
@@ -431,37 +465,31 @@ export default function SmsReviewInboxPage() {
                 !Boolean(
                   (selectedItem.parsedPayload as Record<string, unknown> | null)?.suggestedTransfer
                 ) && (
-                  <div className="p-3 rounded bg-amber-500/10 border border-amber-500/20 text-xs space-y-1">
-                    <div className="flex items-center gap-1.5 font-semibold text-amber-600 dark:text-amber-400">
-                      <CreditCard size={14} />
+                  <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/25 text-xs space-y-1">
+                    <div className="flex items-center gap-2 font-bold text-amber-600 dark:text-amber-400">
+                      <CreditCard size={15} />
                       <span>Credit Card Settlement Review</span>
                     </div>
-                    <p className="text-[var(--text-muted)]">
-                      This inward payment is flagged for settlement handling. Please select the funding source account and destination credit card below to post as a verified settlement transfer.
+                    <p className="text-[var(--text-muted)] leading-relaxed">
+                      This inward payment is flagged for settlement handling. Please select the
+                      funding source account and destination credit card below to post as a verified
+                      settlement transfer.
                     </p>
                   </div>
                 )}
 
               {/* Edit Controls */}
               {(() => {
-                const form = formValues[selectedItem.id] || {
-                  accountId: "",
-                  amount: "",
-                  categoryId: "",
-                  note: "",
-                  toAccountId: "",
-                  destinationAmount: "",
-                  exchangeRate: "",
-                };
+                const form = formValues[selectedItem.id] || EMPTY_FORM;
                 const isSettlement = selectedItem.reviewReason === "CREDIT_CARD_SETTLEMENT";
 
                 return (
-                  <div className="space-y-3 pt-2">
+                  <div className="space-y-4 pt-2">
                     {isSettlement ? (
-                      <div className="space-y-3">
-                        <div className="grid grid-cols-2 gap-3">
-                          <div className="space-y-1">
-                            <label className="text-xs font-medium text-[var(--text-muted)]">
+                      <div className="space-y-4">
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-1.5">
+                            <label className="text-xs font-semibold text-[var(--text-muted)] block">
                               Funding Account (From) *
                             </label>
                             <select
@@ -470,7 +498,7 @@ export default function SmsReviewInboxPage() {
                               onChange={(e) =>
                                 handleFieldChange(selectedItem.id, "accountId", e.target.value)
                               }
-                              className="w-full h-8 px-2.5 rounded bg-[var(--bg)] border border-hairline text-xs text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
+                              className="w-full h-11 px-3.5 rounded-2xl bg-[var(--bg)] border border-[var(--border)] text-xs text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
                             >
                               <option value="">-- Select Source Account --</option>
                               {accounts.map((acc) => (
@@ -481,8 +509,8 @@ export default function SmsReviewInboxPage() {
                             </select>
                           </div>
 
-                          <div className="space-y-1">
-                            <label className="text-xs font-medium text-[var(--text-muted)]">
+                          <div className="space-y-1.5">
+                            <label className="text-xs font-semibold text-[var(--text-muted)] block">
                               Credit Card (To) *
                             </label>
                             <select
@@ -491,7 +519,7 @@ export default function SmsReviewInboxPage() {
                               onChange={(e) =>
                                 handleFieldChange(selectedItem.id, "toAccountId", e.target.value)
                               }
-                              className="w-full h-8 px-2.5 rounded bg-[var(--bg)] border border-hairline text-xs text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
+                              className="w-full h-11 px-3.5 rounded-2xl bg-[var(--bg)] border border-[var(--border)] text-xs text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
                             >
                               <option value="">-- Select Credit Card --</option>
                               {accounts
@@ -505,9 +533,9 @@ export default function SmsReviewInboxPage() {
                           </div>
                         </div>
 
-                        <div className="grid grid-cols-2 gap-3">
-                          <div className="space-y-1">
-                            <label className="text-xs font-medium text-[var(--text-muted)]">
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-1.5">
+                            <label className="text-xs font-semibold text-[var(--text-muted)] block">
                               Settlement Amount (LKR) *
                             </label>
                             <input
@@ -518,12 +546,12 @@ export default function SmsReviewInboxPage() {
                                 handleFieldChange(selectedItem.id, "amount", e.target.value)
                               }
                               placeholder="e.g. 1500.00"
-                              className="w-full h-8 px-2.5 rounded bg-[var(--bg)] border border-hairline text-xs text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
+                              className="w-full h-11 px-3.5 rounded-2xl bg-[var(--bg)] border border-[var(--border)] text-xs font-mono text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
                             />
                           </div>
 
-                          <div className="space-y-1">
-                            <label className="text-xs font-medium text-[var(--text-muted)]">
+                          <div className="space-y-1.5">
+                            <label className="text-xs font-semibold text-[var(--text-muted)] block">
                               Settlement Note
                             </label>
                             <input
@@ -533,16 +561,16 @@ export default function SmsReviewInboxPage() {
                               onChange={(e) =>
                                 handleFieldChange(selectedItem.id, "note", e.target.value)
                               }
-                              className="w-full h-8 px-2.5 rounded bg-[var(--bg)] border border-hairline text-xs text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
+                              className="w-full h-11 px-3.5 rounded-2xl bg-[var(--bg)] border border-[var(--border)] text-xs text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
                             />
                           </div>
                         </div>
                       </div>
                     ) : (
                       <>
-                        <div className="grid grid-cols-2 gap-3">
-                          <div className="space-y-1">
-                            <label className="text-xs font-medium text-[var(--text-muted)]">
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-1.5">
+                            <label className="text-xs font-semibold text-[var(--text-muted)] block">
                               Account *
                             </label>
                             <select
@@ -551,7 +579,7 @@ export default function SmsReviewInboxPage() {
                               onChange={(e) =>
                                 handleFieldChange(selectedItem.id, "accountId", e.target.value)
                               }
-                              className="w-full h-8 px-2.5 rounded bg-[var(--bg)] border border-hairline text-xs text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
+                              className="w-full h-11 px-3.5 rounded-2xl bg-[var(--bg)] border border-[var(--border)] text-xs text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
                             >
                               <option value="">-- Select Account --</option>
                               {accounts.map((acc) => (
@@ -562,8 +590,8 @@ export default function SmsReviewInboxPage() {
                             </select>
                           </div>
 
-                          <div className="space-y-1">
-                            <label className="text-xs font-medium text-[var(--text-muted)]">
+                          <div className="space-y-1.5">
+                            <label className="text-xs font-semibold text-[var(--text-muted)] block">
                               Amount (LKR) *
                             </label>
                             <input
@@ -574,14 +602,14 @@ export default function SmsReviewInboxPage() {
                                 handleFieldChange(selectedItem.id, "amount", e.target.value)
                               }
                               placeholder="e.g. 1500.00"
-                              className="w-full h-8 px-2.5 rounded bg-[var(--bg)] border border-hairline text-xs text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
+                              className="w-full h-11 px-3.5 rounded-2xl bg-[var(--bg)] border border-[var(--border)] text-xs font-mono text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
                             />
                           </div>
                         </div>
 
-                        <div className="grid grid-cols-2 gap-3">
-                          <div className="space-y-1">
-                            <label className="text-xs font-medium text-[var(--text-muted)]">
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-1.5">
+                            <label className="text-xs font-semibold text-[var(--text-muted)] block">
                               Category
                             </label>
                             <select
@@ -590,19 +618,19 @@ export default function SmsReviewInboxPage() {
                               onChange={(e) =>
                                 handleFieldChange(selectedItem.id, "categoryId", e.target.value)
                               }
-                              className="w-full h-8 px-2.5 rounded bg-[var(--bg)] border border-hairline text-xs text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
+                              className="w-full h-11 px-3.5 rounded-2xl bg-[var(--bg)] border border-[var(--border)] text-xs text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
                             >
                               <option value="">-- Optional Category --</option>
                               {categories.map((cat) => (
                                 <option key={cat.id} value={cat.id}>
-                                  {cat.icon || "📁"} {cat.name}
+                                  {cat.name}
                                 </option>
                               ))}
                             </select>
                           </div>
 
-                          <div className="space-y-1">
-                            <label className="text-xs font-medium text-[var(--text-muted)]">
+                          <div className="space-y-1.5">
+                            <label className="text-xs font-semibold text-[var(--text-muted)] block">
                               Note / Merchant
                             </label>
                             <input
@@ -612,7 +640,7 @@ export default function SmsReviewInboxPage() {
                               onChange={(e) =>
                                 handleFieldChange(selectedItem.id, "note", e.target.value)
                               }
-                              className="w-full h-8 px-2.5 rounded bg-[var(--bg)] border border-hairline text-xs text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
+                              className="w-full h-11 px-3.5 rounded-2xl bg-[var(--bg)] border border-[var(--border)] text-xs text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
                             />
                           </div>
                         </div>
@@ -620,16 +648,16 @@ export default function SmsReviewInboxPage() {
                     )}
 
                     {/* Actions Toolbar */}
-                    <div className="flex items-center justify-between pt-3 border-t border-hairline">
-                      <div className="flex items-center gap-2">
+                    <div className="flex items-center justify-between pt-4 border-t border-[var(--border)]">
+                      <div className="flex items-center gap-2.5">
                         <button
                           type="button"
                           data-testid="inbox-ignore-btn"
                           disabled={submitting === selectedItem.id}
                           onClick={() => handleIgnore(selectedItem.id)}
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded border border-hairline hover:bg-surface text-xs font-medium text-[var(--text-muted)] transition-colors"
+                          className="h-11 px-4 inline-flex items-center gap-1.5 rounded-2xl border border-[var(--border)] bg-[var(--bg)] hover:bg-[var(--surface-hover)] text-xs font-semibold text-[var(--text-muted)] transition-colors cursor-pointer"
                         >
-                          <XCircle size={14} />
+                          <XCircle size={15} />
                           <span>Ignore</span>
                         </button>
 
@@ -638,10 +666,10 @@ export default function SmsReviewInboxPage() {
                           data-testid="inbox-retry-btn"
                           disabled={submitting === selectedItem.id}
                           onClick={() => handleRetry(selectedItem.id)}
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded border border-hairline hover:bg-surface text-xs font-medium text-[var(--text-muted)] transition-colors"
+                          className="h-11 px-4 inline-flex items-center gap-1.5 rounded-2xl border border-[var(--border)] bg-[var(--bg)] hover:bg-[var(--surface-hover)] text-xs font-semibold text-[var(--text-muted)] transition-colors cursor-pointer"
                         >
                           <RefreshCw
-                            size={13}
+                            size={14}
                             className={submitting === selectedItem.id ? "animate-spin" : ""}
                           />
                           <span>Retry Parser</span>
@@ -653,9 +681,9 @@ export default function SmsReviewInboxPage() {
                         data-testid="inbox-post-btn"
                         disabled={submitting === selectedItem.id}
                         onClick={() => handlePost(selectedItem.id)}
-                        className="flex items-center gap-1.5 px-4 py-1.5 rounded bg-[var(--accent)] text-white text-xs font-semibold hover:opacity-90 active:scale-95 transition-all disabled:opacity-50"
+                        className="h-11 px-5 inline-flex items-center gap-2 rounded-2xl bg-[var(--accent)] text-white text-xs font-bold hover:opacity-95 active:scale-[0.98] transition-all disabled:opacity-50 cursor-pointer"
                       >
-                        <CheckCircle2 size={14} />
+                        <CheckCircle2 size={15} />
                         <span>Post Transaction</span>
                       </button>
                     </div>

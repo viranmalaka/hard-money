@@ -14,7 +14,7 @@ interface IconPickerProps {
 export function IconPicker({
   value,
   onChange,
-  color = "#1971C2",
+  color = "#059669",
   triggerClassName = "",
 }: IconPickerProps) {
   const [isOpen, setIsOpen] = useState(false);
@@ -51,18 +51,18 @@ export function IconPicker({
         type="button"
         data-testid="icon-picker-trigger"
         onClick={() => setIsOpen(true)}
-        className={`flex items-center gap-2 px-3 py-2 rounded border border-hairline bg-[var(--bg)] text-xs text-[var(--text)] hover:border-[var(--accent)] transition-all ${triggerClassName}`}
+        className={`flex items-center gap-2.5 h-11 px-3.5 rounded-2xl border border-hairline bg-[var(--bg)] text-xs text-[var(--text)] hover:border-[var(--accent)] transition-all ${triggerClassName}`}
       >
         <span
-          className="w-6 h-6 rounded flex items-center justify-center text-white shrink-0 shadow-xs"
+          className="w-7 h-7 rounded-xl flex items-center justify-center text-white shrink-0 shadow-xs"
           style={{ backgroundColor: color }}
         >
-          <CategoryIcon name={value} size={14} className="text-white" />
+          <CategoryIcon name={value} size={15} className="text-white" />
         </span>
-        <span className="font-medium truncate flex-1 text-left">
+        <span className="font-medium truncate flex-1 text-left text-sm">
           {value || "Select Icon"}
         </span>
-        <span className="text-[10px] text-[var(--text-muted)] border border-hairline px-1.5 py-0.5 rounded">
+        <span className="text-[11px] font-medium text-[var(--text-muted)] border border-hairline px-2 py-0.5 rounded-lg bg-[var(--surface)]">
           Change
         </span>
       </button>
@@ -70,73 +70,72 @@ export function IconPicker({
       {/* Modal Backdrop & Dialog */}
       {isOpen && (
         <div
-          className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-3 animate-in fade-in"
+          className="fixed inset-0 z-50 bg-black/55 backdrop-blur-xs flex items-end md:items-center justify-center p-0 md:p-4 animate-in fade-in duration-150"
           onClick={() => setIsOpen(false)}
         >
           <div
-            className="w-full max-w-lg bg-[var(--bg)] border border-hairline rounded-lg shadow-xl overflow-hidden flex flex-col max-h-[85vh] animate-in zoom-in-95"
+            className="w-full md:max-w-lg bg-[var(--surface)] border border-hairline rounded-t-3xl md:rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh] pb-sheet-safe md:pb-0 animate-in zoom-in-95 duration-150"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
-            <div className="flex items-center justify-between p-3.5 border-b border-hairline">
-              <div className="flex items-center gap-2">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-hairline">
+              <div className="flex items-center gap-3">
                 <span
-                  className="w-6 h-6 rounded flex items-center justify-center text-white shrink-0"
+                  className="w-8 h-8 rounded-xl flex items-center justify-center text-white shrink-0 shadow-xs"
                   style={{ backgroundColor: color }}
                 >
-                  <CategoryIcon name={value} size={14} className="text-white" />
+                  <CategoryIcon name={value} size={16} className="text-white" />
                 </span>
-                <h3 className="text-sm font-semibold text-[var(--text)]">
+                <h3 className="text-base font-semibold text-[var(--text)]">
                   Pick Category Icon
                 </h3>
               </div>
               <button
                 type="button"
                 onClick={() => setIsOpen(false)}
-                className="p-1 rounded text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--surface-hover)] transition-colors"
+                className="w-9 h-9 rounded-xl flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--surface-hover)] transition-colors"
               >
-                <X size={16} />
+                <X size={18} />
               </button>
             </div>
 
-            {/* Search Input */}
-            <div className="p-3 border-b border-hairline bg-[var(--surface)]">
+            {/* Search Input & Group Pill Filters */}
+            <div className="px-5 py-3.5 border-b border-hairline bg-[var(--bg)]/60 space-y-2.5">
               <div className="relative">
                 <Search
-                  size={14}
-                  className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]"
+                  size={15}
+                  className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]"
                 />
                 <input
                   type="text"
                   data-testid="icon-picker-search"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search 50 common category icons..."
-                  className="w-full pl-8 pr-3 py-1.5 text-xs rounded border border-hairline bg-[var(--bg)] text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
+                  placeholder="Search curated category icons..."
+                  className="w-full h-11 pl-10 pr-9 text-sm rounded-2xl border border-hairline bg-[var(--surface)] text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
                   autoFocus
                 />
                 {search && (
                   <button
                     type="button"
                     onClick={() => setSearch("")}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text)]"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text)]"
                   >
-                    <X size={12} />
+                    <X size={14} />
                   </button>
                 )}
               </div>
 
-              {/* Group Pill Filters */}
-              <div className="flex items-center gap-1.5 overflow-x-auto pt-2 scrollbar-none">
+              <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-0.5">
                 {groups.map((grp) => (
                   <button
                     key={grp}
                     type="button"
                     onClick={() => setActiveGroup(grp)}
-                    className={`px-2 py-0.5 rounded-full text-[10px] font-medium whitespace-nowrap transition-colors ${
+                    className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors ${
                       activeGroup === grp
-                        ? "bg-[var(--accent)] text-white"
-                        : "bg-[var(--bg)] border border-hairline text-[var(--text-muted)] hover:text-[var(--text)]"
+                        ? "bg-[var(--accent)] text-white shadow-xs"
+                        : "bg-[var(--surface)] border border-hairline text-[var(--text-muted)] hover:text-[var(--text)]"
                     }`}
                   >
                     {grp}
@@ -146,13 +145,13 @@ export function IconPicker({
             </div>
 
             {/* Icon Grid */}
-            <div className="flex-1 overflow-y-auto p-3">
+            <div className="flex-1 overflow-y-auto p-4 sm:p-5">
               {filteredIcons.length === 0 ? (
-                <div className="py-8 text-center text-xs text-[var(--text-muted)]">
+                <div className="py-10 text-center text-xs text-[var(--text-muted)]">
                   No icons matching &ldquo;{search}&rdquo;
                 </div>
               ) : (
-                <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
+                <div className="grid grid-cols-4 sm:grid-cols-5 gap-2.5">
                   {filteredIcons.map((item) => {
                     const isSelected =
                       value.toLowerCase() === item.name.toLowerCase();
@@ -167,27 +166,27 @@ export function IconPicker({
                           onChange(item.name);
                           setIsOpen(false);
                         }}
-                        className={`flex flex-col items-center justify-center p-2 rounded-lg border transition-all text-center group relative ${
+                        className={`flex flex-col items-center justify-center p-2.5 rounded-2xl border transition-all text-center group relative ${
                           isSelected
                             ? "border-[var(--accent)] bg-[var(--accent)]/10 text-[var(--text)] font-semibold shadow-xs"
-                            : "border-hairline bg-[var(--bg)] hover:bg-[var(--surface-hover)] text-[var(--text)] hover:border-[var(--text-muted)]"
+                            : "border-hairline bg-[var(--bg)] hover:bg-[var(--surface-hover)] text-[var(--text)]"
                         }`}
                         title={item.label}
                       >
                         <div
-                          className="w-8 h-8 rounded-full flex items-center justify-center mb-1 transition-transform group-hover:scale-110"
+                          className="w-9 h-9 rounded-xl flex items-center justify-center mb-1.5 transition-transform group-hover:scale-105"
                           style={{
                             backgroundColor: isSelected ? color : "var(--surface)",
                             color: isSelected ? "#FFFFFF" : "var(--text)",
                           }}
                         >
-                          <IconComponent size={16} />
+                          <IconComponent size={17} />
                         </div>
                         <span className="text-[10px] truncate max-w-full leading-tight text-[var(--text-muted)] group-hover:text-[var(--text)]">
                           {item.name}
                         </span>
                         {isSelected && (
-                          <span className="absolute top-1 right-1 text-[var(--accent)]">
+                          <span className="absolute top-1.5 right-1.5 text-[var(--accent)]">
                             <Check size={12} />
                           </span>
                         )}
@@ -199,12 +198,12 @@ export function IconPicker({
             </div>
 
             {/* Footer */}
-            <div className="p-2.5 border-t border-hairline bg-[var(--surface)] flex items-center justify-between text-[11px] text-[var(--text-muted)]">
+            <div className="px-5 py-3.5 border-t border-hairline bg-[var(--bg)]/60 flex items-center justify-between text-xs text-[var(--text-muted)]">
               <span>Showing {filteredIcons.length} curated icons</span>
               <button
                 type="button"
                 onClick={() => setIsOpen(false)}
-                className="px-3 py-1 rounded border border-hairline bg-[var(--bg)] text-[var(--text)] font-medium hover:bg-[var(--surface-hover)]"
+                className="h-9 px-4 rounded-xl border border-hairline bg-[var(--surface)] text-[var(--text)] font-semibold hover:bg-[var(--surface-hover)] transition-colors"
               >
                 Close
               </button>

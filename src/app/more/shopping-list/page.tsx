@@ -2,8 +2,8 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Check, GripVertical, Pencil, Plus, Trash2, X } from "lucide-react";
-import Link from "next/link";
+import { Check, GripVertical, Pencil, Plus, Trash2, X } from "lucide-react";
+import { AppHeader } from "@/components/navigation/app-header";
 import { useSync } from "@/components/sync-provider";
 import {
   localCreateShoppingListItem,
@@ -136,7 +136,7 @@ export default function ShoppingListPage() {
     await sync();
   };
 
-  const trackPointerTarget = (event: React.PointerEvent<HTMLButtonElement>) => {
+  const trackPointerTarget = (event: React.PointerEvent<HTMLElement>) => {
     if (!draggedId) return;
     const element = document.elementFromPoint(event.clientX, event.clientY);
     const row = element?.closest<HTMLElement>("[data-shopping-item-id]");
@@ -151,74 +151,84 @@ export default function ShoppingListPage() {
   };
 
   return (
-    <main className="flex-1 max-w-2xl mx-auto w-full px-4 py-3 space-y-4">
-      <div className="flex items-center gap-3">
-        <Link href="/more" aria-label="Back to More" className="text-[var(--text-muted)] hover:text-[var(--text)]">
-          <ArrowLeft size={18} />
-        </Link>
-        <div>
-          <h1 className="text-base font-semibold tracking-tight text-[var(--text)]">Shopping List</h1>
-          <p className="text-[11px] text-[var(--text-muted)]">Shared household items to buy</p>
-        </div>
-      </div>
+    <main className="flex-1 max-w-3xl mx-auto w-full px-5 sm:px-7 pt-4 sm:pt-6 pb-8 space-y-6">
+      <AppHeader
+        title="Shopping List"
+        subtitle="Shared Household Checklist"
+        backHref="/more"
+        backLabel="Back to More"
+      />
 
       {households.length > 1 && (
-        <label className="block text-xs font-semibold text-[var(--text-muted)]">
-          Household
+        <label className="block text-xs font-semibold text-[var(--text-muted)] space-y-1.5">
+          <span>Household</span>
           <select
             value={householdId}
             onChange={(event) => setHouseholdId(event.target.value)}
-            className="mt-1 w-full h-9 px-3 rounded bg-[var(--bg)] border border-hairline text-sm text-[var(--text)]"
+            className="w-full h-12 px-4 rounded-2xl bg-[var(--surface)] border border-[var(--border)] text-sm text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
             data-testid="shopping-list-household-select"
           >
             {households.map((household) => (
-              <option key={household.id} value={household.id}>{household.name}</option>
+              <option key={household.id} value={household.id}>
+                {household.name}
+              </option>
             ))}
           </select>
         </label>
       )}
 
-      <form onSubmit={addItem} className="flat-card p-3 flex gap-2 items-end">
-        <label className="flex-1 text-[11px] font-semibold text-[var(--text-muted)]">
-          Item
+      <form
+        onSubmit={addItem}
+        className="rounded-3xl bg-[var(--surface)] border border-[var(--border)] p-4 sm:p-5 flex flex-col sm:flex-row gap-3 sm:items-end shadow-xs"
+      >
+        <label className="flex-1 text-xs font-semibold text-[var(--text-muted)] space-y-1.5">
+          <span>Item</span>
           <input
             value={name}
             onChange={(event) => setName(event.target.value)}
-            placeholder="Add an item"
+            placeholder="Add an item (e.g. Fresh Milk)"
             maxLength={200}
-            className="mt-1 w-full h-10 px-3 rounded bg-[var(--bg)] border border-hairline text-sm text-[var(--text)]"
+            className="w-full h-12 px-4 rounded-2xl bg-[var(--bg)] border border-[var(--border)] text-sm text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
             data-testid="shopping-list-item-input"
           />
         </label>
-        <label className="w-24 text-[11px] font-semibold text-[var(--text-muted)]">
-          Quantity
-          <input
-            value={quantity}
-            onChange={(event) => setQuantity(event.target.value)}
-            placeholder="2 kg"
-            maxLength={50}
-            className="mt-1 w-full h-10 px-3 rounded bg-[var(--bg)] border border-hairline text-sm text-[var(--text)]"
-            data-testid="shopping-list-quantity-input"
-          />
-        </label>
-        <button type="submit" className="h-10 px-3 rounded bg-[var(--accent)] text-white flex items-center gap-1 text-xs font-semibold" data-testid="shopping-list-add-button">
-          <Plus size={15} /> Add
-        </button>
+        <div className="flex gap-3 items-end">
+          <label className="flex-1 sm:w-28 text-xs font-semibold text-[var(--text-muted)] space-y-1.5">
+            <span>Quantity</span>
+            <input
+              value={quantity}
+              onChange={(event) => setQuantity(event.target.value)}
+              placeholder="2 kg"
+              maxLength={50}
+              className="w-full h-12 px-4 rounded-2xl bg-[var(--bg)] border border-[var(--border)] text-sm text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
+              data-testid="shopping-list-quantity-input"
+            />
+          </label>
+          <button
+            type="submit"
+            className="h-12 px-5 rounded-2xl bg-[var(--accent)] text-white inline-flex items-center justify-center gap-1.5 text-xs font-bold hover:opacity-95 active:scale-[0.98] transition-all cursor-pointer shrink-0"
+            data-testid="shopping-list-add-button"
+          >
+            <Plus size={16} /> Add
+          </button>
+        </div>
       </form>
 
       {(error || householdsQuery.error) && (
-        <p className="text-xs text-[var(--expense)]">
+        <p className="text-xs font-semibold text-[var(--expense)] px-1">
           {error || "Unable to load households"}
         </p>
       )}
 
       <section
-        className="flat-card divide-y divide-hairline"
+        className="rounded-3xl bg-[var(--surface)] border border-[var(--border)] divide-y divide-[var(--border)] overflow-hidden shadow-xs"
         aria-label="Shopping items"
         onPointerMove={trackPointerTarget}
       >
         {sortedItems.length === 0 && (
-          <p className="p-6 text-center text-xs text-[var(--text-muted)]">Your shopping list is empty.</p>
+          <p className="p-8 text-center text-sm text-[var(--text-muted)]">
+            Your shopping list is empty.
+          </p>
         )}
         {sortedItems.map((item) => (
           <div
@@ -228,7 +238,9 @@ export default function ShoppingListPage() {
             onDragStart={() => setDraggedId(item.id)}
             onDragOver={(event) => event.preventDefault()}
             onDrop={() => void dropItem(item.id)}
-            className={`p-3 flex items-center gap-2 ${dropTargetId === item.id ? "bg-[var(--surface-hover)]" : ""}`}
+            className={`p-4 flex items-center gap-3 transition-colors ${
+              dropTargetId === item.id ? "bg-[var(--surface-hover)]" : ""
+            }`}
             data-testid={`shopping-list-item-${item.id}`}
           >
             {!item.isCompleted && (
@@ -236,7 +248,7 @@ export default function ShoppingListPage() {
                 type="button"
                 draggable
                 aria-label={`Drag to reorder ${item.name}`}
-                className="touch-none cursor-grab text-[var(--text-muted)] shrink-0 p-1 -m-1"
+                className="touch-none cursor-grab text-[var(--text-muted)] hover:text-[var(--text)] shrink-0 p-1.5 -m-1.5"
                 onPointerDown={(event) => {
                   event.preventDefault();
                   event.currentTarget.setPointerCapture(event.pointerId);
@@ -255,28 +267,80 @@ export default function ShoppingListPage() {
               type="button"
               onClick={() => void toggleItem(item)}
               aria-label={item.isCompleted ? `Uncheck ${item.name}` : `Check ${item.name}`}
-              className={`w-5 h-5 rounded border flex items-center justify-center shrink-0 ${item.isCompleted ? "bg-[var(--accent)] border-[var(--accent)] text-white" : "border-[var(--text-muted)]"}`}
+              className={`w-6 h-6 rounded-lg border flex items-center justify-center shrink-0 transition-colors cursor-pointer ${
+                item.isCompleted
+                  ? "bg-[var(--accent)] border-[var(--accent)] text-white"
+                  : "border-[var(--text-muted)] hover:border-[var(--accent)]"
+              }`}
             >
-              {item.isCompleted && <Check size={13} />}
+              {item.isCompleted && <Check size={14} />}
             </button>
             {editingId === item.id ? (
-              <form className="min-w-0 flex-1 flex flex-wrap items-center gap-2" onSubmit={(event) => { event.preventDefault(); void saveEdit(item); }}>
-                <input value={editName} onChange={(event) => setEditName(event.target.value)} autoFocus className="min-w-[9rem] flex-1 h-8 px-2 rounded border border-hairline bg-[var(--bg)] text-sm text-[var(--text)]" />
-                <input value={editQuantity} onChange={(event) => setEditQuantity(event.target.value)} className="w-14 h-8 px-2 rounded border border-hairline bg-[var(--bg)] text-sm text-[var(--text)]" />
-                <div className="flex items-center gap-2 basis-full sm:basis-auto sm:ml-auto">
-                  <button type="submit" aria-label="Save item" className="text-[var(--income)] p-1"><Check size={18} /></button>
-                  <button type="button" aria-label="Cancel editing" onClick={() => setEditingId(null)} className="text-[var(--text-muted)] p-1"><X size={18} /></button>
-                  <button type="button" aria-label={`Delete ${item.name}`} onClick={() => void deleteItem(item.id)} className="text-[var(--expense)] p-1"><Trash2 size={17} /></button>
+              <form
+                className="min-w-0 flex-1 flex flex-wrap items-center gap-2"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void saveEdit(item);
+                }}
+              >
+                <input
+                  value={editName}
+                  onChange={(event) => setEditName(event.target.value)}
+                  autoFocus
+                  className="min-w-[9rem] flex-1 h-10 px-3 rounded-xl border border-[var(--border)] bg-[var(--bg)] text-sm text-[var(--text)]"
+                />
+                <input
+                  value={editQuantity}
+                  onChange={(event) => setEditQuantity(event.target.value)}
+                  className="w-20 h-10 px-3 rounded-xl border border-[var(--border)] bg-[var(--bg)] text-sm text-[var(--text)]"
+                />
+                <div className="flex items-center gap-1.5 basis-full sm:basis-auto sm:ml-auto">
+                  <button
+                    type="submit"
+                    aria-label="Save item"
+                    className="w-9 h-9 rounded-xl flex items-center justify-center text-[var(--income)] hover:bg-[var(--income)]/10 cursor-pointer"
+                  >
+                    <Check size={18} />
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="Cancel editing"
+                    onClick={() => setEditingId(null)}
+                    className="w-9 h-9 rounded-xl flex items-center justify-center text-[var(--text-muted)] hover:bg-[var(--bg)] cursor-pointer"
+                  >
+                    <X size={18} />
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={`Delete ${item.name}`}
+                    onClick={() => void deleteItem(item.id)}
+                    className="w-9 h-9 rounded-xl flex items-center justify-center text-[var(--expense)] hover:bg-[var(--expense)]/10 cursor-pointer"
+                  >
+                    <Trash2 size={17} />
+                  </button>
                 </div>
               </form>
             ) : (
-              <div className={`min-w-0 flex-1 text-sm ${item.isCompleted ? "line-through text-[var(--text-muted)]" : "text-[var(--text)]"}`}>
+              <div
+                className={`min-w-0 flex-1 text-sm font-medium ${
+                  item.isCompleted ? "line-through text-[var(--text-muted)]" : "text-[var(--text)]"
+                }`}
+              >
                 {item.name}
-                {item.quantity && <span className="ml-2 text-xs text-[var(--text-muted)]">({item.quantity})</span>}
+                {item.quantity && (
+                  <span className="ml-2 px-2 py-0.5 rounded-full bg-[var(--bg)] border border-[var(--border)] text-2xs font-semibold text-[var(--text-muted)]">
+                    {item.quantity}
+                  </span>
+                )}
               </div>
             )}
             {editingId !== item.id && (
-              <button type="button" onClick={() => beginEdit(item)} aria-label={`Edit ${item.name}`} className="text-[var(--text-muted)] hover:text-[var(--text)] p-1">
+              <button
+                type="button"
+                onClick={() => beginEdit(item)}
+                aria-label={`Edit ${item.name}`}
+                className="w-9 h-9 rounded-xl flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--bg)] cursor-pointer shrink-0"
+              >
                 <Pencil size={15} />
               </button>
             )}
@@ -285,7 +349,11 @@ export default function ShoppingListPage() {
       </section>
 
       {completedItems.length > 0 && (
-        <button type="button" onClick={() => void clearCompleted()} className="text-xs font-semibold text-[var(--expense)] hover:underline">
+        <button
+          type="button"
+          onClick={() => void clearCompleted()}
+          className="h-10 px-4 rounded-2xl border border-[var(--expense)]/25 bg-[var(--expense)]/8 text-xs font-bold text-[var(--expense)] hover:bg-[var(--expense)]/15 transition-colors cursor-pointer"
+        >
           Clear completed ({completedItems.length})
         </button>
       )}

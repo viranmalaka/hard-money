@@ -23,9 +23,6 @@ import {
   rateNumberToMicros,
 } from "@/lib/finance-core/currency";
 
-/**
- * Returns today's date in YYYY-MM-DD formatted for Asia/Colombo or local timezone
- */
 function getTodayDateString(): string {
   try {
     const formatter = new Intl.DateTimeFormat("en-CA", {
@@ -96,15 +93,18 @@ function QuickAddModalContent() {
   const [type, setType] = useState<TransactionType>(initialDraft?.type || initialType || "EXPENSE");
   const [date, setDate] = useState<string>(initialDraft?.date || getTodayDateString());
   const [expression, setExpression] = useState<string>(initialDraft?.expression || "");
-  const [rawAccountId, setAccountId] = useState<string>(initialDraft?.accountId || initialAccountId || "");
+  const [rawAccountId, setAccountId] = useState<string>(
+    initialDraft?.accountId || initialAccountId || ""
+  );
   const [rawToAccountId, setToAccountId] = useState<string>(initialDraft?.toAccountId || "");
   const [rawCategoryId, setCategoryId] = useState<string>(initialDraft?.categoryId || "");
   const [destinationAmountStr, setDestinationAmountStr] = useState("");
   const [exchangeRateStr, setExchangeRateStr] = useState("");
   const [note, setNote] = useState<string>(initialDraft?.note || "");
-  const [excludeFromBudget, setExcludeFromBudget] = useState(Boolean(initialDraft?.excludeFromBudget));
+  const [excludeFromBudget, setExcludeFromBudget] = useState(
+    Boolean(initialDraft?.excludeFromBudget)
+  );
   const [errorMsg, setErrorMsg] = useState<string>("");
-  // Desktop has a physical keyboard: on-screen keypad is opt-in via the calculator toggle
   const [isKeypadOpen, setIsKeypadOpen] = useState(false);
 
   const handleApplyTemplate = (tmpl: LocalTemplate) => {
@@ -130,7 +130,6 @@ function QuickAddModalContent() {
 
   const amountInputRef = useRef<HTMLInputElement>(null);
 
-  // Derived effective account and category with sensible fallbacks
   const accountId = useMemo(() => {
     if (rawAccountId && activeAccounts.some((a) => a.id === rawAccountId)) {
       return rawAccountId;
@@ -139,33 +138,43 @@ function QuickAddModalContent() {
   }, [rawAccountId, activeAccounts]);
 
   const toAccountId = useMemo(() => {
-    if (rawToAccountId && activeAccounts.some((a) => a.id === rawToAccountId && a.id !== accountId)) {
+    if (
+      rawToAccountId &&
+      activeAccounts.some((a) => a.id === rawToAccountId && a.id !== accountId)
+    ) {
       return rawToAccountId;
     }
     const dest = activeAccounts.find((a) => a.id !== accountId);
     return dest?.id || "";
   }, [rawToAccountId, activeAccounts, accountId]);
-  const sourceAccount = useMemo(() => activeAccounts.find((a) => a.id === accountId), [activeAccounts, accountId]);
-  const destinationAccount = useMemo(() => activeAccounts.find((a) => a.id === toAccountId), [activeAccounts, toAccountId]);
+
+  const sourceAccount = useMemo(
+    () => activeAccounts.find((a) => a.id === accountId),
+    [activeAccounts, accountId]
+  );
+  const destinationAccount = useMemo(
+    () => activeAccounts.find((a) => a.id === toAccountId),
+    [activeAccounts, toAccountId]
+  );
   const isUsdToLkrTransfer =
-    type === "TRANSFER" && sourceAccount?.currency === "USD" && destinationAccount?.currency === "LKR";
+    type === "TRANSFER" &&
+    sourceAccount?.currency === "USD" &&
+    destinationAccount?.currency === "LKR";
 
   const categoryGroups = useMemo(() => groupCategoriesByType(categories), [categories]);
-
-  // Categories valid for the current transaction type
   const typeCategories = type === "INCOME" ? categoryGroups.income : categoryGroups.expense;
 
-  // Mobile: no auto-populated selections — the user picks each field (guided by OK/next flow)
   const mobileCategoryId =
     rawCategoryId && typeCategories.some((c) => c.id === rawCategoryId) ? rawCategoryId : "";
   const mobileAccountId =
     rawAccountId && activeAccounts.some((a) => a.id === rawAccountId) ? rawAccountId : "";
   const mobileToAccountId =
-    rawToAccountId && rawToAccountId !== mobileAccountId && activeAccounts.some((a) => a.id === rawToAccountId)
+    rawToAccountId &&
+    rawToAccountId !== mobileAccountId &&
+    activeAccounts.some((a) => a.id === rawToAccountId)
       ? rawToAccountId
       : "";
 
-  // Desktop: sensible fallbacks (first account / first category of the current type)
   const categoryId = useMemo(() => {
     if (rawCategoryId && typeCategories.some((c) => c.id === rawCategoryId)) {
       return rawCategoryId;
@@ -173,12 +182,10 @@ function QuickAddModalContent() {
     return typeCategories[0]?.id || "";
   }, [rawCategoryId, typeCategories]);
 
-  // Live expression evaluation
   const evalResult = useMemo(() => {
     return evaluateExpression(expression);
   }, [expression]);
 
-  // Keypad button click handler
   const onKeypadClick = useCallback((token: string) => {
     setErrorMsg("");
     if (token === "C") {
@@ -194,7 +201,6 @@ function QuickAddModalContent() {
     });
   }, []);
 
-  // Physical keyboard listener
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLInputElement>) => {
       const key = e.key;
@@ -226,10 +232,25 @@ function QuickAddModalContent() {
 
   const isDivisionByZero = !evalResult.isValid;
 
+  const handleDestinationAmountChange = (val: string) => {
+    setDestinationAmountStr(val);
+    const destinationMinor = Math.round(Number(val) * 100);
+    const sourceMinor = Math.round((evalResult.value || 0) * 100);
+    setExchangeRateStr(
+      sourceMinor > 0 && destinationMinor > 0
+        ? (calculateExchangeRateMicros(sourceMinor, destinationMinor) / 1_000_000).toFixed(6)
+        : ""
+    );
+  };
+
+  const handleExchangeRateChange = (val: string) => {
+    setExchangeRateStr(val);
+    setDestinationAmountStr("");
+  };
+
   const validateAndSubmit = async (keepOpen = false) => {
     setErrorMsg("");
 
-    // Division by zero or evaluation error
     if (!evalResult.isValid) {
       setErrorMsg(evalResult.error || "Invalid amount formula");
       return;
@@ -346,219 +367,142 @@ function QuickAddModalContent() {
         validateAndSubmit={validateAndSubmit}
         closeQuickAdd={closeQuickAdd}
         isDivisionByZero={isDivisionByZero}
+        isUsdToLkrTransfer={isUsdToLkrTransfer}
+        destinationAmountStr={destinationAmountStr}
+        onDestinationAmountChange={handleDestinationAmountChange}
+        exchangeRateStr={exchangeRateStr}
+        onExchangeRateChange={handleExchangeRateChange}
       />
 
       {/* Desktop Modal Sheet (>= md) */}
       <div
         data-testid="quick-add-sheet"
-        className="hidden md:flex fixed inset-0 z-50 bg-black/60 backdrop-blur-xs items-center justify-center p-4 select-none overflow-y-auto"
+        className="hidden md:flex fixed inset-0 z-50 bg-black/60 backdrop-blur-xs items-center justify-center p-4 select-none overflow-y-auto animate-in fade-in duration-150"
       >
         <div
           data-testid="quick-add-dialog"
-          className="w-full max-w-md bg-[var(--surface)] border border-hairline rounded-xl shadow-2xl flex flex-col modal-sheet-dialog overflow-hidden"
+          className="w-full max-w-lg bg-[var(--surface)] border border-[var(--border)] rounded-3xl shadow-2xl flex flex-col modal-sheet-dialog overflow-hidden"
         >
-        {/* Header: Type Tabs & Close */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-hairline bg-[var(--surface)] shrink-0">
-          {/* 3-State Type Switcher */}
-          <div className="flex items-center gap-1 p-0.5 bg-[var(--border)] rounded-md text-xs font-semibold">
-            <button
-              type="button"
-              data-testid="type-expense"
-              onClick={() => {
-                setType("EXPENSE");
-                setErrorMsg("");
-              }}
-              className={`px-3 py-1.5 rounded transition-all ${
-                type === "EXPENSE"
-                  ? "bg-[var(--surface)] text-[var(--text)] shadow-xs"
-                  : "text-[var(--text-muted)] hover:text-[var(--text)]"
-              }`}
-            >
-              Expense
-            </button>
-            <button
-              type="button"
-              data-testid="type-income"
-              onClick={() => {
-                setType("INCOME");
-                setErrorMsg("");
-              }}
-              className={`px-3 py-1.5 rounded transition-all ${
-                type === "INCOME"
-                  ? "bg-[var(--surface)] text-[var(--text)] shadow-xs"
-                  : "text-[var(--text-muted)] hover:text-[var(--text)]"
-              }`}
-            >
-              Income
-            </button>
-            <button
-              type="button"
-              data-testid="type-transfer"
-              onClick={() => {
-                setType("TRANSFER");
-                setErrorMsg("");
-              }}
-              className={`px-3 py-1.5 rounded transition-all ${
-                type === "TRANSFER"
-                  ? "bg-[var(--surface)] text-[var(--text)] shadow-xs"
-                  : "text-[var(--text-muted)] hover:text-[var(--text)]"
-              }`}
-            >
-              Transfer
-            </button>
-          </div>
-
-          {/* Close button */}
-          <button
-            type="button"
-            data-testid="quick-add-close"
-            onClick={closeQuickAdd}
-            className="p-1.5 rounded text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--border)] transition-colors"
-          >
-            <X size={18} />
-          </button>
-        </div>
-
-        {/* Bookmark Chips Row */}
-        {templates.length > 0 && (
-          <div
-            data-testid="bookmark-chips"
-            className="flex items-center gap-1.5 overflow-x-auto px-4 py-2 border-b border-hairline bg-[var(--surface-hover)]/30 no-scrollbar shrink-0"
-          >
-            {templates.map((tmpl) => (
+          {/* Header: Type Tabs & Close */}
+          <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--border)] bg-[var(--surface)] shrink-0">
+            <div className="flex items-center gap-1 p-1 bg-[var(--bg)] border border-[var(--border)] rounded-2xl text-xs font-bold">
               <button
-                key={tmpl.id}
                 type="button"
-                data-testid={`bookmark-chip-${tmpl.id}`}
-                onClick={() => handleApplyTemplate(tmpl)}
-                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-hairline bg-[var(--surface)] hover:bg-[var(--border)] text-xs text-[var(--text)] whitespace-nowrap shrink-0 transition-colors"
-              >
-                <span className="font-medium">{tmpl.name}</span>
-                {tmpl.defaultAmountMinor && (
-                  <span className="text-[10px] text-[var(--text-muted)] font-mono">
-                    {(tmpl.defaultAmountMinor / 100).toFixed(0)}
-                  </span>
-                )}
-              </button>
-            ))}
-          </div>
-        )}
-
-        {/* Content Body */}
-        <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-3">
-          {/* Date & Account selectors row */}
-          <div className="grid grid-cols-2 gap-2 text-xs">
-            <div className="space-y-1">
-              <label className="text-[11px] font-medium text-[var(--text-muted)]">Date</label>
-              <input
-                type="date"
-                data-testid="quick-add-date"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-                className="w-full px-2.5 py-2 rounded border border-hairline bg-[var(--bg)] text-[var(--text)] font-mono text-xs focus:outline-none focus:ring-1 focus:ring-[var(--text)]"
-              />
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-[11px] font-medium text-[var(--text-muted)]">
-                {type === "TRANSFER" ? "From Account" : "Account"}
-              </label>
-              <select
-                data-testid="quick-add-account"
-                value={accountId}
-                onChange={(e) => setAccountId(e.target.value)}
-                className="w-full px-2.5 py-2 rounded border border-hairline bg-[var(--bg)] text-[var(--text)] text-xs focus:outline-none focus:ring-1 focus:ring-[var(--text)]"
-              >
-                {activeAccounts.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.name} ({a.currency})
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          {/* Transfer Destination Account */}
-          {type === "TRANSFER" && (
-            <div className="space-y-1 text-xs">
-              <label className="text-[11px] font-medium text-[var(--text-muted)]">To Account</label>
-              <select
-                data-testid="quick-add-to-account"
-                value={toAccountId}
-                onChange={(e) => setToAccountId(e.target.value)}
-                className="w-full px-2.5 py-2 rounded border border-hairline bg-[var(--bg)] text-[var(--text)] text-xs focus:outline-none focus:ring-1 focus:ring-[var(--text)]"
-              >
-                {activeAccounts
-                  .filter((a) => a.id !== accountId)
-                  .map((a) => (
-                    <option key={a.id} value={a.id}>
-                      {a.name} ({a.currency})
-                    </option>
-                  ))}
-              </select>
-            </div>
-          )}
-
-          {isUsdToLkrTransfer && (
-            <div className="grid grid-cols-2 gap-2 text-xs">
-              <label className="space-y-1">
-                <span className="text-[11px] font-medium text-[var(--text-muted)]">Final LKR amount</span>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  data-testid="quick-add-destination-amount"
-                  value={destinationAmountStr}
-                  onChange={(e) => {
-                    setDestinationAmountStr(e.target.value);
-                    const destinationMinor = Math.round(Number(e.target.value) * 100);
-                    const sourceMinor = Math.round(evalResult.value * 100);
-                    setExchangeRateStr(
-                      sourceMinor > 0 && destinationMinor > 0
-                        ? (calculateExchangeRateMicros(sourceMinor, destinationMinor) / 1_000_000).toFixed(6)
-                        : "",
-                    );
-                  }}
-                  placeholder="Optional"
-                  className="w-full px-2.5 py-2 rounded border border-hairline bg-[var(--bg)] text-[var(--text)] font-mono focus:outline-none focus:ring-1 focus:ring-[var(--text)]"
-                />
-              </label>
-              <label className="space-y-1">
-                <span className="text-[11px] font-medium text-[var(--text-muted)]">Rate (LKR / USD)</span>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.000001"
-                  data-testid="quick-add-exchange-rate"
-                  value={exchangeRateStr}
-                  onChange={(e) => {
-                    setExchangeRateStr(e.target.value);
-                    setDestinationAmountStr("");
-                  }}
-                  placeholder="Optional"
-                  className="w-full px-2.5 py-2 rounded border border-hairline bg-[var(--bg)] text-[var(--text)] font-mono focus:outline-none focus:ring-1 focus:ring-[var(--text)]"
-                />
-              </label>
-            </div>
-          )}
-
-          {/* Amount Display & Live Preview */}
-          <div className="p-3 rounded-lg border border-hairline bg-[var(--bg)] space-y-1">
-            <div className="flex items-baseline justify-between">
-              <span className="text-[11px] font-medium text-[var(--text-muted)] uppercase tracking-wider">
-                Amount ({sourceAccount?.currency || "LKR"})
-              </span>
-              <span
-                data-testid="calculator-preview"
-                className={`font-mono text-xs font-semibold tabular-nums ${
-                  evalResult.isValid ? "text-[var(--text-muted)]" : "text-red-500 font-bold"
+                data-testid="type-expense"
+                onClick={() => {
+                  setType("EXPENSE");
+                  setErrorMsg("");
+                }}
+                className={`px-4 py-2 rounded-xl transition-all cursor-pointer ${
+                  type === "EXPENSE"
+                    ? "bg-[var(--expense)]/12 text-[var(--expense)] border border-[var(--expense)]/25"
+                    : "text-[var(--text-muted)] hover:text-[var(--text)]"
                 }`}
               >
-                {evalResult.isValid ? evalResult.displayValue : evalResult.displayValue}
-              </span>
+                Expense
+              </button>
+              <button
+                type="button"
+                data-testid="type-income"
+                onClick={() => {
+                  setType("INCOME");
+                  setErrorMsg("");
+                }}
+                className={`px-4 py-2 rounded-xl transition-all cursor-pointer ${
+                  type === "INCOME"
+                    ? "bg-[var(--income)]/12 text-[var(--income)] border border-[var(--income)]/25"
+                    : "text-[var(--text-muted)] hover:text-[var(--text)]"
+                }`}
+              >
+                Income
+              </button>
+              <button
+                type="button"
+                data-testid="type-transfer"
+                onClick={() => {
+                  setType("TRANSFER");
+                  setErrorMsg("");
+                }}
+                className={`px-4 py-2 rounded-xl transition-all cursor-pointer ${
+                  type === "TRANSFER"
+                    ? "bg-[var(--accent)]/12 text-[var(--accent)] border border-[var(--accent)]/25"
+                    : "text-[var(--text-muted)] hover:text-[var(--text)]"
+                }`}
+              >
+                Transfer
+              </button>
             </div>
 
-            <div className="flex items-center justify-between">
+            <button
+              type="button"
+              data-testid="quick-add-close"
+              onClick={closeQuickAdd}
+              className="w-9 h-9 rounded-xl flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--bg)] transition-colors cursor-pointer"
+            >
+              <X size={18} />
+            </button>
+          </div>
+
+          {/* Bookmark Chips Row */}
+          {templates.length > 0 && (
+            <div
+              data-testid="bookmark-chips"
+              className="flex items-center gap-2 overflow-x-auto px-6 py-3 border-b border-[var(--border)] bg-[var(--bg)]/50 no-scrollbar shrink-0"
+            >
+              {templates.map((tmpl) => (
+                <button
+                  key={tmpl.id}
+                  type="button"
+                  data-testid={`bookmark-chip-${tmpl.id}`}
+                  onClick={() => handleApplyTemplate(tmpl)}
+                  className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-2xl border border-[var(--border)] bg-[var(--surface)] hover:border-[var(--accent)]/40 text-xs text-[var(--text)] whitespace-nowrap shrink-0 transition-colors cursor-pointer shadow-2xs"
+                >
+                  <span className="font-semibold">{tmpl.name}</span>
+                  {tmpl.defaultAmountMinor && (
+                    <span className="text-2xs text-[var(--text-muted)] font-mono">
+                      {(tmpl.defaultAmountMinor / 100).toFixed(0)}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Content Body */}
+          <div className="flex-1 min-h-0 overflow-y-auto p-6 space-y-4">
+            {/* Modern Hero Amount Card */}
+            <div className="p-5 rounded-3xl border border-[var(--border)] bg-[var(--bg)] space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-2xs font-bold text-[var(--text-muted)] uppercase tracking-wider">
+                  Amount ({sourceAccount?.currency || "LKR"})
+                </span>
+                <div className="flex items-center gap-2">
+                  <span
+                    data-testid="calculator-preview"
+                    className={`font-mono text-xs font-bold tabular-nums ${
+                      evalResult.isValid ? "text-[var(--text-muted)]" : "text-[var(--expense)]"
+                    }`}
+                  >
+                    {evalResult.displayValue}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setIsKeypadOpen(!isKeypadOpen);
+                    }}
+                    className={`w-8 h-8 rounded-xl border flex items-center justify-center transition-colors cursor-pointer ${
+                      isKeypadOpen
+                        ? "bg-[var(--accent)] text-white border-[var(--accent)]"
+                        : "bg-[var(--surface)] border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text)]"
+                    }`}
+                    title="Toggle Calculator Keypad"
+                  >
+                    <Calculator size={15} />
+                  </button>
+                </div>
+              </div>
+
               <input
                 ref={amountInputRef}
                 type="text"
@@ -569,154 +513,236 @@ function QuickAddModalContent() {
                 readOnly
                 autoFocus
                 aria-label="Amount (type digits and + - * /)"
-                className="w-full text-2xl font-bold font-mono tracking-tight bg-transparent text-[var(--text)] focus:outline-none text-right tabular-nums cursor-text"
+                className="w-full text-3xl font-bold font-mono tracking-tight bg-transparent text-[var(--text)] focus:outline-none text-center tabular-nums cursor-text py-1"
               />
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setIsKeypadOpen(!isKeypadOpen);
-                }}
-                className={`ml-2 p-1.5 rounded border border-hairline transition-colors ${
-                  isKeypadOpen
-                    ? "bg-[var(--accent)] text-white border-[var(--accent)]"
-                    : "bg-[var(--surface)] text-[var(--text-muted)] hover:text-[var(--text)]"
-                }`}
-                title="Toggle Calculator Keypad"
-              >
-                <Calculator size={16} />
-              </button>
             </div>
-          </div>
 
-          {/* On-Demand Pop-Up Arithmetic Keypad */}
-          <NumberKeypadPopup
-            isOpen={isKeypadOpen}
-            onClose={() => setIsKeypadOpen(false)}
-            onKeypadClick={onKeypadClick}
-            expression={expression}
-            previewValue={evalResult.isValid ? evalResult.displayValue : undefined}
-          />
+            <NumberKeypadPopup
+              isOpen={isKeypadOpen}
+              onClose={() => setIsKeypadOpen(false)}
+              onKeypadClick={onKeypadClick}
+              expression={expression}
+              previewValue={evalResult.isValid ? evalResult.displayValue : undefined}
+            />
 
-          {/* Category Selector Grid (Only for Expense & Income) */}
-          {type !== "TRANSFER" && (
-            <div className="space-y-1.5">
-              <label className="text-[11px] font-medium text-[var(--text-muted)]">Category</label>
-              <div className="max-h-44 overflow-y-auto p-1.5 rounded border border-hairline bg-[var(--bg)] space-y-2">
-                {(type === "INCOME"
-                  ? [{ label: "Income", items: categoryGroups.income }, { label: "Expense", items: categoryGroups.expense }]
-                  : [{ label: "Expense", items: categoryGroups.expense }, { label: "Income", items: categoryGroups.income }]
-                )
-                  .filter((g) => g.items.length > 0)
-                  .map((group) => (
-                    <div key={group.label}>
-                      <div className="px-1 pb-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
-                        {group.label}
-                      </div>
-                      <div className="grid grid-cols-4 gap-1.5">
-                        {group.items.map((cat) => {
-                          const isSelected = categoryId === cat.id;
-                          return (
-                            <button
-                              key={cat.id}
-                              type="button"
-                              data-testid={`category-select-${cat.id}`}
-                              onClick={() => {
-                                setCategoryId(cat.id);
-                                // Picking a category of the other group switches the transaction type
-                                const t = getCategoryType(cat);
-                                if (t !== type) setType(t);
-                              }}
-                              className={`flex flex-col items-center justify-center p-2 rounded text-center transition-all ${
-                                isSelected
-                                  ? "bg-[var(--text)] text-[var(--bg)] font-semibold shadow-xs"
-                                  : "hover:bg-[var(--border)] text-[var(--text)]"
-                              }`}
-                            >
-                              <span
-                                className="w-6 h-6 rounded-full flex items-center justify-center mb-1 shrink-0 text-white shadow-xs"
-                                style={{ backgroundColor: cat.color || "#888" }}
-                              >
-                                <CategoryIcon name={cat.icon} size={13} className="text-white" />
-                              </span>
-                              <span className="text-[10px] truncate max-w-full leading-tight">{cat.name}</span>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
+            {/* Date & Account Pill Selectors */}
+            <div className="grid grid-cols-2 gap-3 text-xs">
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-[var(--text-muted)] block">Date</label>
+                <input
+                  type="date"
+                  data-testid="quick-add-date"
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                  className="w-full h-11 px-3.5 rounded-2xl border border-[var(--border)] bg-[var(--bg)] text-[var(--text)] font-mono text-xs focus:outline-none focus:border-[var(--accent)]"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-[var(--text-muted)] block">
+                  {type === "TRANSFER" ? "From Account" : "Account"}
+                </label>
+                <select
+                  data-testid="quick-add-account"
+                  value={accountId}
+                  onChange={(e) => setAccountId(e.target.value)}
+                  className="w-full h-11 px-3.5 rounded-2xl border border-[var(--border)] bg-[var(--bg)] text-[var(--text)] text-xs focus:outline-none focus:border-[var(--accent)]"
+                >
+                  {activeAccounts.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.name} ({a.currency})
+                    </option>
                   ))}
+                </select>
               </div>
             </div>
-          )}
 
-          {/* Note Input */}
-          <div className="space-y-1">
-            <label className="text-[11px] font-medium text-[var(--text-muted)]">Note (optional)</label>
-            <input
-              type="text"
-              data-testid="quick-add-note"
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              placeholder="e.g. Lunch with team, monthly salary"
-              className="w-full px-3 py-2 rounded border border-hairline bg-[var(--bg)] text-[var(--text)] text-xs focus:outline-none focus:ring-1 focus:ring-[var(--text)]"
-            />
+            {type === "TRANSFER" && (
+              <div className="space-y-1.5 text-xs">
+                <label className="text-xs font-semibold text-[var(--text-muted)] block">
+                  To Account
+                </label>
+                <select
+                  data-testid="quick-add-to-account"
+                  value={toAccountId}
+                  onChange={(e) => setToAccountId(e.target.value)}
+                  className="w-full h-11 px-3.5 rounded-2xl border border-[var(--border)] bg-[var(--bg)] text-[var(--text)] text-xs focus:outline-none focus:border-[var(--accent)]"
+                >
+                  {activeAccounts
+                    .filter((a) => a.id !== accountId)
+                    .map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {a.name} ({a.currency})
+                      </option>
+                    ))}
+                </select>
+              </div>
+            )}
+
+            {isUsdToLkrTransfer && (
+              <div className="grid grid-cols-2 gap-3 text-xs">
+                <label className="space-y-1.5 block">
+                  <span className="text-xs font-semibold text-[var(--text-muted)]">
+                    Final LKR amount
+                  </span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    data-testid="quick-add-destination-amount"
+                    value={destinationAmountStr}
+                    onChange={(e) => handleDestinationAmountChange(e.target.value)}
+                    placeholder="Optional"
+                    className="w-full h-11 px-3.5 rounded-2xl border border-[var(--border)] bg-[var(--bg)] text-[var(--text)] font-mono focus:outline-none focus:border-[var(--accent)]"
+                  />
+                </label>
+                <label className="space-y-1.5 block">
+                  <span className="text-xs font-semibold text-[var(--text-muted)]">
+                    Rate (LKR / USD)
+                  </span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.000001"
+                    data-testid="quick-add-exchange-rate"
+                    value={exchangeRateStr}
+                    onChange={(e) => handleExchangeRateChange(e.target.value)}
+                    placeholder="Optional"
+                    className="w-full h-11 px-3.5 rounded-2xl border border-[var(--border)] bg-[var(--bg)] text-[var(--text)] font-mono focus:outline-none focus:border-[var(--accent)]"
+                  />
+                </label>
+              </div>
+            )}
+
+            {/* Category Selector Grid */}
+            {type !== "TRANSFER" && (
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-[var(--text-muted)] block">
+                  Category
+                </label>
+                <div className="max-h-52 overflow-y-auto p-2.5 rounded-2xl border border-[var(--border)] bg-[var(--bg)] space-y-3">
+                  {(type === "INCOME"
+                    ? [
+                        { label: "Income", items: categoryGroups.income },
+                        { label: "Expense", items: categoryGroups.expense },
+                      ]
+                    : [
+                        { label: "Expense", items: categoryGroups.expense },
+                        { label: "Income", items: categoryGroups.income },
+                      ]
+                  )
+                    .filter((g) => g.items.length > 0)
+                    .map((group) => (
+                      <div key={group.label}>
+                        <div className="px-1 pb-1.5 text-2xs font-bold uppercase tracking-wider text-[var(--text-muted)]">
+                          {group.label}
+                        </div>
+                        <div className="grid grid-cols-4 gap-2">
+                          {group.items.map((cat) => {
+                            const isSelected = categoryId === cat.id;
+                            return (
+                              <button
+                                key={cat.id}
+                                type="button"
+                                data-testid={`category-select-${cat.id}`}
+                                onClick={() => {
+                                  setCategoryId(cat.id);
+                                  const t = getCategoryType(cat);
+                                  if (t !== type) setType(t);
+                                }}
+                                className={`flex flex-col items-center justify-center p-2.5 rounded-2xl text-center transition-all cursor-pointer border ${
+                                  isSelected
+                                    ? "bg-[var(--accent)]/12 border-[var(--accent)] text-[var(--text)] font-bold shadow-2xs"
+                                    : "bg-[var(--surface)] border-transparent hover:border-[var(--border)] text-[var(--text)]"
+                                }`}
+                              >
+                                <span
+                                  className="w-8 h-8 rounded-xl flex items-center justify-center mb-1.5 shrink-0 text-white shadow-2xs"
+                                  style={{ backgroundColor: cat.color || "#888" }}
+                                >
+                                  <CategoryIcon name={cat.icon} size={15} className="text-white" />
+                                </span>
+                                <span className="text-2xs truncate max-w-full leading-tight">
+                                  {cat.name}
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            )}
+
+            {/* Note Input */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-[var(--text-muted)] block">
+                Note (optional)
+              </label>
+              <input
+                type="text"
+                data-testid="quick-add-note"
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                placeholder="e.g. Lunch with team, monthly salary"
+                className="w-full h-11 px-4 rounded-2xl border border-[var(--border)] bg-[var(--bg)] text-[var(--text)] text-xs focus:outline-none focus:border-[var(--accent)]"
+              />
+            </div>
+
+            {/* Exclude from Budget Toggle */}
+            <div className="flex items-center justify-between pt-2 border-t border-[var(--border)]">
+              <span className="text-xs font-semibold text-[var(--text)]">Exclude from budget</span>
+              <button
+                type="button"
+                data-testid="exclude-budget-toggle"
+                onClick={() => setExcludeFromBudget(!excludeFromBudget)}
+                className={`w-11 h-6 rounded-full transition-colors relative cursor-pointer ${
+                  excludeFromBudget ? "bg-[var(--accent)]" : "bg-[var(--border)]"
+                }`}
+              >
+                <span
+                  className={`block w-5 h-5 rounded-full bg-white transition-transform absolute top-0.5 ${
+                    excludeFromBudget ? "left-5.5" : "left-0.5"
+                  }`}
+                />
+              </button>
+            </div>
+
+            {errorMsg && (
+              <div
+                data-testid="quick-add-error"
+                className="flex items-center gap-2 p-3 rounded-2xl bg-[var(--expense)]/10 border border-[var(--expense)]/25 text-xs text-[var(--expense)] font-semibold"
+              >
+                <AlertCircle size={15} className="shrink-0" />
+                <span>{errorMsg}</span>
+              </div>
+            )}
           </div>
 
-          {/* Exclude from Budget Toggle */}
-          <div className="flex items-center justify-between py-1 border-t border-hairline">
-            <span className="text-xs text-[var(--text)]">Exclude from budget</span>
+          {/* Action Buttons */}
+          <div className="px-6 py-4 border-t border-[var(--border)] bg-[var(--surface)] grid grid-cols-2 gap-3 pb-sheet-safe shrink-0">
             <button
               type="button"
-              data-testid="exclude-budget-toggle"
-              onClick={() => setExcludeFromBudget(!excludeFromBudget)}
-              className={`w-9 h-5 rounded-full transition-colors relative ${
-                excludeFromBudget ? "bg-[var(--text)]" : "bg-[var(--border)]"
-              }`}
+              data-testid="quick-add-continue"
+              disabled={isDivisionByZero}
+              onClick={() => validateAndSubmit(true)}
+              className="h-12 px-4 rounded-2xl border border-[var(--border)] bg-[var(--bg)] font-bold text-xs text-[var(--text)] hover:bg-[var(--surface-hover)] active:scale-[0.98] transition-all disabled:opacity-40 disabled:pointer-events-none cursor-pointer"
             >
-              <span
-                className={`block w-3.5 h-3.5 rounded-full bg-[var(--bg)] transition-transform absolute top-0.5 ${
-                  excludeFromBudget ? "left-4.5" : "left-0.5"
-                }`}
-              />
+              Save &amp; Add Another
+            </button>
+            <button
+              type="button"
+              data-testid="quick-add-save"
+              disabled={isDivisionByZero}
+              onClick={() => validateAndSubmit(false)}
+              className="h-12 px-4 rounded-2xl bg-[var(--accent)] text-white font-bold text-xs hover:opacity-95 active:scale-[0.98] transition-all disabled:opacity-40 disabled:pointer-events-none cursor-pointer shadow-xs"
+            >
+              Save Transaction
             </button>
           </div>
-
-          {/* Inline Validation / Error Message */}
-          {errorMsg && (
-            <div
-              data-testid="quick-add-error"
-              className="flex items-center gap-1.5 text-xs text-red-500 font-medium py-1"
-            >
-              <AlertCircle size={14} className="shrink-0" />
-              <span>{errorMsg}</span>
-            </div>
-          )}
-        </div>
-
-        {/* Action Buttons: Save & Continue */}
-        <div className="p-3 border-t border-hairline bg-[var(--surface)] grid grid-cols-2 gap-2 pb-sheet-safe shrink-0">
-          <button
-            type="button"
-            data-testid="quick-add-continue"
-            disabled={isDivisionByZero}
-            onClick={() => validateAndSubmit(true)}
-            className="py-2.5 px-3 rounded border border-hairline font-semibold text-xs text-[var(--text)] hover:bg-[var(--border)] active:scale-98 transition-all disabled:opacity-40 disabled:pointer-events-none"
-          >
-            Continue
-          </button>
-          <button
-            type="button"
-            data-testid="quick-add-save"
-            disabled={isDivisionByZero}
-            onClick={() => validateAndSubmit(false)}
-            className="py-2.5 px-3 rounded bg-[var(--text)] text-[var(--bg)] font-semibold text-xs hover:opacity-90 active:scale-98 transition-all disabled:opacity-40 disabled:pointer-events-none"
-          >
-            Save
-          </button>
         </div>
       </div>
-    </div>
     </>
   );
 }

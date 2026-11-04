@@ -10,12 +10,11 @@ import React, {
 } from "react";
 import { usePathname, useRouter } from "next/navigation";
 
-export type TabId = "trans" | "stats" | "budget" | "accounts" | "more";
+export type TabId = "trans" | "stats" | "accounts" | "more";
 
 export const TAB_CONFIG: Record<TabId, { path: string; name: string }> = {
-  trans: { path: "/", name: "Trans." },
+  trans: { path: "/", name: "Home" },
   stats: { path: "/stats", name: "Stats" },
-  budget: { path: "/budget", name: "Budget" },
   accounts: { path: "/accounts", name: "Accounts" },
   more: { path: "/more", name: "More" },
 };
@@ -23,7 +22,6 @@ export const TAB_CONFIG: Record<TabId, { path: string; name: string }> = {
 export const PATH_TO_TAB: Record<string, TabId> = {
   "/": "trans",
   "/stats": "stats",
-  "/budget": "budget",
   "/accounts": "accounts",
   "/more": "more",
 };
@@ -31,7 +29,6 @@ export const PATH_TO_TAB: Record<string, TabId> = {
 export function getTabFromPath(path: string): TabId | null {
   if (path === "/") return "trans";
   if (path === "/stats") return "stats";
-  if (path === "/budget") return "budget";
   if (path === "/accounts") return "accounts";
   if (path === "/more") return "more";
   return null;
@@ -82,7 +79,7 @@ export function TabNavigationProvider({
 
   const activeTab = currentTab;
 
-  const prefetchTab = useCallback((_tab: TabId) => {
+  const prefetchTab = useCallback<TabNavigationContextValue["prefetchTab"]>(() => {
     // No-op without Dexie pre-warming
   }, []);
 
@@ -98,7 +95,7 @@ export function TabNavigationProvider({
         targetTab = getTabFromPath(destination);
       }
 
-      // If switching to one of the 5 primary tabs
+      // If switching to one of the 4 primary tabs
       if (targetTab && targetPath) {
         // Immediate DOM state update (0ms switch)
         setVisitedTabs((prev) => {
@@ -114,22 +111,29 @@ export function TabNavigationProvider({
           window.dispatchEvent(new PopStateEvent("popstate"));
         }
       } else {
-        // Standard Next.js route navigation for subpages or auth routes
+        // Standard Next.js route navigation for subpages (/budget, /more/*, /accounts/[id]) or auth routes
         router.push(destination);
       }
     },
     [router]
   );
 
+  const effectiveVisitedTabs = useMemo(() => {
+    if (!activeTab || visitedTabs.has(activeTab)) return visitedTabs;
+    const next = new Set(visitedTabs);
+    next.add(activeTab);
+    return next;
+  }, [activeTab, visitedTabs]);
+
   const value = useMemo<TabNavigationContextValue>(
     () => ({
       activeTab,
       isMainTab: activeTab !== null,
-      visitedTabs,
+      visitedTabs: effectiveVisitedTabs,
       switchToTab,
       prefetchTab,
     }),
-    [activeTab, visitedTabs, switchToTab, prefetchTab]
+    [activeTab, effectiveVisitedTabs, switchToTab, prefetchTab]
   );
 
   return (

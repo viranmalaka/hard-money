@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { X, Check } from "lucide-react";
+import { X, Check, CreditCard } from "lucide-react";
 import { LocalAccount } from "@/lib/db";
 import { useAccounts, useSync } from "@/components/sync-provider";
 import { localCreateTransaction } from "@/lib/sync/client";
@@ -28,18 +28,15 @@ export function SettleModal({
   const accounts = useAccounts();
   const { db, sync } = useSync();
 
-  // Mode: "BILLED" | "TOTAL" | "CUSTOM"
   const [selectedMode, setSelectedMode] = useState<"BILLED" | "TOTAL" | "CUSTOM">("BILLED");
   const [customAmountStr, setCustomAmountStr] = useState("");
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Eligible source accounts (BANK_SAVINGS or CASH, non-archived)
   const sourceAccounts = accounts.filter(
     (a) => !a.isArchived && a.id !== card.id && (a.type === "BANK_SAVINGS" || a.type === "CASH")
   );
 
-  // Default source is linked settlement account or first eligible source
   const defaultSourceId =
     card.linkedSettlementAccountId && sourceAccounts.some((a) => a.id === card.linkedSettlementAccountId)
       ? card.linkedSettlementAccountId
@@ -49,6 +46,13 @@ export function SettleModal({
   const effectiveSourceId = sourceAccountId || defaultSourceId;
 
   if (!isOpen) return null;
+
+  const activeAmountMinor =
+    selectedMode === "BILLED"
+      ? billedBalanceMinor
+      : selectedMode === "TOTAL"
+      ? totalDebtMinor
+      : parseMoneyToMinor(customAmountStr);
 
   const handleSettle = async () => {
     setError("");
@@ -67,8 +71,8 @@ export function SettleModal({
       return;
     }
 
-    const effectiveSourceId = sourceAccountId || defaultSourceId;
-    if (!effectiveSourceId) {
+    const chosenSourceId = sourceAccountId || defaultSourceId;
+    if (!chosenSourceId) {
       setError("Please select a source payment account");
       return;
     }
@@ -78,7 +82,7 @@ export function SettleModal({
       const todayDate = getColomboDateString(new Date());
       await localCreateTransaction(db, {
         userId: card.userId,
-        accountId: effectiveSourceId,
+        accountId: chosenSourceId,
         toAccountId: card.id,
         amountMinor,
         type: "TRANSFER",
@@ -111,105 +115,121 @@ export function SettleModal({
   return (
     <div
       data-testid="settle-modal"
-      className="fixed inset-0 z-50 bg-black/50 flex items-end md:items-center justify-center p-0 md:p-4 backdrop-blur-xs overflow-y-auto"
+      className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-end md:items-center justify-center p-0 md:p-4 overflow-y-auto animate-in fade-in duration-150"
+      onClick={(e) => {
+        if (e.target === e.currentTarget && !isSubmitting) onClose();
+      }}
     >
-      <div
-        className="w-full md:max-w-md bg-[var(--surface)] border border-hairline rounded-t-2xl md:rounded-xl shadow-2xl p-5 pb-sheet-safe md:pb-5 space-y-4 modal-sheet-dialog overflow-y-auto"
-      >
-        <div className="flex items-center justify-between pb-2 border-b border-hairline">
-          <div>
-            <h2 className="text-sm font-semibold text-[var(--text)]">Settle Credit Card</h2>
-            <p className="text-[11px] text-[var(--text-muted)]">{card.name}</p>
+      <div className="w-full md:max-w-md bg-[var(--surface)] border border-hairline rounded-t-3xl md:rounded-3xl shadow-2xl p-5 sm:p-6 pb-sheet-safe md:pb-6 space-y-5 modal-sheet-dialog overflow-y-auto">
+        <div className="flex items-center justify-between pb-3.5 border-b border-hairline">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-[var(--accent)]/10 text-[var(--accent)] flex items-center justify-center shrink-0">
+              <CreditCard size={18} />
+            </div>
+            <div>
+              <h2 className="text-base font-semibold text-[var(--text)]">Settle Credit Card</h2>
+              <p className="text-xs text-[var(--text-muted)]">{card.name}</p>
+            </div>
           </div>
           <button
             type="button"
             data-testid="settle-cancel-btn"
             onClick={onClose}
-            className="p-1 rounded text-[var(--text-muted)] hover:text-[var(--text)]"
+            className="w-9 h-9 rounded-xl flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--surface-hover)] transition-colors"
           >
-            <X size={16} />
+            <X size={18} />
           </button>
         </div>
 
-        {/* Quick Payment Chips */}
-        <div className="space-y-2">
-          <label className="text-[11px] font-medium text-[var(--text-muted)]">Select Settlement Amount</label>
-          <div className="grid grid-cols-3 gap-2">
-            {/* Full Billed Due */}
-            <button
-              type="button"
-              data-testid="settle-chip-billed"
-              onClick={() => setSelectedMode("BILLED")}
-              className={`p-2.5 rounded-lg border text-left flex flex-col justify-between transition-colors ${
-                selectedMode === "BILLED"
-                  ? "border-[var(--text)] bg-[var(--text)]/5 font-semibold"
-                  : "border-hairline hover:bg-[var(--border)]/40"
-              }`}
-            >
-              <span className="text-[10px] text-[var(--text-muted)]">Full Billed</span>
-              <span className="text-xs font-mono tabular-nums text-[var(--text)] mt-1 truncate">
-                {formatMoney(billedBalanceMinor)}
-              </span>
-            </button>
-
-            {/* Total Outstanding */}
-            <button
-              type="button"
-              data-testid="settle-chip-total"
-              onClick={() => setSelectedMode("TOTAL")}
-              className={`p-2.5 rounded-lg border text-left flex flex-col justify-between transition-colors ${
-                selectedMode === "TOTAL"
-                  ? "border-[var(--text)] bg-[var(--text)]/5 font-semibold"
-                  : "border-hairline hover:bg-[var(--border)]/40"
-              }`}
-            >
-              <span className="text-[10px] text-[var(--text-muted)]">Total Debt</span>
-              <span className="text-xs font-mono tabular-nums text-[var(--text)] mt-1 truncate">
-                {formatMoney(totalDebtMinor)}
-              </span>
-            </button>
-
-            {/* Custom Amount */}
-            <button
-              type="button"
-              data-testid="settle-chip-custom"
-              onClick={() => setSelectedMode("CUSTOM")}
-              className={`p-2.5 rounded-lg border text-left flex flex-col justify-between transition-colors ${
-                selectedMode === "CUSTOM"
-                  ? "border-[var(--text)] bg-[var(--text)]/5 font-semibold"
-                  : "border-hairline hover:bg-[var(--border)]/40"
-              }`}
-            >
-              <span className="text-[10px] text-[var(--text-muted)]">Custom</span>
-              <span className="text-xs font-mono text-[var(--text)] mt-1">Other</span>
-            </button>
-          </div>
-
-          {/* Custom Amount Input */}
-          {selectedMode === "CUSTOM" && (
-            <div className="pt-1 space-y-1">
-              <label className="text-[11px] text-[var(--text-muted)]">Enter Amount (LKR)</label>
+        {/* Hero Settlement Amount Display */}
+        <div className="rounded-3xl bg-[var(--bg)] border border-hairline px-4 py-5 text-center space-y-1.5">
+          <span className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+            Settlement Payment
+          </span>
+          {selectedMode === "CUSTOM" ? (
+            <div className="flex items-center justify-center gap-2 pt-1">
+              <span className="text-sm font-semibold text-[var(--text-muted)]">LKR</span>
               <input
                 type="text"
                 data-testid="settle-amount-input"
                 value={customAmountStr}
                 onChange={(e) => setCustomAmountStr(e.target.value)}
                 placeholder="0.00"
-                className="w-full px-3 py-2 rounded border border-hairline bg-[var(--bg)] text-[var(--text)] font-mono tabular-nums focus:outline-none focus:ring-1 focus:ring-[var(--text)] text-sm"
+                className="w-44 bg-transparent text-center text-2xl sm:text-3xl font-bold font-mono tabular-nums text-[var(--text)] focus:outline-none border-b-2 border-[var(--accent)] pb-1"
                 autoFocus
               />
             </div>
+          ) : (
+            <p className="text-2xl sm:text-3xl font-bold font-mono tabular-nums text-[var(--text)]">
+              {formatMoney(activeAmountMinor)}
+            </p>
           )}
+        </div>
+
+        {/* Quick Payment Chips */}
+        <div className="space-y-2">
+          <label className="block text-xs font-medium text-[var(--text-muted)]">
+            Select Settlement Mode
+          </label>
+          <div className="grid grid-cols-3 gap-2.5">
+            <button
+              type="button"
+              data-testid="settle-chip-billed"
+              onClick={() => setSelectedMode("BILLED")}
+              className={`p-3 rounded-2xl border text-left flex flex-col justify-between transition-all ${
+                selectedMode === "BILLED"
+                  ? "border-[var(--accent)] bg-[var(--accent)]/10 ring-1 ring-[var(--accent)]/30"
+                  : "border-hairline bg-[var(--bg)] hover:bg-[var(--surface-hover)]"
+              }`}
+            >
+              <span className="text-[11px] font-medium text-[var(--text-muted)]">Full Billed</span>
+              <span className="text-xs font-mono font-semibold tabular-nums text-[var(--text)] mt-1.5 truncate">
+                {formatMoney(billedBalanceMinor)}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              data-testid="settle-chip-total"
+              onClick={() => setSelectedMode("TOTAL")}
+              className={`p-3 rounded-2xl border text-left flex flex-col justify-between transition-all ${
+                selectedMode === "TOTAL"
+                  ? "border-[var(--accent)] bg-[var(--accent)]/10 ring-1 ring-[var(--accent)]/30"
+                  : "border-hairline bg-[var(--bg)] hover:bg-[var(--surface-hover)]"
+              }`}
+            >
+              <span className="text-[11px] font-medium text-[var(--text-muted)]">Total Debt</span>
+              <span className="text-xs font-mono font-semibold tabular-nums text-[var(--text)] mt-1.5 truncate">
+                {formatMoney(totalDebtMinor)}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              data-testid="settle-chip-custom"
+              onClick={() => setSelectedMode("CUSTOM")}
+              className={`p-3 rounded-2xl border text-left flex flex-col justify-between transition-all ${
+                selectedMode === "CUSTOM"
+                  ? "border-[var(--accent)] bg-[var(--accent)]/10 ring-1 ring-[var(--accent)]/30"
+                  : "border-hairline bg-[var(--bg)] hover:bg-[var(--surface-hover)]"
+              }`}
+            >
+              <span className="text-[11px] font-medium text-[var(--text-muted)]">Custom</span>
+              <span className="text-xs font-mono font-semibold text-[var(--text)] mt-1.5">Other</span>
+            </button>
+          </div>
         </div>
 
         {/* Source Account Picker */}
         <div className="space-y-1.5">
-          <label className="text-[11px] font-medium text-[var(--text-muted)]">Pay From Account</label>
+          <label className="block text-xs font-medium text-[var(--text-muted)]">
+            Pay From Account
+          </label>
           <select
             data-testid="settle-source-account-select"
             value={effectiveSourceId}
             onChange={(e) => setSourceAccountId(e.target.value)}
-            className="w-full px-3 py-2 rounded border border-hairline bg-[var(--bg)] text-[var(--text)] text-xs focus:outline-none focus:ring-1 focus:ring-[var(--text)]"
+            className="w-full h-11 px-3.5 rounded-2xl border border-hairline bg-[var(--bg)] text-[var(--text)] text-sm focus:outline-none focus:border-[var(--accent)]"
           >
             {sourceAccounts.map((acc) => (
               <option key={acc.id} value={acc.id}>
@@ -219,14 +239,18 @@ export function SettleModal({
           </select>
         </div>
 
-        {error && <p className="text-xs text-red-500">{error}</p>}
+        {error && (
+          <div className="p-3 rounded-2xl bg-red-500/10 border border-red-500/25 text-xs text-red-500 font-medium">
+            {error}
+          </div>
+        )}
 
         {/* Actions */}
-        <div className="flex items-center justify-end gap-2 pt-2 border-t border-hairline">
+        <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-hairline">
           <button
             type="button"
             onClick={onClose}
-            className="px-3 py-1.5 rounded text-xs font-medium text-[var(--text-muted)] hover:text-[var(--text)]"
+            className="h-11 px-4 rounded-2xl border border-hairline text-xs font-semibold text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--surface-hover)] transition-colors"
           >
             Cancel
           </button>
@@ -235,10 +259,10 @@ export function SettleModal({
             data-testid="settle-confirm-btn"
             disabled={isSubmitting}
             onClick={handleSettle}
-            className="flex items-center gap-1.5 px-4 py-1.5 rounded bg-[var(--text)] text-[var(--bg)] text-xs font-semibold hover:opacity-90 transition-opacity disabled:opacity-50"
+            className="h-11 flex items-center gap-2 px-5 rounded-2xl bg-[var(--accent)] text-white text-xs font-semibold hover:opacity-95 active:scale-[0.99] transition-all disabled:opacity-50 shadow-sm"
           >
-            <Check size={14} />
-            <span>Confirm Settlement</span>
+            <Check size={15} />
+            <span>{isSubmitting ? "Settling..." : "Confirm Settlement"}</span>
           </button>
         </div>
       </div>

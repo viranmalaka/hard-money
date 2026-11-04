@@ -4,6 +4,7 @@ import React, { useState, Suspense } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { ShieldCheck } from "lucide-react";
 import { login } from "@/services/auth-service";
 import { queryKeys } from "@/lib/api/query-keys";
 
@@ -27,7 +28,6 @@ function LoginForm() {
   });
 
   const handleFocus = (e: React.FocusEvent<HTMLInputElement>) => {
-    // Ensure input is comfortably visible above mobile keyboard
     e.target.scrollIntoView({ behavior: "smooth", block: "center" });
   };
 
@@ -37,22 +37,24 @@ function LoginForm() {
     try {
       await loginMutation.mutateAsync({ email, password });
     } catch (mutationError) {
-      setError(mutationError instanceof Error ? mutationError.message : "Invalid email or password");
+      setError(
+        mutationError instanceof Error ? mutationError.message : "Invalid email or password"
+      );
     }
   };
 
   return (
-    <div className="w-full max-w-sm space-y-6">
+    <div className="w-full max-w-md space-y-6">
       {/* Header */}
-      <div className="text-center space-y-2">
-        <div className="inline-flex items-center justify-center w-10 h-10 rounded bg-[var(--accent)] text-white font-bold text-lg mb-1">
-          H
+      <div className="text-center space-y-2.5">
+        <div className="inline-flex items-center justify-center w-14 h-14 rounded-3xl bg-gradient-to-br from-[#065F46] to-[#10B981] text-white font-bold text-xl shadow-md mb-1">
+          HM
         </div>
-        <h1 className="text-2xl font-bold tracking-tight text-[var(--text)]">
+        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-[var(--text)]">
           Sign In to Hard Money
         </h1>
-        <p className="text-xs text-[var(--text-muted)]">
-          Local-first treasury & financial ledger
+        <p className="text-xs sm:text-sm text-[var(--text-muted)]">
+          Local-first private treasury &amp; financial ledger
         </p>
       </div>
 
@@ -61,18 +63,22 @@ function LoginForm() {
         <div
           data-testid="auth-error"
           role="alert"
-          className="p-3 text-xs rounded border border-red-200 bg-red-50 dark:bg-red-950/40 dark:border-red-800 text-red-600 dark:text-red-400 font-medium"
+          className="p-4 text-xs rounded-2xl border border-[var(--expense)]/30 bg-[var(--expense)]/10 text-[var(--expense)] font-semibold"
         >
           {error}
         </div>
       )}
 
       {/* Login Form */}
-      <form action="javascript:void(0);" onSubmit={handleSubmit} className="flat-card p-5 space-y-4">
+      <form
+        action="javascript:void(0);"
+        onSubmit={handleSubmit}
+        className="rounded-3xl bg-[var(--surface)] border border-[var(--border)] p-6 sm:p-7 space-y-5 shadow-sm"
+      >
         <div className="space-y-1.5">
           <label
             htmlFor="login-email"
-            className="block text-xs font-medium text-[var(--text-muted)]"
+            className="block text-xs font-semibold text-[var(--text-muted)]"
           >
             Email address
           </label>
@@ -89,14 +95,14 @@ function LoginForm() {
             onChange={(e) => setEmail(e.target.value)}
             onFocus={handleFocus}
             placeholder="you@example.com"
-            className="w-full px-3 py-2 rounded text-sm bg-[var(--surface)] border border-[var(--border)] text-[var(--text)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent)] transition-colors"
+            className="w-full h-12 px-4 rounded-2xl text-sm bg-[var(--bg)] border border-[var(--border)] text-[var(--text)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent)] transition-colors"
           />
         </div>
 
         <div className="space-y-1.5">
           <label
             htmlFor="login-password"
-            className="block text-xs font-medium text-[var(--text-muted)]"
+            className="block text-xs font-semibold text-[var(--text-muted)]"
           >
             Password
           </label>
@@ -112,7 +118,7 @@ function LoginForm() {
             onChange={(e) => setPassword(e.target.value)}
             onFocus={handleFocus}
             placeholder="••••••••"
-            className="w-full px-3 py-2 rounded text-sm bg-[var(--surface)] border border-[var(--border)] text-[var(--text)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent)] transition-colors"
+            className="w-full h-12 px-4 rounded-2xl text-sm bg-[var(--bg)] border border-[var(--border)] text-[var(--text)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent)] transition-colors"
           />
         </div>
 
@@ -121,10 +127,15 @@ function LoginForm() {
           data-testid="login-submit"
           tabIndex={3}
           disabled={loginMutation.isPending}
-          className="w-full py-2.5 px-4 rounded text-sm font-semibold bg-[var(--accent)] text-white hover:opacity-95 active:scale-[0.98] transition-all disabled:opacity-50 cursor-pointer"
+          className="w-full h-12 px-5 rounded-2xl text-sm font-bold bg-[var(--accent)] text-white hover:opacity-95 active:scale-[0.98] transition-all disabled:opacity-50 cursor-pointer shadow-xs"
         >
           {loginMutation.isPending ? "Signing in…" : "Sign In"}
         </button>
+
+        <div className="flex items-center justify-center gap-1.5 pt-1 text-2xs text-[var(--text-muted)]">
+          <ShieldCheck size={13} className="text-[var(--accent)]" />
+          <span>End-to-end offline-ready IndexedDB treasury</span>
+        </div>
       </form>
 
       {/* Footer Link */}
@@ -133,7 +144,7 @@ function LoginForm() {
         <Link
           href="/register"
           data-testid="register-link"
-          className="font-medium text-[var(--accent)] hover:underline"
+          className="font-bold text-[var(--accent)] hover:underline"
         >
           Create account
         </Link>
@@ -144,7 +155,7 @@ function LoginForm() {
 
 export default function LoginPage() {
   return (
-    <div className="min-h-full flex flex-col justify-center items-center px-4 py-12">
+    <div className="min-h-full flex flex-col justify-center items-center px-5 py-12">
       <Suspense fallback={<div className="text-xs text-[var(--text-muted)]">Loading…</div>}>
         <LoginForm />
       </Suspense>

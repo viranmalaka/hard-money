@@ -54,11 +54,9 @@ export function MonthSwitcher({ currentDate, onChange }: MonthSwitcherProps) {
     const touchEndX = e.changedTouches[0].clientX;
     const diff = touchStartXRef.current - touchEndX;
 
-    // Swipe left -> next month (diff > 40)
     if (diff > 40) {
       handleNext();
     } else if (diff < -40) {
-      // Swipe right -> prev month (diff < -40)
       handlePrev();
     }
     touchStartXRef.current = null;
@@ -71,21 +69,21 @@ export function MonthSwitcher({ currentDate, onChange }: MonthSwitcherProps) {
       onKeyDown={handleKeyDown}
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
-      className="flex items-center justify-between px-4 py-2 bg-app select-none focus:outline-none"
+      className="flex items-center justify-between px-2.5 py-2 rounded-2xl bg-[var(--surface)] border border-[var(--border)] select-none focus:outline-none"
     >
       <button
         type="button"
         data-testid="month-prev"
         onClick={handlePrev}
         aria-label="Previous Month"
-        className="p-1 rounded text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-surface transition-colors cursor-pointer"
+        className="w-10 h-10 rounded-xl bg-[var(--bg)] border border-[var(--border)] flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text)] hover:border-[var(--text-muted)] transition-colors cursor-pointer"
       >
         <ChevronLeft size={18} />
       </button>
 
       <span
         data-testid="month-label"
-        className="font-semibold text-sm tracking-tight text-[var(--text)] pointer-events-none"
+        className="font-bold text-sm sm:text-base tracking-tight text-[var(--text)] pointer-events-none"
       >
         {monthNames[date.getMonth()]} {date.getFullYear()}
       </span>
@@ -95,7 +93,7 @@ export function MonthSwitcher({ currentDate, onChange }: MonthSwitcherProps) {
         data-testid="month-next"
         onClick={handleNext}
         aria-label="Next Month"
-        className="p-1 rounded text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-surface transition-colors cursor-pointer"
+        className="w-10 h-10 rounded-xl bg-[var(--bg)] border border-[var(--border)] flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text)] hover:border-[var(--text-muted)] transition-colors cursor-pointer"
       >
         <ChevronRight size={18} />
       </button>

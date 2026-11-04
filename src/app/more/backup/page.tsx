@@ -1,10 +1,8 @@
 "use client";
 
 import React, { useState, useRef } from "react";
-import Link from "next/link";
 import { useQueryClient } from "@tanstack/react-query";
 import {
-  ArrowLeft,
   Download,
   Upload,
   FileJson,
@@ -26,6 +24,7 @@ import {
   Settings,
   X,
 } from "lucide-react";
+import { AppHeader } from "@/components/navigation/app-header";
 import { ConfirmationModal } from "@/components/ui/confirmation-modal";
 import { downloadBackup, importBackup } from "@/services/backup-service";
 import {
@@ -155,7 +154,6 @@ export default function BackupPage() {
     setExportOptions(empty);
   };
 
-  // Handle Export
   const handleExport = async () => {
     if (selectedOptionsCount === 0) return;
 
@@ -176,7 +174,6 @@ export default function BackupPage() {
     }
   };
 
-  // Process selected file
   const processFile = async (file: File) => {
     setParseError(null);
     setImportError(null);
@@ -253,7 +250,6 @@ export default function BackupPage() {
     }
   };
 
-  // Perform Import
   const handleConfirmImport = async () => {
     if (!parsedBackup) return;
     setIsImporting(true);
@@ -273,60 +269,48 @@ export default function BackupPage() {
   };
 
   return (
-    <main className="flex-1 max-w-4xl mx-auto w-full px-4 py-3 space-y-4">
-      {/* Header */}
-      <div className="flex items-center justify-between py-1">
-        <div className="flex items-center gap-2">
-          <Link
-            href="/more"
-            transitionTypes={["nav-back"]}
-            className="p-1.5 rounded text-[var(--text-muted)] hover:text-[var(--text)] transition-colors"
-          >
-            <ArrowLeft size={16} />
-          </Link>
-          <div>
-            <h1 className="text-base font-semibold tracking-tight text-[var(--text)]">
-              Data & Backup
-            </h1>
-            <p className="text-[11px] text-[var(--text-muted)]">
-              Export full JSON backup archives or restore treasury database
-            </p>
-          </div>
-        </div>
-      </div>
+    <main className="flex-1 max-w-4xl mx-auto w-full px-5 sm:px-7 pt-4 sm:pt-6 pb-8 space-y-6">
+      <AppHeader
+        title="Data & Backup"
+        subtitle="Portable JSON Archive & Treasury Restore"
+        backHref="/more"
+        backLabel="Back to More"
+      />
 
       {/* Export Section */}
-      <div className="space-y-1">
-        <span className="text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wider px-1">
+      <section className="space-y-2.5">
+        <h2 className="text-2xs font-bold text-[var(--text-muted)] uppercase tracking-wider px-1">
           Export Treasury Data
-        </span>
-        <div className="flat-card p-4 space-y-3">
-          <div className="flex items-start justify-between gap-4">
-            <div className="space-y-1">
-              <h2 className="text-sm font-semibold text-[var(--text)] flex items-center gap-2">
-                <Database size={16} className="text-[var(--accent)]" />
-                <span>Full JSON Backup</span>
-              </h2>
-              <p className="text-xs text-[var(--text-muted)] leading-relaxed">
-                Download a complete, portable JSON snapshot of all your entities: accounts,
-                transactions, split items, categories, budgets, loans, fixed deposits, credit
-                cards, SMS activity, and settings.
-              </p>
+        </h2>
+        <div className="rounded-3xl bg-[var(--surface)] border border-[var(--border)] p-5 sm:p-6 space-y-4 shadow-xs">
+          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+            <div className="flex items-start gap-3.5 min-w-0">
+              <div className="w-11 h-11 rounded-2xl bg-[var(--accent)]/12 border border-[var(--accent)]/25 flex items-center justify-center text-[var(--accent)] shrink-0">
+                <Database size={20} />
+              </div>
+              <div className="space-y-1 min-w-0">
+                <h3 className="text-base font-bold text-[var(--text)]">Full JSON Backup</h3>
+                <p className="text-xs text-[var(--text-muted)] leading-relaxed">
+                  Download a complete, portable JSON snapshot of all your entities: accounts,
+                  transactions, split items, categories, budgets, loans, fixed deposits, credit
+                  cards, SMS activity, and settings.
+                </p>
+              </div>
             </div>
             <button
               type="button"
               data-testid="export-json-btn"
               disabled={isExporting}
               onClick={() => setIsExportModalOpen(true)}
-              className="flex items-center gap-2 px-4 py-2 rounded text-xs font-semibold bg-[var(--accent)] text-white hover:opacity-90 active:scale-95 transition-all shadow-xs shrink-0 disabled:opacity-50"
+              className="h-11 px-5 inline-flex items-center justify-center gap-2 rounded-2xl text-xs font-bold bg-[var(--accent)] text-white hover:opacity-95 active:scale-[0.98] transition-all shadow-xs shrink-0 disabled:opacity-50 cursor-pointer"
             >
-              <Download size={14} />
+              <Download size={15} />
               <span>Export Data</span>
             </button>
           </div>
 
-          <div className="flex items-center gap-2 px-3 py-2 rounded bg-[var(--surface-hover)] border border-hairline text-[11px] text-[var(--text-muted)]">
-            <ShieldCheck size={14} className="text-[var(--income)] shrink-0" />
+          <div className="flex items-start sm:items-center gap-2.5 p-3.5 rounded-2xl bg-[var(--bg)] border border-[var(--border)] text-xs text-[var(--text-muted)] leading-relaxed">
+            <ShieldCheck size={17} className="text-[var(--income)] shrink-0 mt-0.5 sm:mt-0" />
             <span>
               Sensitive authentication credentials (like account passwords) are excluded, while
               preserving all intra-entity relationships, balances, and configurations.
@@ -336,9 +320,9 @@ export default function BackupPage() {
           {exportSuccess && (
             <div
               data-testid="export-success-banner"
-              className="flex items-center gap-2 p-3 rounded bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs"
+              className="flex items-center gap-2.5 p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/25 text-emerald-600 dark:text-emerald-400 text-xs font-medium"
             >
-              <CheckCircle2 size={16} className="shrink-0" />
+              <CheckCircle2 size={17} className="shrink-0" />
               <span>Backup file downloaded successfully!</span>
             </div>
           )}
@@ -346,58 +330,68 @@ export default function BackupPage() {
           {exportError && (
             <div
               data-testid="export-error-banner"
-              className="flex items-center gap-2 p-3 rounded bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 text-xs"
+              className="flex items-center gap-2.5 p-3.5 rounded-2xl bg-[var(--expense)]/10 border border-[var(--expense)]/25 text-[var(--expense)] text-xs font-medium"
             >
-              <AlertCircle size={16} className="shrink-0" />
+              <AlertCircle size={17} className="shrink-0" />
               <span>{exportError}</span>
             </div>
           )}
         </div>
-      </div>
+      </section>
 
       {/* Import Section */}
-      <div className="space-y-1">
-        <span className="text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wider px-1">
+      <section className="space-y-2.5">
+        <h2 className="text-2xs font-bold text-[var(--text-muted)] uppercase tracking-wider px-1">
           Import & Restore Data
-        </span>
-        <div className="flat-card p-4 space-y-4">
-          <div className="space-y-1">
-            <h2 className="text-sm font-semibold text-[var(--text)] flex items-center gap-2">
-              <RefreshCw size={16} className="text-[var(--accent)]" />
-              <span>Restore from Backup</span>
-            </h2>
-            <p className="text-xs text-[var(--text-muted)] leading-relaxed">
-              Upload a previously exported HardMoney JSON file to reimport or recover your data.
-              Records are safely merged and upserted using original entity identifiers.
-            </p>
+        </h2>
+        <div className="rounded-3xl bg-[var(--surface)] border border-[var(--border)] p-5 sm:p-6 space-y-5 shadow-xs">
+          <div className="flex items-start gap-3.5">
+            <div className="w-11 h-11 rounded-2xl bg-[var(--accent)]/12 border border-[var(--accent)]/25 flex items-center justify-center text-[var(--accent)] shrink-0">
+              <RefreshCw size={20} />
+            </div>
+            <div className="space-y-1">
+              <h3 className="text-base font-bold text-[var(--text)]">Restore from Backup</h3>
+              <p className="text-xs text-[var(--text-muted)] leading-relaxed">
+                Upload a previously exported HardMoney JSON file to reimport or recover your data.
+                Records are safely merged and upserted using original entity identifiers.
+              </p>
+            </div>
           </div>
 
           {/* Import Success Banner */}
           {importResult && (
             <div
               data-testid="import-success-banner"
-              className="p-4 rounded-lg bg-emerald-500/10 border border-emerald-500/20 space-y-2 text-xs text-emerald-700 dark:text-emerald-300"
+              className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/25 space-y-3 text-xs text-emerald-700 dark:text-emerald-300"
             >
-              <div className="flex items-center gap-2 font-semibold">
-                <CheckCircle2 size={16} className="text-emerald-600 dark:text-emerald-400" />
+              <div className="flex items-center gap-2 font-bold">
+                <CheckCircle2 size={17} className="text-emerald-600 dark:text-emerald-400" />
                 <span>Data restored successfully!</span>
               </div>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 text-[11px]">
-                <div className="bg-[var(--surface)] p-2 rounded border border-hairline">
-                  <span className="text-[var(--text-muted)] block">Accounts</span>
-                  <span className="font-semibold text-[var(--text)]">{importResult.importedCounts.accounts}</span>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-1">
+                <div className="bg-[var(--surface)] p-3 rounded-xl border border-[var(--border)]">
+                  <span className="text-[var(--text-muted)] text-2xs block">Accounts</span>
+                  <span className="font-bold font-mono text-sm text-[var(--text)]">
+                    {importResult.importedCounts.accounts}
+                  </span>
                 </div>
-                <div className="bg-[var(--surface)] p-2 rounded border border-hairline">
-                  <span className="text-[var(--text-muted)] block">Transactions</span>
-                  <span className="font-semibold text-[var(--text)]">{importResult.importedCounts.transactions}</span>
+                <div className="bg-[var(--surface)] p-3 rounded-xl border border-[var(--border)]">
+                  <span className="text-[var(--text-muted)] text-2xs block">Transactions</span>
+                  <span className="font-bold font-mono text-sm text-[var(--text)]">
+                    {importResult.importedCounts.transactions}
+                  </span>
                 </div>
-                <div className="bg-[var(--surface)] p-2 rounded border border-hairline">
-                  <span className="text-[var(--text-muted)] block">Categories</span>
-                  <span className="font-semibold text-[var(--text)]">{importResult.importedCounts.categories}</span>
+                <div className="bg-[var(--surface)] p-3 rounded-xl border border-[var(--border)]">
+                  <span className="text-[var(--text-muted)] text-2xs block">Categories</span>
+                  <span className="font-bold font-mono text-sm text-[var(--text)]">
+                    {importResult.importedCounts.categories}
+                  </span>
                 </div>
-                <div className="bg-[var(--surface)] p-2 rounded border border-hairline">
-                  <span className="text-[var(--text-muted)] block">Budgets</span>
-                  <span className="font-semibold text-[var(--text)]">{importResult.importedCounts.budgets}</span>
+                <div className="bg-[var(--surface)] p-3 rounded-xl border border-[var(--border)]">
+                  <span className="text-[var(--text-muted)] text-2xs block">Budgets</span>
+                  <span className="font-bold font-mono text-sm text-[var(--text)]">
+                    {importResult.importedCounts.budgets}
+                  </span>
                 </div>
               </div>
             </div>
@@ -407,9 +401,9 @@ export default function BackupPage() {
           {importError && (
             <div
               data-testid="import-error-banner"
-              className="flex items-center gap-2 p-3 rounded bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 text-xs"
+              className="flex items-center gap-2.5 p-3.5 rounded-2xl bg-[var(--expense)]/10 border border-[var(--expense)]/25 text-[var(--expense)] text-xs font-medium"
             >
-              <AlertCircle size={16} className="shrink-0" />
+              <AlertCircle size={17} className="shrink-0" />
               <span>{importError}</span>
             </div>
           )}
@@ -431,21 +425,21 @@ export default function BackupPage() {
                 onDrop={handleDrop}
                 onClick={() => fileInputRef.current?.click()}
                 data-testid="backup-dropzone"
-                className={`border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors ${
+                className={`border-2 border-dashed rounded-3xl p-8 text-center cursor-pointer transition-colors ${
                   isDragging
-                    ? "border-[var(--accent)] bg-[var(--accent)]/5"
-                    : "border-hairline hover:border-[var(--accent)]/50 bg-[var(--surface-hover)]/30"
+                    ? "border-[var(--accent)] bg-[var(--accent)]/8"
+                    : "border-[var(--border)] hover:border-[var(--accent)]/50 bg-[var(--bg)]"
                 }`}
               >
-                <div className="flex flex-col items-center justify-center gap-2">
-                  <div className="w-12 h-12 rounded-full bg-[var(--surface)] border border-hairline flex items-center justify-center text-[var(--text-muted)]">
-                    <Upload size={20} />
+                <div className="flex flex-col items-center justify-center gap-3">
+                  <div className="w-13 h-13 rounded-2xl bg-[var(--surface)] border border-[var(--border)] flex items-center justify-center text-[var(--accent)] shadow-xs">
+                    <Upload size={22} />
                   </div>
-                  <div className="space-y-0.5">
-                    <p className="text-xs font-semibold text-[var(--text)]">
+                  <div className="space-y-1">
+                    <p className="text-sm font-bold text-[var(--text)]">
                       Click to choose or drag & drop backup JSON
                     </p>
-                    <p className="text-[11px] text-[var(--text-muted)]">
+                    <p className="text-xs text-[var(--text-muted)]">
                       Supports files created with HardMoney Backup (v1)
                     </p>
                   </div>
@@ -455,26 +449,29 @@ export default function BackupPage() {
               {parseError && (
                 <div
                   data-testid="parse-error-banner"
-                  className="mt-2 flex items-center gap-2 p-3 rounded bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 text-xs"
+                  className="mt-3 flex items-center gap-2.5 p-3.5 rounded-2xl bg-[var(--expense)]/10 border border-[var(--expense)]/25 text-[var(--expense)] text-xs font-medium"
                 >
-                  <AlertCircle size={16} className="shrink-0" />
+                  <AlertCircle size={17} className="shrink-0" />
                   <span>{parseError}</span>
                 </div>
               )}
             </div>
           ) : (
             /* Backup Inspection Preview Card */
-            <div data-testid="backup-preview-card" className="space-y-3 p-4 rounded-lg border border-hairline bg-[var(--surface)]">
-              <div className="flex items-start justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-[var(--accent)]/10 text-[var(--accent)] flex items-center justify-center shrink-0">
+            <div
+              data-testid="backup-preview-card"
+              className="space-y-4 p-4 sm:p-5 rounded-2xl border border-[var(--border)] bg-[var(--bg)]"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-3.5 min-w-0">
+                  <div className="w-11 h-11 rounded-2xl bg-[var(--accent)]/12 text-[var(--accent)] flex items-center justify-center shrink-0">
                     <FileJson size={20} />
                   </div>
-                  <div>
-                    <span className="text-xs font-semibold text-[var(--text)] block truncate max-w-xs sm:max-w-md">
+                  <div className="min-w-0">
+                    <span className="text-sm font-bold text-[var(--text)] block truncate">
                       {selectedFile?.name}
                     </span>
-                    <span className="text-[11px] text-[var(--text-muted)]">
+                    <span className="text-xs text-[var(--text-muted)] block mt-0.5">
                       {selectedFile ? `${(selectedFile.size / 1024).toFixed(1)} KB • ` : ""}
                       Exported {new Date(parsedBackup.exportedAt).toLocaleString()}
                     </span>
@@ -485,7 +482,7 @@ export default function BackupPage() {
                   type="button"
                   data-testid="cancel-file-btn"
                   onClick={handleResetImport}
-                  className="text-xs text-[var(--text-muted)] hover:text-[var(--text)] transition-colors px-2 py-1 rounded"
+                  className="text-xs font-semibold text-[var(--text-muted)] hover:text-[var(--text)] transition-colors px-3 py-1.5 rounded-xl bg-[var(--surface)] border border-[var(--border)] cursor-pointer shrink-0"
                 >
                   Change File
                 </button>
@@ -493,86 +490,48 @@ export default function BackupPage() {
 
               {/* Entity Breakdown Stats */}
               {entityCounts && (
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2">
-                  <div className="p-2 rounded bg-[var(--surface-hover)] border border-hairline flex items-center gap-2">
-                    <CreditCard size={14} className="text-[var(--accent)] shrink-0" />
-                    <div>
-                      <span className="text-[10px] text-[var(--text-muted)] block">Accounts</span>
-                      <span className="text-xs font-semibold text-[var(--text)]">{entityCounts.accounts}</span>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                  {[
+                    { label: "Accounts", count: entityCounts.accounts, icon: CreditCard },
+                    { label: "Transactions", count: entityCounts.transactions, icon: Receipt },
+                    { label: "Categories", count: entityCounts.categories, icon: Layers },
+                    { label: "Budgets", count: entityCounts.budgets, icon: FolderArchive },
+                    { label: "Loans", count: entityCounts.loans, icon: FileText },
+                    { label: "Fixed Deposits", count: entityCounts.fixedDeposits, icon: Database },
+                    { label: "Households", count: entityCounts.households, icon: Home },
+                    { label: "Shopping Items", count: entityCounts.shoppingListItems, icon: CheckSquare },
+                  ].map(({ label, count, icon: ItemIcon }) => (
+                    <div
+                      key={label}
+                      className="p-3 rounded-xl bg-[var(--surface)] border border-[var(--border)] flex items-center gap-2.5"
+                    >
+                      <ItemIcon size={15} className="text-[var(--accent)] shrink-0" />
+                      <div className="min-w-0">
+                        <span className="text-2xs text-[var(--text-muted)] block truncate">
+                          {label}
+                        </span>
+                        <span className="text-xs font-bold font-mono text-[var(--text)]">
+                          {count}
+                        </span>
+                      </div>
                     </div>
-                  </div>
-
-                  <div className="p-2 rounded bg-[var(--surface-hover)] border border-hairline flex items-center gap-2">
-                    <Receipt size={14} className="text-[var(--accent)] shrink-0" />
-                    <div>
-                      <span className="text-[10px] text-[var(--text-muted)] block">Transactions</span>
-                      <span className="text-xs font-semibold text-[var(--text)]">{entityCounts.transactions}</span>
-                    </div>
-                  </div>
-
-                  <div className="p-2 rounded bg-[var(--surface-hover)] border border-hairline flex items-center gap-2">
-                    <Layers size={14} className="text-[var(--accent)] shrink-0" />
-                    <div>
-                      <span className="text-[10px] text-[var(--text-muted)] block">Categories</span>
-                      <span className="text-xs font-semibold text-[var(--text)]">{entityCounts.categories}</span>
-                    </div>
-                  </div>
-
-                  <div className="p-2 rounded bg-[var(--surface-hover)] border border-hairline flex items-center gap-2">
-                    <FolderArchive size={14} className="text-[var(--accent)] shrink-0" />
-                    <div>
-                      <span className="text-[10px] text-[var(--text-muted)] block">Budgets</span>
-                      <span className="text-xs font-semibold text-[var(--text)]">{entityCounts.budgets}</span>
-                    </div>
-                  </div>
-
-                  <div className="p-2 rounded bg-[var(--surface-hover)] border border-hairline flex items-center gap-2">
-                    <FileText size={14} className="text-[var(--accent)] shrink-0" />
-                    <div>
-                      <span className="text-[10px] text-[var(--text-muted)] block">Loans</span>
-                      <span className="text-xs font-semibold text-[var(--text)]">{entityCounts.loans}</span>
-                    </div>
-                  </div>
-
-                  <div className="p-2 rounded bg-[var(--surface-hover)] border border-hairline flex items-center gap-2">
-                    <Database size={14} className="text-[var(--accent)] shrink-0" />
-                    <div>
-                      <span className="text-[10px] text-[var(--text-muted)] block">Fixed Deposits</span>
-                      <span className="text-xs font-semibold text-[var(--text)]">{entityCounts.fixedDeposits}</span>
-                    </div>
-                  </div>
-
-                  <div className="p-2 rounded bg-[var(--surface-hover)] border border-hairline flex items-center gap-2">
-                    <Home size={14} className="text-[var(--accent)] shrink-0" />
-                    <div>
-                      <span className="text-[10px] text-[var(--text-muted)] block">Households</span>
-                      <span className="text-xs font-semibold text-[var(--text)]">{entityCounts.households}</span>
-                    </div>
-                  </div>
-
-                  <div className="p-2 rounded bg-[var(--surface-hover)] border border-hairline flex items-center gap-2">
-                    <CheckSquare size={14} className="text-[var(--accent)] shrink-0" />
-                    <div>
-                      <span className="text-[10px] text-[var(--text-muted)] block">Shopping Items</span>
-                      <span className="text-xs font-semibold text-[var(--text)]">{entityCounts.shoppingListItems}</span>
-                    </div>
-                  </div>
+                  ))}
                 </div>
               )}
 
               {/* Warning Notice */}
-              <div className="p-2.5 rounded bg-amber-500/10 border border-amber-500/20 text-amber-700 dark:text-amber-300 text-[11px] leading-relaxed">
+              <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/25 text-amber-700 dark:text-amber-300 text-xs leading-relaxed">
                 <strong>Restore Strategy:</strong> Existing entities matching these IDs will be
                 updated, and any missing records will be inserted into your active account.
               </div>
 
               {/* Actions */}
-              <div className="flex items-center justify-end gap-2 pt-2">
+              <div className="flex items-center justify-end gap-2.5 pt-1">
                 <button
                   type="button"
                   data-testid="cancel-import-preview-btn"
                   onClick={handleResetImport}
-                  className="px-3 py-1.5 rounded border border-hairline text-xs font-medium text-[var(--text)] hover:bg-[var(--surface-hover)] transition-colors"
+                  className="h-11 px-4 rounded-2xl border border-[var(--border)] bg-[var(--surface)] text-xs font-semibold text-[var(--text)] hover:bg-[var(--surface-hover)] transition-colors cursor-pointer"
                 >
                   Cancel
                 </button>
@@ -582,208 +541,209 @@ export default function BackupPage() {
                   data-testid="start-import-btn"
                   disabled={isImporting}
                   onClick={() => setIsImportModalOpen(true)}
-                  className="flex items-center gap-2 px-4 py-1.5 rounded text-xs font-semibold bg-[var(--accent)] text-white hover:opacity-90 active:scale-95 transition-all shadow-xs disabled:opacity-50"
+                  className="h-11 px-5 inline-flex items-center gap-2 rounded-2xl text-xs font-bold bg-[var(--accent)] text-white hover:opacity-95 active:scale-[0.98] transition-all shadow-xs disabled:opacity-50 cursor-pointer"
                 >
                   {isImporting ? (
                     <>
-                  <Loader2 size={14} className="animate-spin" />
-                  <span>Restoring Data...</span>
-                </>
-              ) : (
-                <>
-                  <Upload size={14} />
-                  <span>Confirm & Restore Data</span>
-                </>
-              )}
-            </button>
+                      <Loader2 size={15} className="animate-spin" />
+                      <span>Restoring Data...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Upload size={15} />
+                      <span>Confirm & Restore Data</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </section>
+
+      {/* Export Window Modal */}
+      {isExportModalOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="export-modal-title"
+          data-testid="export-modal"
+          className="fixed inset-0 z-50 bg-black/60 flex items-end sm:items-center justify-center p-0 sm:p-4 backdrop-blur-xs select-none overflow-y-auto animate-in fade-in duration-150"
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !isExporting) setIsExportModalOpen(false);
+          }}
+        >
+          <div className="w-full max-w-lg bg-[var(--surface)] border border-[var(--border)] rounded-t-3xl sm:rounded-3xl shadow-2xl p-5 sm:p-6 pb-sheet-safe sm:pb-6 space-y-4 my-auto animate-in slide-in-from-bottom sm:zoom-in-95 duration-150 flex flex-col max-h-[90vh]">
+            {/* Modal Header */}
+            <div className="flex items-start justify-between gap-3 pb-3.5 border-b border-[var(--border)] shrink-0">
+              <div>
+                <div className="flex items-center gap-2.5">
+                  <Database size={18} className="text-[var(--accent)]" />
+                  <h2 id="export-modal-title" className="text-base font-bold text-[var(--text)]">
+                    Export Treasury Data
+                  </h2>
+                </div>
+                <p className="text-xs text-[var(--text-muted)] mt-1 leading-relaxed">
+                  Select the data categories to include in this JSON export.
+                </p>
+              </div>
+              <button
+                type="button"
+                disabled={isExporting}
+                onClick={() => setIsExportModalOpen(false)}
+                className="w-9 h-9 rounded-xl flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--bg)] transition-colors disabled:opacity-50 cursor-pointer"
+                aria-label="Close export window"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Toolbar: Counter & Quick Selection */}
+            <div className="flex items-center justify-between gap-2 px-1 shrink-0">
+              <span
+                className={`px-2.5 py-1 rounded-full text-2xs font-bold border ${
+                  isAllSelected
+                    ? "bg-[var(--accent)]/12 text-[var(--accent)] border-[var(--accent)]/30"
+                    : selectedOptionsCount > 0
+                      ? "bg-amber-500/15 text-amber-500 border-amber-500/30"
+                      : "bg-[var(--expense)]/15 text-[var(--expense)] border-[var(--expense)]/30"
+                }`}
+              >
+                {isAllSelected
+                  ? `All Categories (${totalOptionsCount})`
+                  : `${selectedOptionsCount} of ${totalOptionsCount} selected`}
+              </span>
+
+              <div className="flex items-center gap-2.5 text-xs">
+                <button
+                  type="button"
+                  disabled={isExporting || isAllSelected}
+                  onClick={handleSelectAll}
+                  className="text-[var(--accent)] hover:underline disabled:opacity-40 disabled:no-underline font-semibold cursor-pointer"
+                >
+                  Select All
+                </button>
+                <span className="text-[var(--text-muted)]">•</span>
+                <button
+                  type="button"
+                  disabled={isExporting || selectedOptionsCount === 0}
+                  onClick={handleDeselectAll}
+                  className="text-[var(--text-muted)] hover:text-[var(--text)] disabled:opacity-40 font-semibold cursor-pointer"
+                >
+                  Deselect All
+                </button>
+              </div>
+            </div>
+
+            {/* Categories List */}
+            <div className="space-y-1.5 overflow-y-auto flex-1 pr-1 border border-[var(--border)] rounded-2xl p-2.5 bg-[var(--bg)]">
+              {EXPORT_CATEGORY_ITEMS.map((item) => {
+                const isChecked = exportOptions[item.key];
+                const Icon = item.icon;
+
+                return (
+                  <label
+                    key={item.key}
+                    data-testid={`export-item-${item.key}`}
+                    className={`flex items-start gap-3 p-3 rounded-2xl cursor-pointer transition-all ${
+                      isChecked
+                        ? "bg-[var(--surface)] border border-[var(--border)] shadow-2xs"
+                        : "opacity-60 hover:opacity-100 hover:bg-[var(--surface)] border border-transparent"
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={isChecked}
+                      disabled={isExporting}
+                      onChange={() => handleToggleOption(item.key)}
+                      className="mt-1 rounded border-[var(--border)] bg-[var(--bg)] text-[var(--accent)] focus:ring-0 cursor-pointer"
+                    />
+                    <div className="w-8 h-8 rounded-xl bg-[var(--accent)]/12 flex items-center justify-center text-[var(--accent)] shrink-0">
+                      <Icon size={15} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <span className="text-xs font-bold text-[var(--text)] block truncate">
+                        {item.label}
+                      </span>
+                      <p className="text-2xs text-[var(--text-muted)] leading-relaxed mt-0.5">
+                        {item.description}
+                      </p>
+                    </div>
+                  </label>
+                );
+              })}
+            </div>
+
+            {/* Warning if 0 selected */}
+            {selectedOptionsCount === 0 && (
+              <div
+                role="alert"
+                className="p-3 rounded-2xl bg-[var(--expense)]/10 border border-[var(--expense)]/25 text-[var(--expense)] text-xs font-medium"
+              >
+                Please select at least one data category to generate an export.
+              </div>
+            )}
+
+            {/* Modal Footer */}
+            <div className="flex items-center justify-between gap-3 pt-3 border-t border-[var(--border)] shrink-0">
+              <p className="text-xs text-[var(--text-muted)] hidden sm:block">
+                {isAllSelected ? "Full snapshot of your treasury data" : "Custom partial snapshot"}
+              </p>
+              <div className="flex items-center gap-2.5 ml-auto">
+                <button
+                  type="button"
+                  disabled={isExporting}
+                  onClick={() => setIsExportModalOpen(false)}
+                  className="h-11 px-4 rounded-2xl border border-[var(--border)] text-xs font-semibold text-[var(--text)] hover:bg-[var(--surface-hover)] transition-colors disabled:opacity-50 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  data-testid="confirm-export-btn"
+                  disabled={isExporting || selectedOptionsCount === 0}
+                  onClick={handleExport}
+                  className="h-11 px-5 inline-flex items-center gap-2 rounded-2xl text-xs font-bold bg-[var(--accent)] text-white hover:opacity-95 active:scale-[0.98] transition-all shadow-xs disabled:opacity-50 disabled:pointer-events-none cursor-pointer"
+                >
+                  {isExporting ? (
+                    <>
+                      <Loader2 size={15} className="animate-spin" />
+                      <span>Exporting...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Download size={15} />
+                      <span>
+                        {isAllSelected
+                          ? "Download All Data"
+                          : `Download Selected (${selectedOptionsCount})`}
+                      </span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
-    </div>
-  </div>
 
-  {/* Export Window Modal */}
-  {isExportModalOpen && (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="export-modal-title"
-      data-testid="export-modal"
-      className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-3 sm:p-4 backdrop-blur-xs select-none overflow-y-auto animate-in fade-in duration-150"
-      onClick={(e) => {
-        if (e.target === e.currentTarget && !isExporting) setIsExportModalOpen(false);
-      }}
-    >
-      <div className="w-full max-w-lg bg-[var(--surface)] border border-hairline rounded-2xl shadow-2xl p-4 sm:p-5 space-y-4 my-auto animate-in zoom-in-95 duration-150 flex flex-col max-h-[90vh]">
-        {/* Modal Header */}
-        <div className="flex items-start justify-between pb-3 border-b border-hairline shrink-0">
-          <div>
-            <div className="flex items-center gap-2">
-              <Database size={18} className="text-[var(--accent)]" />
-              <h2 id="export-modal-title" className="text-sm sm:text-base font-semibold text-[var(--text)]">
-                Export Treasury Data
-              </h2>
-            </div>
-            <p className="text-xs text-[var(--text-muted)] mt-1">
-              Select the data categories you want to include in this JSON export. All categories are selected by default.
-            </p>
-          </div>
-          <button
-            type="button"
-            disabled={isExporting}
-            onClick={() => setIsExportModalOpen(false)}
-            className="p-1 rounded text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--border)] transition-colors disabled:opacity-50"
-            aria-label="Close export window"
-          >
-            <X size={18} />
-          </button>
-        </div>
-
-        {/* Toolbar: Counter & Quick Selection */}
-        <div className="flex items-center justify-between gap-2 px-1 shrink-0">
-          <div className="flex items-center gap-2">
-            <span
-              className={`px-2 py-0.5 rounded text-[11px] font-medium border ${
-                isAllSelected
-                  ? "bg-[var(--accent)]/15 text-[var(--accent)] border-[var(--accent)]/30"
-                  : selectedOptionsCount > 0
-                  ? "bg-amber-500/15 text-amber-500 border-amber-500/30"
-                  : "bg-red-500/15 text-red-500 border-red-500/30"
-              }`}
-            >
-              {isAllSelected
-                ? `All Categories (${totalOptionsCount})`
-                : `${selectedOptionsCount} of ${totalOptionsCount} selected`}
-            </span>
-          </div>
-
-          <div className="flex items-center gap-2 text-xs">
-            <button
-              type="button"
-              disabled={isExporting || isAllSelected}
-              onClick={handleSelectAll}
-              className="text-[var(--accent)] hover:underline disabled:opacity-40 disabled:no-underline font-medium"
-            >
-              Select All
-            </button>
-            <span className="text-[var(--text-muted)]">•</span>
-            <button
-              type="button"
-              disabled={isExporting || selectedOptionsCount === 0}
-              onClick={handleDeselectAll}
-              className="text-[var(--text-muted)] hover:text-[var(--text)] disabled:opacity-40 font-medium"
-            >
-              Deselect All
-            </button>
-          </div>
-        </div>
-
-        {/* Categories List */}
-        <div className="space-y-1.5 overflow-y-auto flex-1 pr-1 border border-hairline rounded-xl p-2 bg-[var(--bg)]/50 divide-y divide-hairline/40">
-          {EXPORT_CATEGORY_ITEMS.map((item) => {
-            const isChecked = exportOptions[item.key];
-            const Icon = item.icon;
-
-            return (
-              <label
-                key={item.key}
-                data-testid={`export-item-${item.key}`}
-                className={`flex items-start gap-3 p-2.5 rounded-lg cursor-pointer transition-all ${
-                  isChecked
-                    ? "bg-[var(--surface)] hover:bg-[var(--surface-hover)]"
-                    : "opacity-60 hover:opacity-100 hover:bg-[var(--surface)]"
-                }`}
-              >
-                <input
-                  type="checkbox"
-                  checked={isChecked}
-                  disabled={isExporting}
-                  onChange={() => handleToggleOption(item.key)}
-                  className="mt-0.5 rounded border-hairline bg-[var(--bg)] text-[var(--accent)] focus:ring-0 cursor-pointer"
-                />
-                <div className="w-7 h-7 rounded-lg bg-[var(--surface-hover)] border border-hairline flex items-center justify-center text-[var(--accent)] shrink-0">
-                  <Icon size={14} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs font-semibold text-[var(--text)] block truncate">
-                      {item.label}
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-[var(--text-muted)] leading-tight mt-0.5">
-                    {item.description}
-                  </p>
-                </div>
-              </label>
-            );
-          })}
-        </div>
-
-        {/* Warning if 0 selected */}
-        {selectedOptionsCount === 0 && (
-          <div role="alert" className="p-2.5 rounded-lg bg-red-500/10 border border-red-500/20 text-red-500 text-xs">
-            Please select at least one data category to generate an export.
-          </div>
-        )}
-
-        {/* Modal Footer */}
-        <div className="flex items-center justify-between gap-2 pt-3 border-t border-hairline shrink-0">
-          <p className="text-[11px] text-[var(--text-muted)] hidden sm:block">
-            {isAllSelected ? "Full snapshot of your treasury data" : "Custom partial snapshot"}
-          </p>
-          <div className="flex items-center gap-2 ml-auto">
-            <button
-              type="button"
-              disabled={isExporting}
-              onClick={() => setIsExportModalOpen(false)}
-              className="px-3.5 py-1.5 rounded border border-hairline text-xs font-medium text-[var(--text)] hover:bg-[var(--border)] transition-colors disabled:opacity-50"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              data-testid="confirm-export-btn"
-              disabled={isExporting || selectedOptionsCount === 0}
-              onClick={handleExport}
-              className="flex items-center gap-2 px-4 py-1.5 rounded text-xs font-semibold bg-[var(--accent)] text-white hover:opacity-90 active:scale-95 transition-all shadow-xs disabled:opacity-50 disabled:pointer-events-none"
-            >
-              {isExporting ? (
-                <>
-                  <Loader2 size={14} className="animate-spin" />
-                  <span>Exporting...</span>
-                </>
-              ) : (
-                <>
-                  <Download size={14} />
-                  <span>
-                    {isAllSelected ? "Download All Data" : `Download Selected (${selectedOptionsCount})`}
-                  </span>
-                </>
-              )}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  )}
-
-  {/* Confirmation Modal */}
-  <ConfirmationModal
-    isOpen={isImportModalOpen}
-    onClose={() => setIsImportModalOpen(false)}
-    onConfirm={handleConfirmImport}
-    title="Restore Treasury Data"
-    message={`Are you sure you want to restore data from ${selectedFile?.name || "this backup"}? This will upsert ${
-      entityCounts
-        ? `${entityCounts.accounts} accounts, ${entityCounts.transactions} transactions, and related records`
-        : "all entities"
-    } into your account.`}
-    confirmText="Yes, Restore Data"
-    cancelText="Cancel"
-    variant="warning"
-    icon="alert"
-    testId="import-confirmation-modal"
-  />
-</main>
+      {/* Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
+        onConfirm={handleConfirmImport}
+        title="Restore Treasury Data"
+        message={`Are you sure you want to restore data from ${selectedFile?.name || "this backup"}? This will upsert ${
+          entityCounts
+            ? `${entityCounts.accounts} accounts, ${entityCounts.transactions} transactions, and related records`
+            : "all entities"
+        } into your account.`}
+        confirmText="Yes, Restore Data"
+        cancelText="Cancel"
+        variant="warning"
+        icon="alert"
+        testId="import-confirmation-modal"
+      />
+    </main>
   );
 }

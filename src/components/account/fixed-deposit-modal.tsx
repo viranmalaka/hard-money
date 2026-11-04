@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { X } from "lucide-react";
+import { X, Landmark } from "lucide-react";
 import { LocalAccount, LocalFixedDeposit } from "@/lib/db";
 import { useSync } from "@/components/sync-provider";
 import { localCreateFixedDeposit, localUpdateFixedDeposit } from "@/lib/sync/client";
@@ -16,7 +16,12 @@ interface FixedDepositModalProps {
   fixedDeposit?: LocalFixedDeposit | null;
 }
 
-export function FixedDepositModal({ isOpen, onClose, accounts, fixedDeposit = null }: FixedDepositModalProps) {
+export function FixedDepositModal({
+  isOpen,
+  onClose,
+  accounts,
+  fixedDeposit = null,
+}: FixedDepositModalProps) {
   useModalHistory(isOpen, onClose, "fixed-deposit-modal");
   const { db, userId, sync } = useSync();
 
@@ -87,7 +92,6 @@ export function FixedDepositModal({ isOpen, onClose, accounts, fixedDeposit = nu
       return;
     }
 
-    // Fetch user default WHT from settings
     fetch("/api/user/settings", { cache: "no-store" })
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
@@ -203,50 +207,68 @@ export function FixedDepositModal({ isOpen, onClose, accounts, fixedDeposit = nu
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-150 overflow-y-auto">
-      <div className="w-full max-w-md bg-[var(--surface)] border border-hairline rounded shadow-2xl overflow-hidden modal-sheet-dialog flex flex-col">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-hairline shrink-0">
-          <h2 className="text-sm font-semibold text-[var(--text)]">{fixedDeposit ? "Edit Fixed Deposit" : "New Fixed Deposit"}</h2>
+    <div
+      className="fixed inset-0 z-50 flex items-end md:items-center justify-center p-0 md:p-4 bg-black/55 backdrop-blur-xs animate-in fade-in duration-150 overflow-y-auto"
+      onClick={(e) => {
+        if (e.target === e.currentTarget && !submitting) onClose();
+      }}
+    >
+      <div className="w-full md:max-w-lg bg-[var(--surface)] border border-hairline rounded-t-3xl md:rounded-3xl shadow-2xl overflow-hidden modal-sheet-dialog flex flex-col">
+        <div className="flex items-center justify-between px-5 sm:px-6 py-4 border-b border-hairline shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-[var(--accent)]/10 text-[var(--accent)] flex items-center justify-center shrink-0">
+              <Landmark size={18} />
+            </div>
+            <div>
+              <h2 className="text-base font-semibold text-[var(--text)]">
+                {fixedDeposit ? "Edit Fixed Deposit" : "New Fixed Deposit"}
+              </h2>
+              <p className="text-xs text-[var(--text-muted)]">Term deposit placement & interest payouts</p>
+            </div>
+          </div>
           <button
             type="button"
             onClick={onClose}
-            className="p-1 rounded text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--border)] transition-colors"
+            className="w-9 h-9 rounded-xl flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--surface-hover)] transition-colors"
           >
-            <X size={16} />
+            <X size={18} />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-4 space-y-3 flex-1 min-h-0 overflow-y-auto">
-          {/* Bank Name */}
-          <div className="space-y-1">
-            <label className="block text-xs font-medium text-[var(--text-muted)]">Bank Name</label>
-            <input
-              type="text"
-              data-testid="fd-form-bank"
-              value={bankName}
-              onChange={(e) => setBankName(e.target.value)}
-              placeholder="e.g. Commercial Bank, Sampath Bank"
-              className="w-full h-8 px-2.5 rounded bg-[var(--bg)] border border-hairline text-xs text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
-            />
-            {errors.bankName && <p className="text-[11px] text-[var(--expense)]">{errors.bankName}</p>}
+        <form onSubmit={handleSubmit} className="p-5 sm:p-6 pb-sheet-safe md:pb-6 space-y-4 flex-1 min-h-0 overflow-y-auto">
+          {/* Bank Name & Account Number */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+            <div className="space-y-1.5">
+              <label className="block text-xs font-medium text-[var(--text-muted)]">Bank Name</label>
+              <input
+                type="text"
+                data-testid="fd-form-bank"
+                value={bankName}
+                onChange={(e) => setBankName(e.target.value)}
+                placeholder="e.g. Commercial Bank"
+                className="w-full h-11 px-3.5 rounded-2xl bg-[var(--bg)] border border-hairline text-sm text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
+              />
+              {errors.bankName && <p className="text-[11px] text-[var(--expense)]">{errors.bankName}</p>}
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="block text-xs font-medium text-[var(--text-muted)]">
+                Account Number (Optional)
+              </label>
+              <input
+                type="text"
+                data-testid="fd-form-account-number"
+                value={accountNumber}
+                onChange={(e) => setAccountNumber(e.target.value)}
+                placeholder="e.g. 100098234"
+                className="w-full h-11 px-3.5 rounded-2xl bg-[var(--bg)] border border-hairline text-sm text-[var(--text)] focus:outline-none focus:border-[var(--accent)] font-mono"
+              />
+            </div>
           </div>
 
-          {/* Account Number */}
-          <div className="space-y-1">
-            <label className="block text-xs font-medium text-[var(--text-muted)]">Account Number (Optional)</label>
-            <input
-              type="text"
-              data-testid="fd-form-account-number"
-              value={accountNumber}
-              onChange={(e) => setAccountNumber(e.target.value)}
-              placeholder="e.g. 100098234"
-              className="w-full h-8 px-2.5 rounded bg-[var(--bg)] border border-hairline text-xs text-[var(--text)] focus:outline-none focus:border-[var(--accent)] font-mono"
-            />
-          </div>
-
-          {/* Principal & Rate */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1">
+          {/* Principal & Started Date */}
+          <div className="grid grid-cols-2 gap-3.5">
+            <div className="space-y-1.5">
               <label className="block text-xs font-medium text-[var(--text-muted)]">Principal Amount</label>
               <input
                 type="text"
@@ -254,17 +276,27 @@ export function FixedDepositModal({ isOpen, onClose, accounts, fixedDeposit = nu
                 value={principalStr}
                 onChange={(e) => setPrincipalStr(e.target.value)}
                 placeholder="1,000,000.00"
-                className="w-full h-8 px-2.5 rounded bg-[var(--bg)] border border-hairline text-xs text-[var(--text)] focus:outline-none focus:border-[var(--accent)] font-mono"
+                className="w-full h-11 px-3.5 rounded-2xl bg-[var(--bg)] border border-hairline text-sm text-[var(--text)] focus:outline-none focus:border-[var(--accent)] font-mono tabular-nums"
               />
               {errors.principal && <p className="text-[11px] text-[var(--expense)]">{errors.principal}</p>}
             </div>
-            <div className="space-y-1">
-              <label className="block text-xs font-medium text-[var(--text-muted)]">Started Date</label>
-              <input type="date" data-testid="fd-form-start-date" value={startDateStr} onChange={(e) => setStartDateStr(e.target.value)} className="w-full h-8 px-2.5 rounded bg-[var(--bg)] border border-hairline text-xs text-[var(--text)]" />
-            </div>
 
-            <div className="space-y-1">
-              <label className="block text-xs font-medium text-[var(--text-muted)]">Annual Rate (APR %)</label>
+            <div className="space-y-1.5">
+              <label className="block text-xs font-medium text-[var(--text-muted)]">Started Date</label>
+              <input
+                type="date"
+                data-testid="fd-form-start-date"
+                value={startDateStr}
+                onChange={(e) => setStartDateStr(e.target.value)}
+                className="w-full h-11 px-3.5 rounded-2xl bg-[var(--bg)] border border-hairline text-sm text-[var(--text)] font-mono focus:outline-none focus:border-[var(--accent)]"
+              />
+            </div>
+          </div>
+
+          {/* Rate, Tenure, WHT */}
+          <div className="grid grid-cols-3 gap-3">
+            <div className="space-y-1.5">
+              <label className="block text-xs font-medium text-[var(--text-muted)]">APR %</label>
               <input
                 type="number"
                 step="0.01"
@@ -272,29 +304,26 @@ export function FixedDepositModal({ isOpen, onClose, accounts, fixedDeposit = nu
                 value={aprStr}
                 onChange={(e) => setAprStr(e.target.value)}
                 placeholder="12.00"
-                className="w-full h-8 px-2.5 rounded bg-[var(--bg)] border border-hairline text-xs text-[var(--text)] focus:outline-none focus:border-[var(--accent)] font-mono"
+                className="w-full h-11 px-3 rounded-2xl bg-[var(--bg)] border border-hairline text-sm text-[var(--text)] focus:outline-none focus:border-[var(--accent)] font-mono"
               />
               {errors.rate && <p className="text-[11px] text-[var(--expense)]">{errors.rate}</p>}
             </div>
-          </div>
 
-          {/* Tenure & WHT */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <label className="block text-xs font-medium text-[var(--text-muted)]">Tenure (Months)</label>
+            <div className="space-y-1.5">
+              <label className="block text-xs font-medium text-[var(--text-muted)]">Tenure (Mo)</label>
               <input
                 type="number"
                 data-testid="fd-form-tenure"
                 value={tenureMonthsStr}
                 onChange={(e) => setTenureMonthsStr(e.target.value)}
                 min="1"
-                className="w-full h-8 px-2.5 rounded bg-[var(--bg)] border border-hairline text-xs text-[var(--text)] focus:outline-none focus:border-[var(--accent)] font-mono"
+                className="w-full h-11 px-3 rounded-2xl bg-[var(--bg)] border border-hairline text-sm text-[var(--text)] focus:outline-none focus:border-[var(--accent)] font-mono"
               />
               {errors.tenure && <p className="text-[11px] text-[var(--expense)]">{errors.tenure}</p>}
             </div>
 
-            <div className="space-y-1">
-              <label className="block text-xs font-medium text-[var(--text-muted)]">Withholding Tax (WHT %)</label>
+            <div className="space-y-1.5">
+              <label className="block text-xs font-medium text-[var(--text-muted)]">WHT %</label>
               <input
                 type="number"
                 step="0.1"
@@ -312,15 +341,15 @@ export function FixedDepositModal({ isOpen, onClose, accounts, fixedDeposit = nu
                 }}
                 min="0"
                 placeholder="5.0"
-                className="w-full h-8 px-2.5 rounded bg-[var(--bg)] border border-hairline text-xs text-[var(--text)] focus:outline-none focus:border-[var(--accent)] font-mono"
+                className="w-full h-11 px-3 rounded-2xl bg-[var(--bg)] border border-hairline text-sm text-[var(--text)] focus:outline-none focus:border-[var(--accent)] font-mono"
               />
               {errors.wht && <p className="text-[11px] text-[var(--expense)]">{errors.wht}</p>}
             </div>
           </div>
 
           {/* Payout Mode & Compounding Frequency */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1">
+          <div className="grid grid-cols-2 gap-3.5">
+            <div className="space-y-1.5">
               <label className="block text-xs font-medium text-[var(--text-muted)]">Payout Mode</label>
               <select
                 data-testid="fd-form-payout-mode"
@@ -328,15 +357,15 @@ export function FixedDepositModal({ isOpen, onClose, accounts, fixedDeposit = nu
                 onChange={(e) =>
                   setPayoutMode(e.target.value as "MONTHLY_PAYOUT_TO_ACCOUNT" | "REINVEST_COMPOUND")
                 }
-                className="w-full h-8 px-2 rounded bg-[var(--bg)] border border-hairline text-xs text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
+                className="w-full h-11 px-3 rounded-2xl bg-[var(--bg)] border border-hairline text-xs sm:text-sm text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
               >
                 <option value="MONTHLY_PAYOUT_TO_ACCOUNT">Monthly Payout</option>
                 <option value="REINVEST_COMPOUND">Compound & Reinvest</option>
               </select>
             </div>
 
-            <div className="space-y-1">
-              <label className="block text-xs font-medium text-[var(--text-muted)]">Compounding Frequency</label>
+            <div className="space-y-1.5">
+              <label className="block text-xs font-medium text-[var(--text-muted)]">Compounding</label>
               <select
                 data-testid="fd-form-compounding"
                 value={compoundingFrequency}
@@ -345,7 +374,7 @@ export function FixedDepositModal({ isOpen, onClose, accounts, fixedDeposit = nu
                     e.target.value as "MONTHLY" | "QUARTERLY" | "ANNUALLY" | "AT_MATURITY"
                   )
                 }
-                className="w-full h-8 px-2 rounded bg-[var(--bg)] border border-hairline text-xs text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
+                className="w-full h-11 px-3 rounded-2xl bg-[var(--bg)] border border-hairline text-xs sm:text-sm text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
               >
                 <option value="MONTHLY">Monthly</option>
                 <option value="QUARTERLY">Quarterly</option>
@@ -356,13 +385,15 @@ export function FixedDepositModal({ isOpen, onClose, accounts, fixedDeposit = nu
           </div>
 
           {/* Linked Savings Account */}
-          <div className="space-y-1">
-            <label className="block text-xs font-medium text-[var(--text-muted)]">Interest Payout Account (Linked Savings)</label>
+          <div className="space-y-1.5">
+            <label className="block text-xs font-medium text-[var(--text-muted)]">
+              Interest Payout Account (Linked Savings)
+            </label>
             <select
               data-testid="fd-form-linked-account"
               value={linkedAccountId}
               onChange={(e) => setLinkedAccountId(e.target.value)}
-              className="w-full h-8 px-2 rounded bg-[var(--bg)] border border-hairline text-xs text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
+              className="w-full h-11 px-3.5 rounded-2xl bg-[var(--bg)] border border-hairline text-sm text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
             >
               <option value="">None / Not linked</option>
               {eligibleSavings.map((acc) => (
@@ -374,20 +405,22 @@ export function FixedDepositModal({ isOpen, onClose, accounts, fixedDeposit = nu
             {errors.linkedAccount ? (
               <p className="text-[11px] text-[var(--expense)]">{errors.linkedAccount}</p>
             ) : (
-              <span className="text-[10px] text-[var(--text-muted)]">
+              <p className="text-[11px] text-[var(--text-muted)] leading-relaxed">
                 Where monthly interest payouts are deposited. Does NOT deduct any funds.
-              </span>
+              </p>
             )}
           </div>
 
           {/* Funding Account */}
-          <div className="space-y-1">
-            <label className="block text-xs font-medium text-[var(--text-muted)]">Funding Account (Deduct Principal)</label>
+          <div className="space-y-1.5">
+            <label className="block text-xs font-medium text-[var(--text-muted)]">
+              Funding Account (Deduct Principal)
+            </label>
             <select
               data-testid="fd-form-funding-account"
               value={fundingAccountId}
               onChange={(e) => setFundingAccountId(e.target.value)}
-              className="w-full h-8 px-2 rounded bg-[var(--bg)] border border-hairline text-xs text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
+              className="w-full h-11 px-3.5 rounded-2xl bg-[var(--bg)] border border-hairline text-sm text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
             >
               <option value="">None — Already started / Track only (No deduction)</option>
               {eligibleSavings.map((acc) => (
@@ -396,33 +429,36 @@ export function FixedDepositModal({ isOpen, onClose, accounts, fixedDeposit = nu
                 </option>
               ))}
             </select>
-            <span className="text-[10px] text-[var(--text-muted)]">
-              Choose &quot;None&quot; for already-started FDs to keep current account balances unchanged. Select an account only if you want to record an initial placement expense.
-            </span>
+            <p className="text-[11px] text-[var(--text-muted)] leading-relaxed">
+              Choose &quot;None&quot; for already-started FDs to keep current account balances unchanged.
+            </p>
           </div>
 
           {/* Auto-renew checkbox */}
-          <div className="flex items-center gap-2 pt-1">
+          <label
+            htmlFor="fd-auto-renew"
+            className="flex items-center gap-3 p-3.5 rounded-2xl bg-[var(--bg)] border border-hairline cursor-pointer"
+          >
             <input
               type="checkbox"
               id="fd-auto-renew"
               data-testid="fd-form-auto-renew"
               checked={autoRenew}
               onChange={(e) => setAutoRenew(e.target.checked)}
-              className="rounded border-hairline bg-[var(--bg)] text-[var(--accent)] focus:ring-0"
+              className="w-4 h-4 rounded border-hairline bg-[var(--surface)] accent-[var(--accent)]"
             />
-            <label htmlFor="fd-auto-renew" className="text-xs text-[var(--text)] cursor-pointer">
+            <span className="text-xs font-medium text-[var(--text)]">
               Auto-renew on maturity for the same tenure
-            </label>
-          </div>
+            </span>
+          </label>
 
           {/* Form Actions */}
-          <div className="flex items-center justify-end gap-2 pt-3 border-t border-hairline">
+          <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-hairline">
             <button
               type="button"
               onClick={onClose}
               disabled={submitting}
-              className="px-3 py-1.5 rounded text-xs font-medium text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--border)] transition-colors"
+              className="h-11 px-4 rounded-2xl border border-hairline text-xs font-semibold text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--surface-hover)] transition-colors"
             >
               Cancel
             </button>
@@ -430,9 +466,15 @@ export function FixedDepositModal({ isOpen, onClose, accounts, fixedDeposit = nu
               type="submit"
               data-testid="fd-form-submit"
               disabled={submitting}
-              className="px-3 py-1.5 rounded bg-[var(--accent)] text-white text-xs font-semibold hover:opacity-90 active:scale-95 transition-all disabled:opacity-50"
+              className="h-11 px-5 rounded-2xl bg-[var(--accent)] text-white text-xs font-semibold hover:opacity-95 active:scale-[0.99] transition-all disabled:opacity-50 shadow-sm"
             >
-              {submitting ? "Creating..." : "Create Fixed Deposit"}
+              {submitting
+                ? fixedDeposit
+                  ? "Saving..."
+                  : "Creating..."
+                : fixedDeposit
+                ? "Save Changes"
+                : "Create Fixed Deposit"}
             </button>
           </div>
         </form>

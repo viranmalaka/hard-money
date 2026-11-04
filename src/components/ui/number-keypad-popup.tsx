@@ -44,26 +44,26 @@ export function NumberKeypadPopup({
   return (
     <div
       data-testid="number-keypad-popup"
-      className="w-full bg-[var(--surface)] border border-hairline rounded-lg p-2.5 space-y-2 animate-in fade-in zoom-in-95 my-1 shadow-xs"
+      className="w-full bg-[var(--surface)] border border-hairline rounded-3xl p-3.5 space-y-3 animate-in fade-in zoom-in-95 my-1.5 shadow-sm"
     >
       {/* Header bar with title, live formula preview and Done button */}
-      <div className="flex items-center justify-between px-1 pb-1 border-b border-hairline">
+      <div className="flex items-center justify-between px-1 pb-2.5 border-b border-hairline">
         <div className="flex items-center gap-2">
           <span className="text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">
             {title}
           </span>
           {previewValue && (
-            <span className="text-[11px] font-mono font-medium text-[var(--text-muted)] bg-[var(--bg)] px-1.5 py-0.5 rounded border border-hairline">
+            <span className="text-xs font-mono font-semibold text-[var(--accent)] bg-[var(--accent)]/10 px-2 py-0.5 rounded-lg border border-[var(--accent)]/25">
               = {previewValue}
             </span>
           )}
         </div>
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-2">
           <button
             type="button"
             data-testid="keypad-clear"
             onClick={() => onKeypadClick("C")}
-            className="px-2 py-0.5 rounded border border-hairline bg-[var(--bg)] text-[10px] font-medium text-[var(--expense)] hover:bg-[var(--surface-hover)] transition-colors"
+            className="h-8 px-2.5 rounded-xl border border-hairline bg-[var(--bg)] text-xs font-medium text-[var(--expense)] hover:bg-[var(--surface-hover)] transition-colors"
           >
             Clear
           </button>
@@ -71,16 +71,16 @@ export function NumberKeypadPopup({
             type="button"
             data-testid="keypad-done-btn"
             onClick={onClose}
-            className="flex items-center gap-1 px-2.5 py-1 rounded bg-[var(--accent)] text-white text-[11px] font-semibold hover:opacity-90 active:scale-95 transition-all shadow-xs"
+            className="h-8 flex items-center gap-1.5 px-3 rounded-xl bg-[var(--accent)] text-white text-xs font-semibold hover:opacity-95 active:scale-95 transition-all shadow-xs"
           >
-            <Check size={12} />
+            <Check size={13} />
             <span>Done</span>
           </button>
         </div>
       </div>
 
       {/* 4x4 Grid */}
-      <div className="grid grid-cols-4 gap-1.5">
+      <div className="grid grid-cols-4 gap-2">
         {/* Row 1 */}
         <KeypadBtn id="keypad-7" label="7" onClick={() => onKeypadClick("7")} />
         <KeypadBtn id="keypad-8" label="8" onClick={() => onKeypadClick("8")} />
@@ -88,7 +88,7 @@ export function NumberKeypadPopup({
         <KeypadBtn
           id="keypad-divide"
           label="÷"
-          className="bg-[var(--bg)] font-semibold text-sm"
+          isOperator
           onClick={() => onKeypadClick("÷")}
         />
 
@@ -99,7 +99,7 @@ export function NumberKeypadPopup({
         <KeypadBtn
           id="keypad-multiply"
           label="×"
-          className="bg-[var(--bg)] font-semibold text-sm"
+          isOperator
           onClick={() => onKeypadClick("×")}
         />
 
@@ -110,7 +110,7 @@ export function NumberKeypadPopup({
         <KeypadBtn
           id="keypad-minus"
           label="−"
-          className="bg-[var(--bg)] font-semibold text-sm"
+          isOperator
           onClick={() => onKeypadClick("-")}
         />
 
@@ -120,13 +120,13 @@ export function NumberKeypadPopup({
         <KeypadBtn
           id="keypad-backspace"
           label="⌫"
-          className="text-xs"
+          className="text-sm"
           onClick={() => onKeypadClick("⌫")}
         />
         <KeypadBtn
           id="keypad-plus"
           label="+"
-          className="bg-[var(--bg)] font-semibold text-sm"
+          isOperator
           onClick={() => onKeypadClick("+")}
         />
       </div>
@@ -137,7 +137,7 @@ export function NumberKeypadPopup({
           type="button"
           data-testid="keypad-equals"
           onClick={() => onKeypadClick("=")}
-          className="w-full py-1.5 rounded border border-hairline bg-[var(--bg)] font-mono text-sm font-semibold hover:bg-[var(--surface-hover)] text-[var(--text)] transition-colors"
+          className="w-full h-11 rounded-2xl border border-hairline bg-[var(--bg)] font-mono text-base font-semibold hover:bg-[var(--surface-hover)] text-[var(--text)] active:scale-[0.99] transition-all"
         >
           =
         </button>
@@ -150,11 +150,13 @@ function KeypadBtn({
   id,
   label,
   onClick,
+  isOperator = false,
   className = "",
 }: {
   id: string;
   label: string;
   onClick: () => void;
+  isOperator?: boolean;
   className?: string;
 }) {
   return (
@@ -162,7 +164,11 @@ function KeypadBtn({
       type="button"
       data-testid={id}
       onClick={onClick}
-      className={`h-10 rounded border border-hairline bg-[var(--bg)] hover:bg-[var(--surface-hover)] active:scale-95 transition-all text-sm font-medium text-[var(--text)] font-mono flex items-center justify-center select-none shadow-xs ${className}`}
+      className={`h-12 rounded-2xl border transition-all text-base font-semibold font-mono flex items-center justify-center select-none active:scale-95 ${
+        isOperator
+          ? "border-[var(--accent)]/25 bg-[var(--accent)]/10 text-[var(--accent)] hover:bg-[var(--accent)]/15"
+          : "border-hairline bg-[var(--bg)] hover:bg-[var(--surface-hover)] text-[var(--text)]"
+      } ${className}`}
     >
       {label}
     </button>

@@ -3,6 +3,7 @@
 import { memo } from "react";
 import { ChevronRight, TrendingUp, X } from "lucide-react";
 import { formatMoney } from "@/lib/finance-core";
+import { CategoryIcon } from "@/components/ui/category-icon";
 import type { LocalTransaction } from "@/lib/db";
 
 export interface TrendPoint {
@@ -28,25 +29,50 @@ export const TrendSection = memo(function TrendSection({
   maxMinor: number;
 }) {
   return (
-    <div data-testid="stats-trend-view" className="p-4 bg-[var(--surface)] border border-hairline rounded-xl space-y-4">
+    <div
+      data-testid="stats-trend-view"
+      className="p-6 bg-[var(--surface)] border border-[var(--border)] rounded-3xl space-y-6"
+    >
       <div className="flex items-center justify-between">
-        <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] flex items-center gap-1.5">
-          <TrendingUp size={14} />
+        <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--text-muted)] flex items-center gap-2">
+          <TrendingUp size={16} className="text-[var(--accent)]" />
           <span>6-Month Expense Trend</span>
         </h3>
       </div>
-      <div className="grid grid-cols-6 gap-2 h-44 items-end pt-4 pb-2 border-b border-hairline">
-        {months.map((month) => {
+
+      <div className="grid grid-cols-6 gap-2.5 sm:gap-4 h-56 items-end pt-4 pb-3 border-b border-[var(--border)]">
+        {months.map((month, idx) => {
           const heightPct = Math.round((month.totalMinor / maxMinor) * 100);
+          const isLatest = idx === months.length - 1;
           return (
-            <div key={month.key} data-testid={`trend-bar-${month.key}`} className="flex flex-col items-center justify-end h-full gap-1.5 group">
-              <span data-testid="trend-bar-amount" className="text-[10px] font-mono text-[var(--text-muted)] group-hover:text-[var(--text)] tabular-nums truncate max-w-full text-center">
+            <div
+              key={month.key}
+              data-testid={`trend-bar-${month.key}`}
+              className="flex flex-col items-center justify-end h-full gap-2 group min-w-0"
+            >
+              <span
+                data-testid="trend-bar-amount"
+                className="text-2xs font-mono font-semibold text-[var(--text-muted)] group-hover:text-[var(--text)] tabular-nums truncate max-w-full text-center"
+              >
                 {formatMoney(month.totalMinor).replace("LKR ", "")}
               </span>
-              <div className="w-full bg-[var(--border)] rounded-t-sm h-full flex items-end">
-                <div style={{ height: `${Math.max(6, heightPct)}%` }} className="w-full bg-[var(--expense)]/80 hover:bg-[var(--expense)] rounded-t-sm transition-all" />
+              <div className="w-full max-w-[44px] bg-[var(--bg)] border border-[var(--border)] rounded-2xl h-full flex items-end p-1">
+                <div
+                  style={{ height: `${Math.max(8, heightPct)}%` }}
+                  className={`w-full rounded-xl transition-all ${
+                    isLatest
+                      ? "bg-[var(--expense)]"
+                      : "bg-[var(--expense)]/65 group-hover:bg-[var(--expense)]"
+                  }`}
+                />
               </div>
-              <span className="text-[11px] font-medium text-[var(--text-muted)] mt-1">{month.label}</span>
+              <span
+                className={`text-xs font-semibold mt-0.5 ${
+                  isLatest ? "text-[var(--text)]" : "text-[var(--text-muted)]"
+                }`}
+              >
+                {month.label}
+              </span>
             </div>
           );
         })}
@@ -65,13 +91,23 @@ export const CategoryList = memo(function CategoryList({
   onSelect: (id: string) => void;
 }) {
   return (
-    <div className="bg-[var(--surface)] border border-hairline rounded-xl p-3 space-y-2">
-      <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] px-1">
-        Top Categories ({categories.length})
-      </h3>
-      <div className="space-y-1">
+    <div className="bg-[var(--surface)] border border-[var(--border)] rounded-3xl p-5 space-y-4">
+      <div className="flex items-center justify-between px-1">
+        <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--text-muted)]">
+          Categories ({categories.length})
+        </h3>
+        <span className="text-2xs font-medium text-[var(--text-muted)]">
+          Tap to inspect
+        </span>
+      </div>
+
+      <div className="space-y-2.5">
         {categories.map((category) => {
           const isSelected = selectedId === category.id;
+          const isAsciiWord = /^[A-Za-z0-9_-]+$/.test(
+            (category.icon || "").trim()
+          );
+
           return (
             <button
               type="button"
@@ -80,22 +116,73 @@ export const CategoryList = memo(function CategoryList({
               onClick={() => onSelect(isSelected ? "" : category.id)}
               aria-expanded={isSelected}
               aria-label={`${category.name}, ${category.percent} percent, ${formatMoney(category.amount)}`}
-              className={`w-full text-left flex items-center justify-between p-2 rounded-lg cursor-pointer transition-all ${
-                isSelected ? "bg-[var(--border)] border border-hairline" : "hover:bg-[var(--bg)] border border-transparent"
+              className={`w-full text-left p-3.5 rounded-2xl border cursor-pointer transition-all space-y-2.5 ${
+                isSelected
+                  ? "bg-[var(--bg)] border-[var(--accent)] ring-1 ring-[var(--accent)]"
+                  : "bg-[var(--bg)]/60 border-[var(--border)] hover:border-[var(--text-muted)]/60"
               }`}
             >
-              <div className="flex items-center gap-2.5 min-w-0">
-                <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: category.color }} />
-                <span className="text-xs font-semibold text-[var(--text)] truncate">{category.name}</span>
-                <span data-testid="category-percent-chip" className="text-[10px] px-1.5 py-0.2 rounded font-mono font-medium bg-[var(--border)] text-[var(--text-muted)] tabular-nums">
-                  {category.percent}%
-                </span>
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  <span
+                    className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
+                    style={{
+                      backgroundColor: `${category.color}20`,
+                      color: category.color,
+                    }}
+                  >
+                    {category.icon && !isAsciiWord ? (
+                      <span className="text-base leading-none">
+                        {category.icon}
+                      </span>
+                    ) : (
+                      <CategoryIcon
+                        name={category.icon || "Folder"}
+                        size={18}
+                      />
+                    )}
+                  </span>
+
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-bold text-[var(--text)] truncate">
+                        {category.name}
+                      </span>
+                      <span
+                        data-testid="category-percent-chip"
+                        className="text-2xs px-2 py-0.5 rounded-full font-mono font-bold bg-[var(--surface)] border border-[var(--border)] text-[var(--text-muted)] tabular-nums shrink-0"
+                      >
+                        {category.percent}%
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  <span
+                    data-testid="category-stat-amount"
+                    className="font-mono font-extrabold text-sm text-[var(--text)] tabular-nums"
+                  >
+                    {formatMoney(category.amount)}
+                  </span>
+                  <ChevronRight
+                    size={16}
+                    className={`text-[var(--text-muted)] transition-transform ${
+                      isSelected ? "rotate-90 text-[var(--accent)]" : ""
+                    }`}
+                  />
+                </div>
               </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <span data-testid="category-stat-amount" className="font-mono font-semibold text-xs text-[var(--text)] tabular-nums">
-                  {formatMoney(category.amount)}
-                </span>
-                <ChevronRight size={14} className={`text-[var(--text-muted)] transition-transform ${isSelected ? "rotate-90 text-[var(--text)]" : ""}`} />
+
+              {/* Clean Progress Bar */}
+              <div className="h-1.5 w-full rounded-full bg-[var(--border)] overflow-hidden">
+                <div
+                  className="h-full rounded-full transition-all duration-300"
+                  style={{
+                    width: `${Math.max(3, category.percent)}%`,
+                    backgroundColor: category.color,
+                  }}
+                />
               </div>
             </button>
           );
@@ -115,25 +202,53 @@ export const CategoryTransactions = memo(function CategoryTransactions({
   onClose: () => void;
 }) {
   return (
-    <section data-testid="category-transactions-list" className="p-4 bg-[var(--surface)] border border-hairline rounded-xl space-y-3">
-      <div className="flex items-center justify-between border-b border-hairline pb-2">
-        <div className="flex items-center gap-2">
-          <span className="w-3 h-3 rounded-full" style={{ backgroundColor: category.color }} />
-          <h3 className="font-semibold text-sm text-[var(--text)]">{category.name} Transactions</h3>
+    <section
+      data-testid="category-transactions-list"
+      className="p-5 bg-[var(--surface)] border border-[var(--border)] rounded-3xl space-y-4"
+    >
+      <div className="flex items-center justify-between border-b border-[var(--border)] pb-3">
+        <div className="flex items-center gap-2.5">
+          <span
+            className="w-3.5 h-3.5 rounded-full shrink-0"
+            style={{ backgroundColor: category.color }}
+          />
+          <h3 className="font-bold text-base text-[var(--text)]">
+            {category.name} · {transactions.length}{" "}
+            {transactions.length === 1 ? "entry" : "entries"}
+          </h3>
         </div>
-        <button type="button" onClick={onClose} className="p-1 rounded text-[var(--text-muted)] hover:text-[var(--text)]">
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close category transactions"
+          className="w-9 h-9 rounded-xl bg-[var(--bg)] border border-[var(--border)] flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text)] cursor-pointer"
+        >
           <X size={16} />
         </button>
       </div>
-      <div className="divide-y divide-hairline">
+
+      <div className="space-y-2.5">
         {transactions.map((transaction) => (
-          <div key={transaction.id} className="py-2 flex items-center justify-between text-xs">
-            <div>
-              <div className="font-medium text-[var(--text)]">{transaction.note || category.name}</div>
-              <div className="text-[11px] text-[var(--text-muted)]">{transaction.transactionDate}</div>
+          <div
+            key={transaction.id}
+            className="p-3.5 rounded-2xl bg-[var(--bg)] border border-[var(--border)] flex items-center justify-between gap-3"
+          >
+            <div className="min-w-0">
+              <div className="font-bold text-sm text-[var(--text)] truncate">
+                {transaction.note || category.name}
+              </div>
+              <div className="text-xs text-[var(--text-muted)] font-mono mt-0.5">
+                {transaction.transactionDate.slice(0, 10)}
+              </div>
             </div>
-            <div className={`font-mono font-semibold tabular-nums ${transaction.type === "INCOME" ? "text-income" : "text-expense"}`}>
-              {transaction.type === "INCOME" ? `+ ${formatMoney(transaction.amountMinor)}` : `- ${formatMoney(transaction.amountMinor)}`}
+            <div
+              className={`font-mono font-extrabold text-sm tabular-nums whitespace-nowrap shrink-0 ${
+                transaction.type === "INCOME" ? "text-income" : "text-expense"
+              }`}
+            >
+              {transaction.type === "INCOME"
+                ? `+${formatMoney(transaction.amountMinor)}`
+                : `-${formatMoney(transaction.amountMinor)}`}
             </div>
           </div>
         ))}

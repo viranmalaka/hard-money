@@ -56,6 +56,11 @@ interface MobileQuickAddProps {
   validateAndSubmit: (keepOpen?: boolean) => Promise<void>;
   closeQuickAdd: () => void;
   isDivisionByZero: boolean;
+  isUsdToLkrTransfer?: boolean;
+  destinationAmountStr?: string;
+  onDestinationAmountChange?: (val: string) => void;
+  exchangeRateStr?: string;
+  onExchangeRateChange?: (val: string) => void;
 }
 
 function formatDisplayDate(dateStr: string): string {
@@ -64,9 +69,8 @@ function formatDisplayDate(dateStr: string): string {
     const dt = new Date(y, m - 1, d);
     return dt.toLocaleDateString("en-US", {
       weekday: "short",
-      month: "2-digit",
-      day: "2-digit",
-      year: "numeric",
+      month: "short",
+      day: "numeric",
     });
   } catch {
     return dateStr;
@@ -109,44 +113,35 @@ export function MobileQuickAdd({
   validateAndSubmit,
   closeQuickAdd,
   isDivisionByZero,
+  isUsdToLkrTransfer,
+  destinationAmountStr = "",
+  onDestinationAmountChange,
+  exchangeRateStr = "",
+  onExchangeRateChange,
 }: MobileQuickAddProps) {
   const router = useRouter();
-  // Mobile active field: amount | category | account | toAccount | date | note
   const [activeField, setActiveField] = useState<MobileActiveField>("amount");
   const [showBookmarks, setShowBookmarks] = useState(false);
 
-  // Styling accents based on type
-  const themeStyles = useMemo(() => {
+  const typeTone = useMemo(() => {
     switch (type) {
       case "EXPENSE":
         return {
-          title: "Expense",
-          accentColor: "#EF4444",
-          borderActive: "border-[#EF4444]",
-          bgActive: "bg-[#EF4444]/15",
-          textActive: "text-[#EF4444]",
-          okBtnBg: "bg-[#EF4444] hover:bg-[#DC2626] text-white",
-          tagActive: "border-[#EF4444] text-[#EF4444]",
+          title: "New Expense",
+          amountText: "text-[var(--expense)]",
+          ctaBg: "bg-[var(--accent)] text-white",
         };
       case "INCOME":
         return {
-          title: "Income",
-          accentColor: "#3B82F6",
-          borderActive: "border-[#3B82F6]",
-          bgActive: "bg-[#3B82F6]/15",
-          textActive: "text-[#3B82F6]",
-          okBtnBg: "bg-[#2563EB] hover:bg-[#1D4ED8] text-white",
-          tagActive: "border-[#3B82F6] text-[#3B82F6]",
+          title: "New Income",
+          amountText: "text-[var(--income)]",
+          ctaBg: "bg-[var(--accent)] text-white",
         };
       case "TRANSFER":
         return {
-          title: "Transfer",
-          accentColor: "#94A3B8",
-          borderActive: "border-slate-300",
-          bgActive: "bg-slate-700/40",
-          textActive: "text-slate-200",
-          okBtnBg: "bg-slate-700 hover:bg-slate-600 text-white",
-          tagActive: "border-slate-300 text-slate-200",
+          title: "Transfer Funds",
+          amountText: "text-[var(--text)]",
+          ctaBg: "bg-[var(--accent)] text-white",
         };
     }
   }, [type]);
@@ -166,7 +161,6 @@ export function MobileQuickAdd({
     [activeAccounts, toAccountId]
   );
 
-  // Accounts grouped by type
   const cashAccounts = useMemo(
     () => activeAccounts.filter((a) => a.type === "CASH"),
     [activeAccounts]
@@ -180,13 +174,8 @@ export function MobileQuickAdd({
     [activeAccounts]
   );
 
-  // Expense/Income categories for the picker (the current type's group is shown first)
   const categoryGroups = useMemo(() => groupCategoriesByType(categories), [categories]);
 
-  /**
-   * Returns the first required field that is still empty, in entry order.
-   * `overrides` lets callers account for a value they've just set (state isn't updated yet).
-   */
   const firstMissingField = (
     overrides: { categoryId?: string; accountId?: string; toAccountId?: string } = {}
   ): MobileActiveField | null => {
@@ -200,14 +189,12 @@ export function MobileQuickAdd({
     return null;
   };
 
-  /** Move to the next empty required field; when everything is filled, open the note panel. */
   const advance = (overrides?: Parameters<typeof firstMissingField>[0]) => {
     setActiveField(firstMissingField(overrides) ?? "note");
   };
 
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  /** Save if complete, otherwise jump to the first missing required field. */
   const submitOrFocusMissing = async () => {
     if (isSubmitting) return;
     const missing = firstMissingField();
@@ -224,7 +211,6 @@ export function MobileQuickAdd({
     }
   };
 
-  // Keypad OK: amount must be valid, then go to the next required field
   const handleKeypadOk = () => {
     if (!evalResult.isValid || !evalResult.value || evalResult.value <= 0) {
       setErrorMsg("Please enter a valid amount");
@@ -235,7 +221,6 @@ export function MobileQuickAdd({
   };
 
   const handleSelectCategory = (catId: string) => {
-    // Picking a category from the other group switches Expense <-> Income
     const cat = categories.find((c) => c.id === catId);
     if (cat) {
       const catType = categoryGroups.income.includes(cat) ? "INCOME" : "EXPENSE";
@@ -268,6 +253,8 @@ export function MobileQuickAdd({
   const todayStr = getRelativeDateString(0);
   const yesterdayStr = getRelativeDateString(-1);
   const twoDaysAgoStr = getRelativeDateString(-2);
+  const currencyCode = selectedAccount?.currency || "LKR";
+  const hasFormula = /[+\-×÷]/.test(expression);
 
   return (
     <div
@@ -277,24 +264,23 @@ export function MobileQuickAdd({
       data-testid="quick-add-mobile"
       className="flex md:hidden flex-col fixed inset-0 z-50 bg-[var(--bg)] text-[var(--text)] select-none overflow-hidden"
     >
-      {/* 1. Mobile Header with Safe Area Inset Top */}
+      {/* 1. Clean Top Bar */}
       <div
-        className="shrink-0 flex items-center justify-between px-3 pb-2.5 border-b border-hairline"
-        style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 7px)" }}
+        className="shrink-0 flex items-center justify-between px-4 pb-3"
+        style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 10px)" }}
       >
         <button
           type="button"
           data-testid="quick-add-mobile-back"
           aria-label="Back to Transactions"
           onClick={closeQuickAdd}
-          className="flex items-center gap-0.5 text-sm font-medium text-[var(--text-muted)] hover:text-[var(--text)] active:opacity-75 py-1 px-1.5 -ml-1 rounded transition-colors"
+          className="w-10 h-10 rounded-2xl bg-[var(--surface)] border border-[var(--border)] flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text)] active:scale-95 transition-all cursor-pointer"
         >
           <ChevronLeft size={20} />
-          <span>Trans.</span>
         </button>
 
-        <span className="text-base font-semibold tracking-wide text-[var(--text)]">
-          {themeStyles.title}
+        <span className="text-sm font-bold tracking-tight text-[var(--text)]">
+          {typeTone.title}
         </span>
 
         <div className="flex items-center gap-2">
@@ -303,14 +289,14 @@ export function MobileQuickAdd({
               type="button"
               data-testid="quick-add-mobile-bookmarks-btn"
               onClick={() => setShowBookmarks(!showBookmarks)}
-              className={`p-1.5 rounded-full transition-colors ${
+              className={`w-10 h-10 rounded-2xl border flex items-center justify-center transition-colors cursor-pointer ${
                 showBookmarks
-                  ? "bg-amber-400/20 text-amber-300"
-                  : "text-[var(--text-muted)] hover:text-[var(--text)]"
+                  ? "bg-amber-500/15 border-amber-500/30 text-amber-500"
+                  : "bg-[var(--surface)] border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text)]"
               }`}
               title="Templates"
             >
-              <Star size={18} fill={showBookmarks ? "currentColor" : "none"} />
+              <Star size={17} fill={showBookmarks ? "currentColor" : "none"} />
             </button>
           )}
 
@@ -319,18 +305,18 @@ export function MobileQuickAdd({
             data-testid="quick-add-mobile-save"
             disabled={isDivisionByZero || isSubmitting}
             onClick={submitOrFocusMissing}
-            className="px-3.5 py-1.5 rounded-md text-xs font-semibold bg-[var(--accent)] text-white hover:opacity-90 active:scale-95 disabled:opacity-40 disabled:pointer-events-none transition-all shadow-xs"
+            className="h-10 px-4 rounded-2xl text-xs font-bold bg-[var(--accent)] text-white hover:opacity-95 active:scale-95 disabled:opacity-40 disabled:pointer-events-none transition-all shadow-xs cursor-pointer"
           >
             {isSubmitting ? "Saving..." : "Save"}
           </button>
         </div>
       </div>
 
-      {/* Templates Drawer/Bar */}
+      {/* Templates Strip */}
       {showBookmarks && templates.length > 0 && (
         <div
           data-testid="quick-add-mobile-bookmarks"
-          className="flex items-center gap-1.5 overflow-x-auto px-4 py-2 border-b border-hairline bg-[var(--surface)] no-scrollbar shrink-0"
+          className="flex items-center gap-2 overflow-x-auto px-4 pb-3 no-scrollbar shrink-0"
         >
           {templates.map((tmpl) => (
             <button
@@ -340,11 +326,11 @@ export function MobileQuickAdd({
                 handleApplyTemplate(tmpl);
                 setShowBookmarks(false);
               }}
-              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full border border-hairline bg-[var(--surface-hover)] text-xs text-[var(--text)] whitespace-nowrap shrink-0 hover:opacity-90 active:scale-95 transition-all"
+              className="inline-flex items-center gap-2 px-3.5 py-2 rounded-2xl border border-[var(--border)] bg-[var(--surface)] text-xs font-semibold text-[var(--text)] whitespace-nowrap shrink-0 active:scale-95 transition-all shadow-2xs"
             >
               <span>{tmpl.name}</span>
               {tmpl.defaultAmountMinor && (
-                <span className="text-[10px] text-[var(--text-muted)] font-mono">
+                <span className="text-2xs text-[var(--text-muted)] font-mono">
                   {(tmpl.defaultAmountMinor / 100).toFixed(0)}
                 </span>
               )}
@@ -353,31 +339,14 @@ export function MobileQuickAdd({
         </div>
       )}
 
-      {/* 2. Top Half: Form Fields */}
-      <div className="shrink-0 px-4 pt-3.5 pb-3 bg-[var(--bg)] space-y-2.5">
-        {/* Type Switcher: Income | Expense | Transfer */}
+      {/* 2. Hero Amount + Pill Selectors */}
+      <div className="shrink-0 px-4 pb-3 space-y-3">
+        {/* Segmented Type Switcher */}
         <div
           role="radiogroup"
           aria-label="Transaction type"
-          className="grid grid-cols-3 gap-2 p-1 bg-[var(--surface)] rounded-xl text-xs font-semibold border border-hairline mb-3"
+          className="grid grid-cols-3 gap-1.5 p-1 bg-[var(--surface)] rounded-2xl text-xs font-bold border border-[var(--border)] shadow-2xs"
         >
-          <button
-            type="button"
-            role="radio"
-            aria-checked={type === "INCOME"}
-            data-testid="quick-add-mobile-type-income"
-            onClick={() => {
-              setType("INCOME");
-              setErrorMsg("");
-            }}
-            className={`py-2 rounded-lg transition-all text-center ${
-              type === "INCOME"
-                ? "bg-[#2563EB]/20 text-[#3B82F6] border border-[#3B82F6] shadow-xs"
-                : "text-[var(--text-muted)] hover:text-[var(--text)]"
-            }`}
-          >
-            Income
-          </button>
           <button
             type="button"
             role="radio"
@@ -387,13 +356,30 @@ export function MobileQuickAdd({
               setType("EXPENSE");
               setErrorMsg("");
             }}
-            className={`py-2 rounded-lg transition-all text-center ${
+            className={`h-9 rounded-xl transition-all text-center cursor-pointer ${
               type === "EXPENSE"
-                ? "bg-[#EF4444]/20 text-[#EF4444] border border-[#EF4444] shadow-xs"
+                ? "bg-[var(--expense)]/12 text-[var(--expense)] border border-[var(--expense)]/30"
                 : "text-[var(--text-muted)] hover:text-[var(--text)]"
             }`}
           >
             Expense
+          </button>
+          <button
+            type="button"
+            role="radio"
+            aria-checked={type === "INCOME"}
+            data-testid="quick-add-mobile-type-income"
+            onClick={() => {
+              setType("INCOME");
+              setErrorMsg("");
+            }}
+            className={`h-9 rounded-xl transition-all text-center cursor-pointer ${
+              type === "INCOME"
+                ? "bg-[var(--income)]/12 text-[var(--income)] border border-[var(--income)]/30"
+                : "text-[var(--text-muted)] hover:text-[var(--text)]"
+            }`}
+          >
+            Income
           </button>
           <button
             type="button"
@@ -404,9 +390,9 @@ export function MobileQuickAdd({
               setType("TRANSFER");
               setErrorMsg("");
             }}
-            className={`py-2 rounded-lg transition-all text-center ${
+            className={`h-9 rounded-xl transition-all text-center cursor-pointer ${
               type === "TRANSFER"
-                ? "bg-[var(--border)] text-[var(--text)] border border-[var(--border)] shadow-xs"
+                ? "bg-[var(--accent)]/12 text-[var(--accent)] border border-[var(--accent)]/30"
                 : "text-[var(--text-muted)] hover:text-[var(--text)]"
             }`}
           >
@@ -414,382 +400,364 @@ export function MobileQuickAdd({
           </button>
         </div>
 
-        {/* Form Rows */}
-        <div className="space-y-2 text-sm">
-          {/* Row: Date */}
-          <button
-            type="button"
-            onClick={() => setActiveField("date")}
-            aria-expanded={activeField === "date"}
-            aria-label={`Date: ${formatDisplayDate(date)}`}
-            className={`w-full flex items-center justify-between py-3 min-h-[46px] cursor-pointer transition-colors text-left ${
-              activeField === "date"
-                ? `border-b-2 ${themeStyles.borderActive}`
-                : "border-b border-hairline"
-            }`}
-          >
-            <span className="text-xs font-medium text-[var(--text-muted)] w-24 tracking-wide">Date</span>
-            <div className="flex-1 flex items-center justify-between pl-2">
-              <span className="text-[var(--text)] font-mono text-xs">
-                {formatDisplayDate(date)}
+        {/* Modern Centered Hero Amount Card */}
+        <button
+          type="button"
+          onClick={() => setActiveField("amount")}
+          aria-expanded={activeField === "amount"}
+          aria-label={`Amount: ${expression || "0"}`}
+          className={`w-full rounded-3xl bg-[var(--surface)] border px-5 py-4 text-center transition-all cursor-pointer shadow-xs ${
+            activeField === "amount"
+              ? "border-[var(--accent)] ring-2 ring-[var(--accent)]/15"
+              : "border-[var(--border)]"
+          }`}
+        >
+          <div className="flex items-center justify-center gap-2 mb-1">
+            <span className="px-2 py-0.5 rounded-full bg-[var(--bg)] border border-[var(--border)] text-2xs font-bold font-mono text-[var(--text-muted)]">
+              {currencyCode}
+            </span>
+            {hasFormula && evalResult.isValid && evalResult.value !== null && (
+              <span className="text-xs font-mono font-semibold text-[var(--accent)]">
+                = {evalResult.displayValue}
               </span>
-              <Calendar size={15} className="text-[var(--text-muted)]" />
-            </div>
-          </button>
-
-          {/* Row: Amount */}
-          <button
-            type="button"
-            onClick={() => setActiveField("amount")}
-            aria-expanded={activeField === "amount"}
-            aria-label={`Amount: ${expression || "0"}`}
-            className={`w-full flex items-center justify-between py-3 min-h-[50px] cursor-pointer transition-colors text-left ${
-              activeField === "amount"
-                ? `border-b-2 ${themeStyles.borderActive}`
-                : "border-b border-hairline"
+            )}
+          </div>
+          <div
+            className={`text-3xl font-bold font-mono tracking-tight tabular-nums truncate ${
+              expression ? typeTone.amountText : "text-[var(--text-muted)]"
             }`}
           >
-            <span className="text-xs font-medium text-[var(--text-muted)] w-24 tracking-wide">Amount</span>
-            <div className="flex-1 flex items-center justify-end pl-2">
-              <div className="text-right">
-                <span className="text-xl font-bold font-mono tracking-tight text-[var(--text)]">
-                  {expression || "0"}
-                </span>
-                {expression && evalResult.isValid && evalResult.value !== null && (
-                  <span className="ml-2.5 text-xs font-mono text-[var(--text-muted)]">
-                    ≈ {evalResult.displayValue}
-                  </span>
-                )}
-              </div>
-            </div>
-          </button>
+            {expression || "0.00"}
+          </div>
+        </button>
 
-          {/* Row: Category (Only for Expense & Income) */}
-          {type !== "TRANSFER" && (
+        {/* USD -> LKR Conversion Inputs (when applicable) */}
+        {isUsdToLkrTransfer && onDestinationAmountChange && onExchangeRateChange && (
+          <div className="grid grid-cols-2 gap-2">
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={destinationAmountStr}
+              onChange={(e) => onDestinationAmountChange(e.target.value)}
+              placeholder="Final LKR amount"
+              className="h-10 px-3 rounded-2xl bg-[var(--surface)] border border-[var(--border)] text-xs font-mono text-[var(--text)]"
+            />
+            <input
+              type="number"
+              min="0"
+              step="0.000001"
+              value={exchangeRateStr}
+              onChange={(e) => onExchangeRateChange(e.target.value)}
+              placeholder="Rate (LKR/USD)"
+              className="h-10 px-3 rounded-2xl bg-[var(--surface)] border border-[var(--border)] text-xs font-mono text-[var(--text)]"
+            />
+          </div>
+        )}
+
+        {/* Spacious Pill / Card Selectors Grid */}
+        <div className="grid grid-cols-2 gap-2">
+          {/* Pill 1: Category OR Transfer Source */}
+          {type !== "TRANSFER" ? (
             <button
               type="button"
               onClick={() => setActiveField("category")}
               aria-expanded={activeField === "category"}
               aria-label={`Category: ${selectedCategory?.name || "Select category"}`}
-              className={`w-full flex items-center justify-between py-3 min-h-[46px] cursor-pointer transition-colors text-left ${
+              className={`p-3 rounded-2xl bg-[var(--surface)] border text-left transition-all cursor-pointer flex items-center gap-2.5 min-w-0 ${
                 activeField === "category"
-                  ? `border-b-2 ${themeStyles.borderActive}`
-                  : "border-b border-hairline"
+                  ? "border-[var(--accent)] ring-2 ring-[var(--accent)]/15"
+                  : "border-[var(--border)]"
               }`}
             >
-              <span className="text-xs font-medium text-[var(--text-muted)] w-24 tracking-wide">Category</span>
-              <div className="flex-1 flex items-center justify-between pl-2">
-                {selectedCategory ? (
-                  <div className="flex items-center gap-2">
-                    <span
-                      className="w-5.5 h-5.5 rounded-full flex items-center justify-center shrink-0 text-white shadow-xs"
-                      style={{ backgroundColor: selectedCategory.color || "#888" }}
-                    >
-                      <CategoryIcon name={selectedCategory.icon} size={12} className="text-white" />
-                    </span>
-                    <span className="text-xs font-medium text-[var(--text)] truncate">
-                      {selectedCategory.name}
-                    </span>
-                  </div>
-                ) : (
-                  <span className="text-xs text-[var(--text-muted)] italic">Select category</span>
-                )}
+              {selectedCategory ? (
+                <span
+                  className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0 text-white shadow-2xs"
+                  style={{ backgroundColor: selectedCategory.color || "#64748B" }}
+                >
+                  <CategoryIcon name={selectedCategory.icon} size={15} className="text-white" />
+                </span>
+              ) : (
+                <span className="w-8 h-8 rounded-xl bg-[var(--bg)] border border-dashed border-[var(--border)] flex items-center justify-center shrink-0 text-[var(--text-muted)]">
+                  <Tag size={14} />
+                </span>
+              )}
+              <div className="min-w-0 flex-1">
+                <span className="text-2xs font-semibold uppercase tracking-wider text-[var(--text-muted)] block">
+                  Category
+                </span>
+                <span className="text-xs font-bold text-[var(--text)] block truncate">
+                  {selectedCategory?.name || "Choose"}
+                </span>
               </div>
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setActiveField("account")}
+              aria-expanded={activeField === "account"}
+              aria-label={`From Account: ${selectedAccount?.name || "Select source"}`}
+              className={`p-3 rounded-2xl bg-[var(--surface)] border text-left transition-all cursor-pointer flex items-center justify-between gap-2 min-w-0 ${
+                activeField === "account"
+                  ? "border-[var(--accent)] ring-2 ring-[var(--accent)]/15"
+                  : "border-[var(--border)]"
+              }`}
+            >
+              <div className="min-w-0">
+                <span className="text-2xs font-semibold uppercase tracking-wider text-[var(--text-muted)] block">
+                  From
+                </span>
+                <span className="text-xs font-bold text-[var(--text)] block truncate">
+                  {selectedAccount?.name || "Source"}
+                </span>
+              </div>
+              <span
+                role="button"
+                tabIndex={0}
+                onClick={handleSwapTransferAccounts}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.stopPropagation();
+                    handleSwapTransferAccounts(e as unknown as React.MouseEvent);
+                  }
+                }}
+                className="w-7 h-7 rounded-lg bg-[var(--bg)] border border-[var(--border)] flex items-center justify-center text-[var(--text-muted)] shrink-0"
+                title="Swap From and To"
+                aria-label="Swap From and To accounts"
+              >
+                <ArrowUpDown size={13} />
+              </span>
             </button>
           )}
 
-          {/* Row: Account (for Expense/Income) OR From/To (for Transfer) */}
+          {/* Pill 2: Account OR Transfer Destination */}
           {type !== "TRANSFER" ? (
             <button
               type="button"
               onClick={() => setActiveField("account")}
               aria-expanded={activeField === "account"}
               aria-label={`Account: ${selectedAccount?.name || "Select account"}`}
-              className={`w-full flex items-center justify-between py-3 min-h-[46px] cursor-pointer transition-colors text-left ${
+              className={`p-3 rounded-2xl bg-[var(--surface)] border text-left transition-all cursor-pointer flex items-center gap-2.5 min-w-0 ${
                 activeField === "account"
-                  ? `border-b-2 ${themeStyles.borderActive}`
-                  : "border-b border-hairline"
+                  ? "border-[var(--accent)] ring-2 ring-[var(--accent)]/15"
+                  : "border-[var(--border)]"
               }`}
             >
-              <span className="text-xs font-medium text-[var(--text-muted)] w-24 tracking-wide">Account</span>
-              <div className="flex-1 flex items-center justify-between pl-2">
-                {selectedAccount ? (
-                  <div className="flex items-center gap-2 text-xs font-medium text-[var(--text)]">
-                    {selectedAccount.type === "CASH" && <Wallet size={14} className="text-emerald-400" />}
-                    {selectedAccount.type === "BANK_SAVINGS" && (
-                      <Building2 size={14} className="text-blue-400" />
-                    )}
-                    {selectedAccount.type === "CREDIT_CARD" && (
-                      <CreditCard size={14} className="text-amber-400" />
-                    )}
-                    <span>{selectedAccount.name}</span>
-                  </div>
+              <span className="w-8 h-8 rounded-xl bg-[var(--accent)]/12 text-[var(--accent)] flex items-center justify-center shrink-0">
+                {selectedAccount?.type === "CREDIT_CARD" ? (
+                  <CreditCard size={15} />
+                ) : selectedAccount?.type === "BANK_SAVINGS" ? (
+                  <Building2 size={15} />
                 ) : (
-                  <span className="text-xs text-[var(--text-muted)] italic">Select account</span>
+                  <Wallet size={15} />
                 )}
+              </span>
+              <div className="min-w-0 flex-1">
+                <span className="text-2xs font-semibold uppercase tracking-wider text-[var(--text-muted)] block">
+                  Account
+                </span>
+                <span className="text-xs font-bold text-[var(--text)] block truncate">
+                  {selectedAccount?.name || "Choose"}
+                </span>
               </div>
             </button>
           ) : (
-            <>
-              {/* Transfer: From Account */}
-              <button
-                type="button"
-                onClick={() => setActiveField("account")}
-                aria-expanded={activeField === "account"}
-                aria-label={`From Account: ${selectedAccount?.name || "Select source"}`}
-                className={`w-full flex items-center justify-between py-3 min-h-[46px] cursor-pointer transition-colors text-left ${
-                  activeField === "account"
-                    ? `border-b-2 ${themeStyles.borderActive}`
-                    : "border-b border-hairline"
-                }`}
-              >
-                <span className="text-xs font-medium text-[var(--text-muted)] w-24 tracking-wide">From</span>
-                <div className="flex-1 flex items-center justify-between pl-2">
-                  <span className="text-xs font-medium text-[var(--text)]">
-                    {selectedAccount?.name || "Select source"}
-                  </span>
-                  <div
-                    role="button"
-                    tabIndex={0}
-                    onClick={handleSwapTransferAccounts}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.stopPropagation();
-                        handleSwapTransferAccounts(e as unknown as React.MouseEvent);
-                      }
-                    }}
-                    className="p-1 rounded text-[var(--text-muted)] hover:text-[var(--text)] cursor-pointer"
-                    title="Swap From and To"
-                    aria-label="Swap From and To accounts"
-                  >
-                    <ArrowUpDown size={15} />
-                  </div>
-                </div>
-              </button>
-
-              {/* Transfer: To Account */}
-              <button
-                type="button"
-                onClick={() => setActiveField("toAccount")}
-                aria-expanded={activeField === "toAccount"}
-                aria-label={`To Account: ${selectedToAccount?.name || "Select destination"}`}
-                className={`w-full flex items-center justify-between py-3 min-h-[46px] cursor-pointer transition-colors text-left ${
-                  activeField === "toAccount"
-                    ? `border-b-2 ${themeStyles.borderActive}`
-                    : "border-b border-hairline"
-                }`}
-              >
-                <span className="text-xs font-medium text-[var(--text-muted)] w-24 tracking-wide">To</span>
-                <div className="flex-1 flex items-center justify-between pl-2">
-                  <span className="text-xs font-medium text-[var(--text)]">
-                    {selectedToAccount?.name || "Select destination"}
-                  </span>
-                </div>
-              </button>
-            </>
+            <button
+              type="button"
+              onClick={() => setActiveField("toAccount")}
+              aria-expanded={activeField === "toAccount"}
+              aria-label={`To Account: ${selectedToAccount?.name || "Select destination"}`}
+              className={`p-3 rounded-2xl bg-[var(--surface)] border text-left transition-all cursor-pointer flex items-center gap-2.5 min-w-0 ${
+                activeField === "toAccount"
+                  ? "border-[var(--accent)] ring-2 ring-[var(--accent)]/15"
+                  : "border-[var(--border)]"
+              }`}
+            >
+              <span className="w-8 h-8 rounded-xl bg-[var(--accent)]/12 text-[var(--accent)] flex items-center justify-center shrink-0">
+                <Wallet size={15} />
+              </span>
+              <div className="min-w-0 flex-1">
+                <span className="text-2xs font-semibold uppercase tracking-wider text-[var(--text-muted)] block">
+                  To
+                </span>
+                <span className="text-xs font-bold text-[var(--text)] block truncate">
+                  {selectedToAccount?.name || "Destination"}
+                </span>
+              </div>
+            </button>
           )}
 
-          {/* Row: Note */}
+          {/* Pill 3: Date */}
+          <button
+            type="button"
+            onClick={() => setActiveField("date")}
+            aria-expanded={activeField === "date"}
+            aria-label={`Date: ${formatDisplayDate(date)}`}
+            className={`p-2.5 px-3 rounded-2xl bg-[var(--surface)] border text-left transition-all cursor-pointer flex items-center gap-2.5 min-w-0 ${
+              activeField === "date"
+                ? "border-[var(--accent)] ring-2 ring-[var(--accent)]/15"
+                : "border-[var(--border)]"
+            }`}
+          >
+            <Calendar size={15} className="text-[var(--text-muted)] shrink-0" />
+            <span className="text-xs font-semibold text-[var(--text)] truncate">
+              {date === todayStr ? "Today" : formatDisplayDate(date)}
+            </span>
+          </button>
+
+          {/* Pill 4: Note */}
           <button
             type="button"
             onClick={() => setActiveField("note")}
             aria-expanded={activeField === "note"}
             aria-label={`Note: ${note.trim() ? note : "None"}`}
-            className={`w-full flex items-center justify-between py-3 min-h-[46px] cursor-pointer transition-colors text-left ${
+            className={`p-2.5 px-3 rounded-2xl bg-[var(--surface)] border text-left transition-all cursor-pointer flex items-center gap-2.5 min-w-0 ${
               activeField === "note"
-                ? `border-b-2 ${themeStyles.borderActive}`
-                : "border-b border-hairline"
+                ? "border-[var(--accent)] ring-2 ring-[var(--accent)]/15"
+                : "border-[var(--border)]"
             }`}
           >
-            <span className="text-xs font-medium text-[var(--text-muted)] w-24 tracking-wide">Note</span>
-            <div className="flex-1 flex items-center justify-between pl-2">
-              <span className="text-xs text-[var(--text)] truncate max-w-[200px]">
-                {note.trim() ? note : <span className="text-[var(--text-muted)] italic">Add note...</span>}
-              </span>
-              <Tag size={14} className="text-[var(--text-muted)]" />
-            </div>
+            <Tag size={15} className="text-[var(--text-muted)] shrink-0" />
+            <span
+              className={`text-xs truncate ${
+                note.trim() ? "font-semibold text-[var(--text)]" : "text-[var(--text-muted)]"
+              }`}
+            >
+              {note.trim() || "Add note..."}
+            </span>
           </button>
         </div>
 
         {/* Inline Error Message */}
         {errorMsg && (
-          <div role="alert" className="flex items-center gap-1.5 text-xs text-rose-500 font-medium py-1">
+          <div
+            role="alert"
+            className="flex items-center gap-2 px-3.5 py-2 rounded-2xl bg-[var(--expense)]/10 border border-[var(--expense)]/25 text-xs text-[var(--expense)] font-semibold"
+          >
             <AlertCircle size={14} className="shrink-0" />
             <span>{errorMsg}</span>
           </div>
         )}
       </div>
 
-      {/* 3. Bottom Half: Dedicated Contextual Input Surface */}
-      <div className="flex-1 flex flex-col bg-[var(--surface)] border-t border-hairline min-h-0 overflow-hidden">
-        {/* Panel Header */}
-        <div className="shrink-0 flex items-center justify-between px-4 py-2 border-b border-hairline bg-[var(--surface-hover)]">
-          <span className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
-            {activeField === "amount" && "Amount Keypad"}
+      {/* 3. Spacious Bottom Contextual Sheet */}
+      <div className="flex-1 flex flex-col bg-[var(--surface)] border-t border-[var(--border)] rounded-t-3xl min-h-0 overflow-hidden shadow-lg">
+        {/* Sheet Header */}
+        <div className="shrink-0 flex items-center justify-between px-5 py-2.5 border-b border-[var(--border)]">
+          <span className="text-2xs font-bold uppercase tracking-wider text-[var(--text-muted)]">
+            {activeField === "amount" && "Calculator Keypad"}
             {activeField === "category" && "Select Category"}
-            {activeField === "account" && (type === "TRANSFER" ? "Select Source Account" : "Select Account")}
+            {activeField === "account" &&
+              (type === "TRANSFER" ? "Select Source Account" : "Select Account")}
             {activeField === "toAccount" && "Select Destination Account"}
             {activeField === "date" && "Select Date"}
-            {activeField === "note" && "Add Note & Tags"}
+            {activeField === "note" && "Note & Options"}
           </span>
 
           <div className="flex items-center gap-2">
             {activeField === "amount" && (
-              <span aria-live="polite" className="text-xs font-mono text-[var(--text-muted)]">
+              <span aria-live="polite" className="text-xs font-mono font-semibold text-[var(--text-muted)]">
                 {evalResult.isValid ? evalResult.displayValue : "Error"}
               </span>
             )}
-            <button
-              type="button"
-              onClick={() => setActiveField("amount")}
-              aria-label="Close panel"
-              className="p-1 rounded text-[var(--text-muted)] hover:text-[var(--text)] transition-colors"
-            >
-              <X size={15} />
-            </button>
+            {activeField !== "amount" && (
+              <button
+                type="button"
+                onClick={() => setActiveField("amount")}
+                aria-label="Close panel"
+                className="w-7 h-7 rounded-xl bg-[var(--bg)] flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text)] transition-colors cursor-pointer"
+              >
+                <X size={14} />
+              </button>
+            )}
           </div>
         </div>
 
-        {/* Panel Dynamic Content */}
+        {/* Dynamic Sheet Content */}
         <div className="flex-1 min-h-0 overflow-y-auto">
-          {/* A. Amount Keypad */}
+          {/* A. Spacious Rounded-2xl Calculator Keypad */}
           {activeField === "amount" && (
             <div
-              className="h-full grid grid-cols-4 grid-rows-5 gap-1.5 p-2 bg-[var(--bg)]"
-              style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 8px)" }}
+              className="h-full grid grid-cols-4 grid-rows-5 gap-2 p-3 bg-[var(--surface)]"
+              style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 12px)" }}
             >
               {/* Row 1: Operators */}
-              <button
-                type="button"
-                aria-label="Add"
-                onClick={() => onKeypadClick("+")}
-                className="rounded-lg bg-[var(--surface-hover)] text-[var(--text)] text-lg font-semibold active:opacity-75 hover:bg-[var(--border)] transition-colors flex items-center justify-center"
-              >
-                +
-              </button>
-              <button
-                type="button"
-                aria-label="Subtract"
-                onClick={() => onKeypadClick("-")}
-                className="rounded-lg bg-[var(--surface-hover)] text-[var(--text)] text-lg font-semibold active:opacity-75 hover:bg-[var(--border)] transition-colors flex items-center justify-center"
-              >
-                -
-              </button>
-              <button
-                type="button"
-                aria-label="Multiply"
-                onClick={() => onKeypadClick("×")}
-                className="rounded-lg bg-[var(--surface-hover)] text-[var(--text)] text-lg font-semibold active:opacity-75 hover:bg-[var(--border)] transition-colors flex items-center justify-center"
-              >
-                ×
-              </button>
-              <button
-                type="button"
-                aria-label="Divide"
-                onClick={() => onKeypadClick("÷")}
-                className="rounded-lg bg-[var(--surface-hover)] text-[var(--text)] text-lg font-semibold active:opacity-75 hover:bg-[var(--border)] transition-colors flex items-center justify-center"
-              >
-                ÷
-              </button>
+              {[
+                { label: "+", aria: "Add", token: "+" },
+                { label: "-", aria: "Subtract", token: "-" },
+                { label: "×", aria: "Multiply", token: "×" },
+                { label: "÷", aria: "Divide", token: "÷" },
+              ].map((op) => (
+                <button
+                  key={op.token}
+                  type="button"
+                  aria-label={op.aria}
+                  onClick={() => onKeypadClick(op.token)}
+                  className="rounded-2xl bg-[var(--bg)] border border-[var(--border)] text-[var(--accent)] text-lg font-bold active:scale-95 hover:bg-[var(--surface-hover)] transition-all flex items-center justify-center cursor-pointer"
+                >
+                  {op.label}
+                </button>
+              ))}
 
               {/* Row 2: 7, 8, 9, = */}
-              <button
-                type="button"
-                aria-label="7"
-                onClick={() => onKeypadClick("7")}
-                className="rounded-lg bg-[var(--surface)] text-[var(--text)] text-xl font-medium active:opacity-75 hover:bg-[var(--surface-hover)] transition-colors flex items-center justify-center"
-              >
-                7
-              </button>
-              <button
-                type="button"
-                aria-label="8"
-                onClick={() => onKeypadClick("8")}
-                className="rounded-lg bg-[var(--surface)] text-[var(--text)] text-xl font-medium active:opacity-75 hover:bg-[var(--surface-hover)] transition-colors flex items-center justify-center"
-              >
-                8
-              </button>
-              <button
-                type="button"
-                aria-label="9"
-                onClick={() => onKeypadClick("9")}
-                className="rounded-lg bg-[var(--surface)] text-[var(--text)] text-xl font-medium active:opacity-75 hover:bg-[var(--surface-hover)] transition-colors flex items-center justify-center"
-              >
-                9
-              </button>
+              {["7", "8", "9"].map((d) => (
+                <button
+                  key={d}
+                  type="button"
+                  aria-label={d}
+                  onClick={() => onKeypadClick(d)}
+                  className="rounded-2xl bg-[var(--bg)]/60 border border-[var(--border)] text-[var(--text)] text-xl font-bold font-mono active:scale-95 hover:bg-[var(--surface-hover)] transition-all flex items-center justify-center cursor-pointer"
+                >
+                  {d}
+                </button>
+              ))}
               <button
                 type="button"
                 aria-label="Equals"
                 onClick={() => onKeypadClick("=")}
-                className="rounded-lg bg-[var(--surface-hover)] text-[var(--text)] text-lg font-semibold active:opacity-75 hover:bg-[var(--border)] transition-colors flex items-center justify-center"
+                className="rounded-2xl bg-[var(--bg)] border border-[var(--border)] text-[var(--accent)] text-lg font-bold active:scale-95 hover:bg-[var(--surface-hover)] transition-all flex items-center justify-center cursor-pointer"
               >
                 =
               </button>
 
               {/* Row 3: 4, 5, 6, . */}
-              <button
-                type="button"
-                aria-label="4"
-                onClick={() => onKeypadClick("4")}
-                className="rounded-lg bg-[var(--surface)] text-[var(--text)] text-xl font-medium active:opacity-75 hover:bg-[var(--surface-hover)] transition-colors flex items-center justify-center"
-              >
-                4
-              </button>
-              <button
-                type="button"
-                aria-label="5"
-                onClick={() => onKeypadClick("5")}
-                className="rounded-lg bg-[var(--surface)] text-[var(--text)] text-xl font-medium active:opacity-75 hover:bg-[var(--surface-hover)] transition-colors flex items-center justify-center"
-              >
-                5
-              </button>
-              <button
-                type="button"
-                aria-label="6"
-                onClick={() => onKeypadClick("6")}
-                className="rounded-lg bg-[var(--surface)] text-[var(--text)] text-xl font-medium active:opacity-75 hover:bg-[var(--surface-hover)] transition-colors flex items-center justify-center"
-              >
-                6
-              </button>
+              {["4", "5", "6"].map((d) => (
+                <button
+                  key={d}
+                  type="button"
+                  aria-label={d}
+                  onClick={() => onKeypadClick(d)}
+                  className="rounded-2xl bg-[var(--bg)]/60 border border-[var(--border)] text-[var(--text)] text-xl font-bold font-mono active:scale-95 hover:bg-[var(--surface-hover)] transition-all flex items-center justify-center cursor-pointer"
+                >
+                  {d}
+                </button>
+              ))}
               <button
                 type="button"
                 aria-label="Decimal point"
                 onClick={() => onKeypadClick(".")}
-                className="rounded-lg bg-[var(--surface)] text-[var(--text)] text-xl font-semibold active:opacity-75 hover:bg-[var(--surface-hover)] transition-colors flex items-center justify-center"
+                className="rounded-2xl bg-[var(--bg)] border border-[var(--border)] text-[var(--text)] text-xl font-bold active:scale-95 hover:bg-[var(--surface-hover)] transition-all flex items-center justify-center cursor-pointer"
               >
                 .
               </button>
 
               {/* Row 4: 1, 2, 3, Backspace */}
-              <button
-                type="button"
-                aria-label="1"
-                onClick={() => onKeypadClick("1")}
-                className="rounded-lg bg-[var(--surface)] text-[var(--text)] text-xl font-medium active:opacity-75 hover:bg-[var(--surface-hover)] transition-colors flex items-center justify-center"
-              >
-                1
-              </button>
-              <button
-                type="button"
-                aria-label="2"
-                onClick={() => onKeypadClick("2")}
-                className="rounded-lg bg-[var(--surface)] text-[var(--text)] text-xl font-medium active:opacity-75 hover:bg-[var(--surface-hover)] transition-colors flex items-center justify-center"
-              >
-                2
-              </button>
-              <button
-                type="button"
-                aria-label="3"
-                onClick={() => onKeypadClick("3")}
-                className="rounded-lg bg-[var(--surface)] text-[var(--text)] text-xl font-medium active:opacity-75 hover:bg-[var(--surface-hover)] transition-colors flex items-center justify-center"
-              >
-                3
-              </button>
+              {["1", "2", "3"].map((d) => (
+                <button
+                  key={d}
+                  type="button"
+                  aria-label={d}
+                  onClick={() => onKeypadClick(d)}
+                  className="rounded-2xl bg-[var(--bg)]/60 border border-[var(--border)] text-[var(--text)] text-xl font-bold font-mono active:scale-95 hover:bg-[var(--surface-hover)] transition-all flex items-center justify-center cursor-pointer"
+                >
+                  {d}
+                </button>
+              ))}
               <button
                 type="button"
                 aria-label="Backspace"
                 onClick={() => onKeypadClick("⌫")}
-                className="rounded-lg bg-[var(--surface-hover)] text-[var(--text)] text-lg font-semibold active:opacity-75 hover:bg-[var(--border)] transition-colors flex items-center justify-center"
+                className="rounded-2xl bg-[var(--bg)] border border-[var(--border)] text-[var(--text)] text-lg font-bold active:scale-95 hover:bg-[var(--surface-hover)] transition-all flex items-center justify-center cursor-pointer"
               >
                 ⌫
               </button>
@@ -799,7 +767,7 @@ export function MobileQuickAdd({
                 type="button"
                 aria-label="Clear"
                 onClick={() => onKeypadClick("C")}
-                className="rounded-lg bg-[var(--surface-hover)] text-rose-400 text-base font-semibold active:opacity-75 hover:bg-[var(--border)] transition-colors flex items-center justify-center"
+                className="rounded-2xl bg-[var(--expense)]/10 border border-[var(--expense)]/25 text-[var(--expense)] text-base font-bold active:scale-95 transition-all flex items-center justify-center cursor-pointer"
               >
                 C
               </button>
@@ -807,7 +775,7 @@ export function MobileQuickAdd({
                 type="button"
                 aria-label="0"
                 onClick={() => onKeypadClick("0")}
-                className="rounded-lg bg-[var(--surface)] text-[var(--text)] text-xl font-medium active:opacity-75 hover:bg-[var(--surface-hover)] transition-colors flex items-center justify-center"
+                className="rounded-2xl bg-[var(--bg)]/60 border border-[var(--border)] text-[var(--text)] text-xl font-bold font-mono active:scale-95 hover:bg-[var(--surface-hover)] transition-all flex items-center justify-center cursor-pointer"
               >
                 0
               </button>
@@ -818,7 +786,7 @@ export function MobileQuickAdd({
                   onKeypadClick("0");
                   onKeypadClick("0");
                 }}
-                className="rounded-lg bg-[var(--surface)] text-[var(--text)] text-base font-medium active:opacity-75 hover:bg-[var(--surface-hover)] transition-colors flex items-center justify-center"
+                className="rounded-2xl bg-[var(--bg)]/60 border border-[var(--border)] text-[var(--text)] text-base font-bold font-mono active:scale-95 hover:bg-[var(--surface-hover)] transition-all flex items-center justify-center cursor-pointer"
               >
                 00
               </button>
@@ -826,7 +794,7 @@ export function MobileQuickAdd({
                 type="button"
                 aria-label="Confirm amount"
                 onClick={handleKeypadOk}
-                className={`rounded-lg font-bold text-base shadow-md active:scale-95 transition-all flex items-center justify-center ${themeStyles.okBtnBg}`}
+                className={`rounded-2xl font-bold text-base shadow-sm active:scale-95 transition-all flex items-center justify-center cursor-pointer ${typeTone.ctaBg}`}
               >
                 OK
               </button>
@@ -836,19 +804,25 @@ export function MobileQuickAdd({
           {/* B. Category Grid */}
           {activeField === "category" && (
             <div
-              className="p-3 grid grid-cols-3 gap-2"
-              style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 16px)" }}
+              className="p-4 grid grid-cols-3 gap-2.5"
+              style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 20px)" }}
             >
               {(type === "INCOME"
-                ? [{ label: "Income", items: categoryGroups.income }, { label: "Expense", items: categoryGroups.expense }]
-                : [{ label: "Expense", items: categoryGroups.expense }, { label: "Income", items: categoryGroups.income }]
+                ? [
+                    { label: "Income", items: categoryGroups.income },
+                    { label: "Expense", items: categoryGroups.expense },
+                  ]
+                : [
+                    { label: "Expense", items: categoryGroups.expense },
+                    { label: "Income", items: categoryGroups.income },
+                  ]
               )
                 .filter((g) => g.items.length > 0)
                 .map((group, gi) => (
                   <React.Fragment key={group.label}>
                     <div
-                      className={`col-span-3 text-[11px] font-semibold text-slate-400 uppercase tracking-wider ${
-                        gi > 0 ? "pt-2" : ""
+                      className={`col-span-3 text-2xs font-bold text-[var(--text-muted)] uppercase tracking-wider px-1 ${
+                        gi > 0 ? "pt-3" : ""
                       }`}
                     >
                       {group.label}
@@ -860,26 +834,27 @@ export function MobileQuickAdd({
                           key={cat.id}
                           type="button"
                           onClick={() => handleSelectCategory(cat.id)}
-                          className={`flex flex-col items-center justify-center py-3 px-2 rounded-xl border text-center transition-all ${
+                          className={`flex flex-col items-center justify-center py-3.5 px-2 rounded-2xl border text-center transition-all cursor-pointer ${
                             isSelected
-                              ? "bg-[#202734] border-[#3B82F6] text-white ring-1 ring-[#3B82F6] shadow-sm"
-                              : "bg-[#1B2028] border-slate-800 text-slate-300 hover:bg-[#222933] active:scale-95"
+                              ? "bg-[var(--accent)]/12 border-[var(--accent)] text-[var(--text)] ring-1 ring-[var(--accent)] shadow-xs"
+                              : "bg-[var(--bg)] border-[var(--border)] text-[var(--text)] hover:bg-[var(--surface-hover)] active:scale-95"
                           }`}
                         >
                           <span
-                            className="w-9 h-9 rounded-full flex items-center justify-center mb-1.5 shrink-0 text-white shadow-sm"
+                            className="w-10 h-10 rounded-2xl flex items-center justify-center mb-2 shrink-0 text-white shadow-xs"
                             style={{ backgroundColor: cat.color || "#64748B" }}
                           >
                             <CategoryIcon name={cat.icon} size={18} className="text-white" />
                           </span>
-                          <span className="text-xs font-medium truncate max-w-full leading-tight">{cat.name}</span>
+                          <span className="text-xs font-semibold truncate max-w-full leading-tight">
+                            {cat.name}
+                          </span>
                         </button>
                       );
                     })}
                   </React.Fragment>
                 ))}
 
-              {/* Add Category Tile */}
               <button
                 type="button"
                 onClick={() => {
@@ -905,12 +880,12 @@ export function MobileQuickAdd({
                   closeQuickAdd();
                   router.push("/more/categories", { transitionTypes: ["nav-forward"] });
                 }}
-                className="flex flex-col items-center justify-center py-3 px-2 rounded-xl border border-dashed border-slate-700 bg-[#161B22] text-slate-400 hover:text-white hover:border-slate-500 active:scale-95 transition-all"
+                className="flex flex-col items-center justify-center py-3.5 px-2 rounded-2xl border border-dashed border-[var(--border)] bg-[var(--bg)] text-[var(--text-muted)] hover:text-[var(--text)] hover:border-[var(--accent)] active:scale-95 transition-all cursor-pointer"
               >
-                <span className="w-9 h-9 rounded-full bg-slate-800 flex items-center justify-center mb-1.5 shrink-0 text-slate-400">
+                <span className="w-10 h-10 rounded-2xl bg-[var(--surface)] border border-[var(--border)] flex items-center justify-center mb-2 shrink-0">
                   <Plus size={18} />
                 </span>
-                <span className="text-xs font-medium">Add New</span>
+                <span className="text-xs font-semibold">Add New</span>
               </button>
             </div>
           )}
@@ -918,143 +893,59 @@ export function MobileQuickAdd({
           {/* C. Account Selection */}
           {(activeField === "account" || activeField === "toAccount") && (
             <div
-              className="p-3 space-y-3"
-              style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 16px)" }}
+              className="p-4 space-y-4"
+              style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 20px)" }}
             >
-              {/* Cash Section */}
-              {cashAccounts.length > 0 && (
-                <div>
-                  <div className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">
-                    <Wallet size={12} className="text-emerald-400" />
-                    <span>Cash Accounts</span>
+              {[
+                { label: "Cash Wallets", items: cashAccounts, icon: Wallet },
+                { label: "Bank Savings & Deposits", items: bankAccounts, icon: Building2 },
+                { label: "Credit Cards", items: cardAccounts, icon: CreditCard },
+              ]
+                .filter((group) => group.items.length > 0)
+                .map(({ label, items, icon: GroupIcon }) => (
+                  <div key={label} className="space-y-2">
+                    <div className="flex items-center gap-1.5 text-2xs font-bold text-[var(--text-muted)] uppercase tracking-wider px-1">
+                      <GroupIcon size={13} className="text-[var(--accent)]" />
+                      <span>{label}</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2.5">
+                      {items.map((acc) => {
+                        const isSelected =
+                          activeField === "account"
+                            ? accountId === acc.id
+                            : toAccountId === acc.id;
+                        const isOther = activeField === "toAccount" && accountId === acc.id;
+                        if (isOther) return null;
+                        return (
+                          <button
+                            key={acc.id}
+                            type="button"
+                            onClick={() =>
+                              activeField === "account"
+                                ? handleSelectAccount(acc.id)
+                                : handleSelectToAccount(acc.id)
+                            }
+                            className={`p-3.5 rounded-2xl border text-left flex flex-col justify-between transition-all cursor-pointer ${
+                              isSelected
+                                ? "bg-[var(--accent)]/12 border-[var(--accent)] ring-1 ring-[var(--accent)] text-[var(--text)]"
+                                : "bg-[var(--bg)] border-[var(--border)] text-[var(--text)] hover:bg-[var(--surface-hover)] active:scale-95"
+                            }`}
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-xs font-bold truncate">{acc.name}</span>
+                              {isSelected && (
+                                <Check size={15} className="text-[var(--accent)] shrink-0" />
+                              )}
+                            </div>
+                            <span className="text-2xs text-[var(--text-muted)] font-mono mt-1.5">
+                              {acc.currency}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    {cashAccounts.map((acc) => {
-                      const isSelected =
-                        activeField === "account"
-                          ? accountId === acc.id
-                          : toAccountId === acc.id;
-                      const isOther =
-                        activeField === "toAccount" && accountId === acc.id;
-                      if (isOther) return null;
-                      return (
-                        <button
-                          key={acc.id}
-                          type="button"
-                          onClick={() =>
-                            activeField === "account"
-                              ? handleSelectAccount(acc.id)
-                              : handleSelectToAccount(acc.id)
-                          }
-                          className={`p-3 rounded-xl border text-left flex flex-col justify-between transition-all ${
-                            isSelected
-                              ? "bg-[#202734] border-[#3B82F6] ring-1 ring-[#3B82F6] text-white"
-                              : "bg-[#1B2028] border-slate-800 text-slate-200 hover:bg-[#222933] active:scale-95"
-                          }`}
-                        >
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs font-semibold">{acc.name}</span>
-                            {isSelected && <Check size={14} className="text-[#3B82F6]" />}
-                          </div>
-                          <span className="text-[11px] text-slate-400 font-mono mt-1">
-                            {acc.currency}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* Bank Accounts Section */}
-              {bankAccounts.length > 0 && (
-                <div>
-                  <div className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">
-                    <Building2 size={12} className="text-blue-400" />
-                    <span>Bank Savings & Deposits</span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    {bankAccounts.map((acc) => {
-                      const isSelected =
-                        activeField === "account"
-                          ? accountId === acc.id
-                          : toAccountId === acc.id;
-                      const isOther =
-                        activeField === "toAccount" && accountId === acc.id;
-                      if (isOther) return null;
-                      return (
-                        <button
-                          key={acc.id}
-                          type="button"
-                          onClick={() =>
-                            activeField === "account"
-                              ? handleSelectAccount(acc.id)
-                              : handleSelectToAccount(acc.id)
-                          }
-                          className={`p-3 rounded-xl border text-left flex flex-col justify-between transition-all ${
-                            isSelected
-                              ? "bg-[#202734] border-[#3B82F6] ring-1 ring-[#3B82F6] text-white"
-                              : "bg-[#1B2028] border-slate-800 text-slate-200 hover:bg-[#222933] active:scale-95"
-                          }`}
-                        >
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs font-semibold">{acc.name}</span>
-                            {isSelected && <Check size={14} className="text-[#3B82F6]" />}
-                          </div>
-                          <span className="text-[11px] text-slate-400 font-mono mt-1">
-                            {acc.currency}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* Credit Cards Section */}
-              {cardAccounts.length > 0 && (
-                <div>
-                  <div className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">
-                    <CreditCard size={12} className="text-amber-400" />
-                    <span>Credit Cards</span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    {cardAccounts.map((acc) => {
-                      const isSelected =
-                        activeField === "account"
-                          ? accountId === acc.id
-                          : toAccountId === acc.id;
-                      const isOther =
-                        activeField === "toAccount" && accountId === acc.id;
-                      if (isOther) return null;
-                      return (
-                        <button
-                          key={acc.id}
-                          type="button"
-                          onClick={() =>
-                            activeField === "account"
-                              ? handleSelectAccount(acc.id)
-                              : handleSelectToAccount(acc.id)
-                          }
-                          className={`p-3 rounded-xl border text-left flex flex-col justify-between transition-all ${
-                            isSelected
-                              ? "bg-[#202734] border-[#3B82F6] ring-1 ring-[#3B82F6] text-white"
-                              : "bg-[#1B2028] border-slate-800 text-slate-200 hover:bg-[#222933] active:scale-95"
-                          }`}
-                        >
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs font-semibold">{acc.name}</span>
-                            {isSelected && <Check size={14} className="text-[#3B82F6]" />}
-                          </div>
-                          <span className="text-[11px] text-slate-400 font-mono mt-1">
-                            {acc.currency}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
+                ))}
             </div>
           )}
 
@@ -1062,74 +953,44 @@ export function MobileQuickAdd({
           {activeField === "date" && (
             <div
               className="p-4 space-y-4"
-              style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 16px)" }}
+              style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 20px)" }}
             >
-              <div className="grid grid-cols-3 gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setDate(todayStr);
-                    advance();
-                  }}
-                  className={`py-3 px-2 rounded-xl border text-center transition-all ${
-                    date === todayStr
-                      ? "bg-[#202734] border-[#3B82F6] text-white font-semibold"
-                      : "bg-[#1B2028] border-slate-800 text-slate-300 hover:bg-[#222933]"
-                  }`}
-                >
-                  <span className="block text-xs">Today</span>
-                  <span className="block text-[10px] text-slate-400 mt-0.5">
-                    {formatDisplayDate(todayStr).split(",")[0]}
-                  </span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setDate(yesterdayStr);
-                    advance();
-                  }}
-                  className={`py-3 px-2 rounded-xl border text-center transition-all ${
-                    date === yesterdayStr
-                      ? "bg-[#202734] border-[#3B82F6] text-white font-semibold"
-                      : "bg-[#1B2028] border-slate-800 text-slate-300 hover:bg-[#222933]"
-                  }`}
-                >
-                  <span className="block text-xs">Yesterday</span>
-                  <span className="block text-[10px] text-slate-400 mt-0.5">
-                    {formatDisplayDate(yesterdayStr).split(",")[0]}
-                  </span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setDate(twoDaysAgoStr);
-                    advance();
-                  }}
-                  className={`py-3 px-2 rounded-xl border text-center transition-all ${
-                    date === twoDaysAgoStr
-                      ? "bg-[#202734] border-[#3B82F6] text-white font-semibold"
-                      : "bg-[#1B2028] border-slate-800 text-slate-300 hover:bg-[#222933]"
-                  }`}
-                >
-                  <span className="block text-xs">2 Days Ago</span>
-                  <span className="block text-[10px] text-slate-400 mt-0.5">
-                    {formatDisplayDate(twoDaysAgoStr).split(",")[0]}
-                  </span>
-                </button>
+              <div className="grid grid-cols-3 gap-2.5">
+                {[
+                  { label: "Today", value: todayStr },
+                  { label: "Yesterday", value: yesterdayStr },
+                  { label: "2 Days Ago", value: twoDaysAgoStr },
+                ].map((preset) => (
+                  <button
+                    key={preset.label}
+                    type="button"
+                    onClick={() => {
+                      setDate(preset.value);
+                      advance();
+                    }}
+                    className={`py-3.5 px-2 rounded-2xl border text-center transition-all cursor-pointer ${
+                      date === preset.value
+                        ? "bg-[var(--accent)]/12 border-[var(--accent)] text-[var(--accent)] font-bold"
+                        : "bg-[var(--bg)] border-[var(--border)] text-[var(--text)] hover:bg-[var(--surface-hover)]"
+                    }`}
+                  >
+                    <span className="block text-xs font-bold">{preset.label}</span>
+                    <span className="block text-2xs text-[var(--text-muted)] mt-0.5">
+                      {formatDisplayDate(preset.value)}
+                    </span>
+                  </button>
+                ))}
               </div>
 
-              {/* Custom Date Input */}
-              <div className="space-y-1.5 pt-2 border-t border-slate-800">
-                <label className="text-xs font-medium text-slate-400">Custom Date</label>
+              <div className="space-y-1.5 pt-3 border-t border-[var(--border)]">
+                <label className="text-xs font-semibold text-[var(--text-muted)] block">
+                  Custom Date
+                </label>
                 <input
                   type="date"
                   value={date}
-                  onChange={(e) => {
-                    setDate(e.target.value);
-                  }}
-                  className="w-full px-3 py-2.5 rounded-xl border border-slate-700 bg-[#1B2028] text-white text-sm focus:outline-none focus:ring-1 focus:ring-[#3B82F6]"
+                  onChange={(e) => setDate(e.target.value)}
+                  className="w-full h-12 px-4 rounded-2xl border border-[var(--border)] bg-[var(--bg)] text-[var(--text)] font-mono text-sm focus:outline-none focus:border-[var(--accent)]"
                 />
               </div>
             </div>
@@ -1139,23 +1000,26 @@ export function MobileQuickAdd({
           {activeField === "note" && (
             <div
               className="p-4 space-y-4"
-              style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 16px)" }}
+              style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 20px)" }}
             >
               <div className="space-y-1.5">
-                <label className="text-xs font-medium text-slate-400">Transaction Note</label>
+                <label className="text-xs font-semibold text-[var(--text-muted)] block">
+                  Transaction Note
+                </label>
                 <textarea
                   value={note}
                   onChange={(e) => setNote(e.target.value)}
                   placeholder="e.g. Lunch with team, monthly salary, Uber ride"
                   rows={3}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-700 bg-[#1B2028] text-white text-sm focus:outline-none focus:ring-1 focus:ring-[#3B82F6]"
+                  className="w-full p-3.5 rounded-2xl border border-[var(--border)] bg-[var(--bg)] text-[var(--text)] text-sm focus:outline-none focus:border-[var(--accent)]"
                 />
               </div>
 
-              {/* Quick tags */}
               <div className="space-y-1.5">
-                <span className="text-xs font-medium text-slate-400">Quick Tags</span>
-                <div className="flex flex-wrap gap-1.5">
+                <span className="text-xs font-semibold text-[var(--text-muted)] block">
+                  Quick Tags
+                </span>
+                <div className="flex flex-wrap gap-2">
                   {[
                     "Lunch",
                     "Dinner",
@@ -1178,7 +1042,7 @@ export function MobileQuickAdd({
                           setNote(`${current}, ${tag}`);
                         }
                       }}
-                      className="px-2.5 py-1 rounded-full border border-slate-700 bg-[#1B2028] text-xs text-slate-300 hover:bg-slate-700 active:scale-95 transition-all"
+                      className="px-3 py-1.5 rounded-full border border-[var(--border)] bg-[var(--bg)] text-xs font-medium text-[var(--text)] hover:bg-[var(--surface-hover)] active:scale-95 transition-all cursor-pointer"
                     >
                       +{tag}
                     </button>
@@ -1186,34 +1050,34 @@ export function MobileQuickAdd({
                 </div>
               </div>
 
-              {/* Exclude from Budget Toggle */}
-              <div className="flex items-center justify-between py-2 border-t border-hairline">
-                <span className="text-xs text-[var(--text)]">Exclude from budget</span>
+              <div className="flex items-center justify-between py-2.5 border-t border-[var(--border)]">
+                <span className="text-xs font-semibold text-[var(--text)]">
+                  Exclude from budget
+                </span>
                 <button
                   type="button"
                   role="switch"
                   aria-checked={excludeFromBudget}
                   aria-label="Exclude from budget"
                   onClick={() => setExcludeFromBudget(!excludeFromBudget)}
-                  className={`w-10 h-6 rounded-full transition-colors relative ${
-                    excludeFromBudget ? "bg-[var(--accent)]" : "bg-[var(--surface-hover)] border border-hairline"
+                  className={`w-11 h-6 rounded-full transition-colors relative cursor-pointer ${
+                    excludeFromBudget ? "bg-[var(--accent)]" : "bg-[var(--border)]"
                   }`}
                 >
                   <span
-                    className={`block w-4 h-4 rounded-full bg-white transition-transform absolute top-1 ${
-                      excludeFromBudget ? "left-5" : "left-1"
+                    className={`block w-5 h-5 rounded-full bg-white transition-transform absolute top-0.5 ${
+                      excludeFromBudget ? "left-5.5" : "left-0.5"
                     }`}
                   />
                 </button>
               </div>
 
-              {/* Primary action: save (or jump to the first missing required field) */}
               <button
                 type="button"
                 data-testid="quick-add-mobile-note-save"
                 disabled={isDivisionByZero || isSubmitting}
                 onClick={submitOrFocusMissing}
-                className={`w-full py-3 rounded-xl font-bold text-sm shadow-md active:scale-98 transition-all disabled:opacity-40 disabled:pointer-events-none ${themeStyles.okBtnBg}`}
+                className={`w-full h-12 rounded-2xl font-bold text-sm shadow-sm active:scale-[0.98] transition-all disabled:opacity-40 disabled:pointer-events-none cursor-pointer ${typeTone.ctaBg}`}
               >
                 {isSubmitting ? "Saving..." : "Save Transaction"}
               </button>

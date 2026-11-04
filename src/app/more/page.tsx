@@ -14,12 +14,14 @@ import {
   LogOut,
   LoaderCircle,
   Paintbrush,
+  PieChart,
   Sliders,
   Smartphone,
   User,
   Users,
   ShoppingBasket,
 } from "lucide-react";
+import { AppHeader } from "@/components/navigation/app-header";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ConfirmationModal } from "@/components/ui/confirmation-modal";
 import { queryKeys } from "@/lib/api/query-keys";
@@ -32,6 +34,17 @@ interface UserProfile {
   id: string;
   name: string;
   email: string;
+}
+
+interface MenuItem {
+  label: string;
+  description: string;
+  icon: React.ComponentType<{ size?: number; className?: string }>;
+  href: string;
+  testId: string;
+  badge: string | null;
+  badgeTestId?: string;
+  highlight?: boolean;
 }
 
 export default function MorePage() {
@@ -61,7 +74,21 @@ export default function MorePage() {
     await logoutMutation.mutateAsync();
   };
 
-  const sections = [
+  const sections: { title: string; items: MenuItem[] }[] = [
+    {
+      title: "Planning & Budgets",
+      items: [
+        {
+          label: "Monthly Budgets",
+          description: "Spending limits, safe-to-spend burn rate & monthly rollover",
+          icon: PieChart,
+          href: "/budget",
+          testId: "more-budget-link",
+          badge: null,
+          highlight: true,
+        },
+      ],
+    },
     {
       title: "Household & Collaboration",
       items: [
@@ -89,7 +116,7 @@ export default function MorePage() {
       items: [
         {
           label: "Preferences & Profile",
-          description: "Theme, currency, tax rates & daily reminders",
+          description: "Appearance, currency, tax rates & daily reminders",
           icon: Sliders,
           href: "/more/preferences",
           testId: "more-preferences-link",
@@ -162,35 +189,32 @@ export default function MorePage() {
   ];
 
   return (
-    <main className="flex-1 max-w-4xl mx-auto w-full px-4 py-3 space-y-4">
-      {/* Header */}
-      <div className="flex items-center justify-between py-1">
-        <div>
-          <h1 className="text-base font-semibold tracking-tight text-[var(--text)]">
-            Settings & More
-          </h1>
-          <p className="text-[11px] text-[var(--text-muted)]">
-            Personal treasury preferences, integrations and automation
-          </p>
-        </div>
-      </div>
+    <main className="flex-1 max-w-4xl mx-auto w-full px-5 sm:px-7 pt-4 sm:pt-6 pb-8 space-y-6">
+      <AppHeader
+        title="Settings & More"
+        subtitle="Treasury Planning, Household & Automation"
+      />
 
       {/* User Account / Profile Card */}
-      <div className="flat-card p-4 flex items-center justify-between shadow-xs">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-[var(--surface)] border border-hairline flex items-center justify-center text-[var(--accent)] font-semibold text-sm">
-            {userLoading ? <LoaderCircle size={18} className="animate-spin" /> : user?.name ? user.name.charAt(0).toUpperCase() : <User size={18} />}
+      <div className="rounded-3xl bg-[var(--surface)] border border-[var(--border)] p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xs">
+        <div className="flex items-center gap-4 min-w-0">
+          <div className="w-13 h-13 rounded-2xl bg-[var(--accent)]/12 border border-[var(--accent)]/25 flex items-center justify-center text-[var(--accent)] font-bold text-base shrink-0">
+            {userLoading ? (
+              <LoaderCircle size={20} className="animate-spin" />
+            ) : user?.name ? (
+              user.name.charAt(0).toUpperCase()
+            ) : (
+              <User size={20} />
+            )}
           </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <span
-                data-testid="user-display-name"
-                className="text-sm font-semibold text-[var(--text)]"
-              >
-                {userLoading ? "Loading profile…" : user?.name || "User"}
-              </span>
-            </div>
-            <p className="text-xs text-[var(--text-muted)]">
+          <div className="min-w-0">
+            <span
+              data-testid="user-display-name"
+              className="text-base font-bold text-[var(--text)] block truncate"
+            >
+              {userLoading ? "Loading profile…" : user?.name || "User"}
+            </span>
+            <p className="text-xs text-[var(--text-muted)] truncate mt-0.5">
               {userLoading ? "Loading account details…" : user?.email || "treasury-admin@local"}
             </p>
           </div>
@@ -200,69 +224,76 @@ export default function MorePage() {
           type="button"
           data-testid="logout-button"
           onClick={() => setShowLogoutConfirm(true)}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-[var(--expense)] border border-hairline rounded hover:bg-[var(--expense)]/10 transition-colors"
+          className="h-11 px-4 inline-flex items-center justify-center gap-2 text-xs font-semibold text-[var(--expense)] bg-[var(--expense)]/8 border border-[var(--expense)]/25 rounded-2xl hover:bg-[var(--expense)]/15 transition-colors cursor-pointer shrink-0"
         >
-          <LogOut size={14} />
+          <LogOut size={16} />
           <span>Log Out</span>
         </button>
       </div>
 
       {/* Categorized Settings Cards */}
-      {sections.map((section) => (
-        <div key={section.title} className="space-y-1">
-          <span className="text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wider px-1">
-            {section.title}
-          </span>
-          <div className="flat-card divide-y divide-hairline">
-            {section.items.map((item) => {
-              const Icon = item.icon;
-              return (
-                <Link
-                  key={item.label}
-                  href={item.href}
-                  transitionTypes={["nav-forward"]}
-                  data-testid={item.testId}
-                  className="flex items-center justify-between p-3.5 hover:bg-[var(--surface-hover)] transition-colors group cursor-pointer"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-[var(--surface)] border border-hairline flex items-center justify-center text-[var(--text-muted)] group-hover:text-[var(--text)] group-hover:border-[var(--accent)] transition-colors shrink-0">
-                      <Icon size={16} />
-                    </div>
-                    <div>
-                      <span className="text-xs font-semibold text-[var(--text)] block">
-                        {item.label}
-                      </span>
-                      <span className="text-[11px] text-[var(--text-muted)]">
-                        {item.description}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    {item.badge && (
-                      <span
-                        data-testid={(item as { badgeTestId?: string }).badgeTestId}
-                        className="px-2 py-0.5 rounded text-[10px] font-semibold bg-[var(--accent)] text-white shadow-xs"
+      <div className="space-y-6">
+        {sections.map((section) => (
+          <section key={section.title} className="space-y-2.5">
+            <h2 className="text-2xs font-bold text-[var(--text-muted)] uppercase tracking-wider px-1">
+              {section.title}
+            </h2>
+            <div className="rounded-3xl bg-[var(--surface)] border border-[var(--border)] divide-y divide-[var(--border)] overflow-hidden shadow-xs">
+              {section.items.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <Link
+                    key={item.label}
+                    href={item.href}
+                    transitionTypes={["nav-forward"]}
+                    data-testid={item.testId}
+                    className="flex items-center justify-between gap-4 p-4 sm:p-5 hover:bg-[var(--surface-hover)] transition-colors group cursor-pointer"
+                  >
+                    <div className="flex items-center gap-3.5 min-w-0">
+                      <div
+                        className={`w-11 h-11 rounded-2xl border flex items-center justify-center transition-colors shrink-0 ${
+                          item.highlight
+                            ? "bg-[var(--accent)]/12 border-[var(--accent)]/30 text-[var(--accent)]"
+                            : "bg-[var(--bg)] border-[var(--border)] text-[var(--text-muted)] group-hover:text-[var(--accent)] group-hover:border-[var(--accent)]/40"
+                        }`}
                       >
-                        {item.badge}
-                      </span>
-                    )}
-                    <ChevronRight
-                      size={16}
-                      className="text-[var(--text-muted)] group-hover:translate-x-0.5 transition-transform"
-                    />
-                  </div>
-                </Link>
-              );
-            })}
-          </div>
-        </div>
-      ))}
+                        <Icon size={19} />
+                      </div>
+                      <div className="min-w-0">
+                        <span className="text-sm font-semibold text-[var(--text)] block truncate">
+                          {item.label}
+                        </span>
+                        <span className="text-xs text-[var(--text-muted)] block mt-0.5 leading-relaxed">
+                          {item.description}
+                        </span>
+                      </div>
+                    </div>
 
-      {/* Empty State requirement */}
+                    <div className="flex items-center gap-2.5 shrink-0">
+                      {item.badge && (
+                        <span
+                          data-testid={item.badgeTestId}
+                          className="px-2.5 py-0.5 rounded-full text-2xs font-bold bg-[var(--accent)] text-white shadow-xs"
+                        >
+                          {item.badge}
+                        </span>
+                      )}
+                      <ChevronRight
+                        size={18}
+                        className="text-[var(--text-muted)] group-hover:text-[var(--text)] group-hover:translate-x-0.5 transition-all"
+                      />
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+          </section>
+        ))}
+      </div>
+
       <EmptyState
         title="Settings & Tools"
-        description="All system configurations, backup tools, and household settings are available here."
+        description="All system configurations, monthly budgets, backup tools, and household settings are available here."
       />
 
       <ConfirmationModal

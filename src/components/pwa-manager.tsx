@@ -3,6 +3,14 @@
 import React, { useEffect, useState } from "react";
 import { RefreshCw } from "lucide-react";
 
+interface HardMoneyWindow extends Window {
+  __hardMoneyInstallPrompt?: Event;
+  __hardMoneyPrimeAssets?: () => Promise<void>;
+  __hardMoneySwRegistration?: ServiceWorkerRegistration;
+  __hardMoneyIsUpdating?: { current: boolean };
+  __hardMoneyTriggerUpdatePrompt?: () => void;
+}
+
 export function PwaManager() {
   const [updateAvailable, setUpdateAvailable] = useState(false);
   const [waitingWorker, setWaitingWorker] = useState<ServiceWorker | null>(null);
@@ -16,27 +24,31 @@ export function PwaManager() {
       return;
     }
 
-    // Capture beforeinstallprompt event for PWA installation
+    const hmWindow = window as HardMoneyWindow;
+
     const handleBeforeInstallPrompt = (e: Event) => {
       e.preventDefault();
-      (window as unknown as { __hardMoneyInstallPrompt?: Event }).__hardMoneyInstallPrompt = e;
+      hmWindow.__hardMoneyInstallPrompt = e;
       window.dispatchEvent(new CustomEvent("hardmoney_install_ready", { detail: e }));
     };
     window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
 
-    // Precache loaded scripts and stylesheets so offline reload has all Next.js bundles
     const primeAssetCache = async () => {
       if (!("caches" in window)) return;
       try {
         const cache = await caches.open("hardmoney-v4");
         const urls = new Set<string>();
 
-        document.querySelectorAll<HTMLScriptElement | HTMLLinkElement>("script[src], link[rel='stylesheet'], link[rel='preload']").forEach((el) => {
-          const url = "src" in el && el.src ? el.src : (el as HTMLLinkElement).href;
-          if (url && (url.includes("/_next/") || url.includes("/static/"))) {
-            urls.add(url);
-          }
-        });
+        document
+          .querySelectorAll<HTMLScriptElement | HTMLLinkElement>(
+            "script[src], link[rel='stylesheet'], link[rel='preload']"
+          )
+          .forEach((el) => {
+            const url = "src" in el && el.src ? el.src : (el as HTMLLinkElement).href;
+            if (url && (url.includes("/_next/") || url.includes("/static/"))) {
+              urls.add(url);
+            }
+          });
 
         if (typeof performance !== "undefined" && typeof performance.getEntriesByType === "function") {
           performance.getEntriesByType("resource").forEach((entry) => {
@@ -64,26 +76,22 @@ export function PwaManager() {
       }
     };
 
-    (window as unknown as { __hardMoneyPrimeAssets?: () => Promise<void> }).__hardMoneyPrimeAssets = primeAssetCache;
+    hmWindow.__hardMoneyPrimeAssets = primeAssetCache;
 
-
-    // Register service worker in production
     navigator.serviceWorker
       .register("/sw.js")
       .then((reg) => {
-        (window as unknown as { __hardMoneySwRegistration?: ServiceWorkerRegistration }).__hardMoneySwRegistration = reg;
-        primeAssetCache();
+        hmWindow.__hardMoneySwRegistration = reg;
+        void primeAssetCache();
         navigator.serviceWorker.ready.then(() => {
-          primeAssetCache();
+          void primeAssetCache();
         });
 
-        // Check if there is already a waiting worker
         if (reg.waiting) {
           setWaitingWorker(reg.waiting);
           setUpdateAvailable(true);
         }
 
-        // Listen for new updates found
         reg.addEventListener("updatefound", () => {
           const installingWorker = reg.installing;
           if (!installingWorker) return;
@@ -103,9 +111,8 @@ export function PwaManager() {
         console.warn("Service worker registration failed:", err);
       });
 
-    // Reload page only when user clicked update and new service worker took control
     const isUpdatingRef = { current: false };
-    (window as any).__hardMoneyIsUpdating = isUpdatingRef;
+    hmWindow.__hardMoneyIsUpdating = isUpdatingRef;
 
     navigator.serviceWorker.addEventListener("controllerchange", () => {
       if (isUpdatingRef.current) {
@@ -113,8 +120,7 @@ export function PwaManager() {
       }
     });
 
-    // Provide testing helper hook to trigger update banner on demand
-    (window as any).__hardMoneyTriggerUpdatePrompt = () => {
+    hmWindow.__hardMoneyTriggerUpdatePrompt = () => {
       setUpdateAvailable(true);
     };
 
@@ -124,8 +130,11 @@ export function PwaManager() {
   }, []);
 
   const handleUpdate = () => {
-    if (typeof window !== "undefined" && (window as any).__hardMoneyIsUpdating) {
-      (window as any).__hardMoneyIsUpdating.current = true;
+    if (typeof window !== "undefined") {
+      const hmWindow = window as HardMoneyWindow;
+      if (hmWindow.__hardMoneyIsUpdating) {
+        hmWindow.__hardMoneyIsUpdating.current = true;
+      }
     }
     if (waitingWorker) {
       waitingWorker.postMessage({ type: "SKIP_WAITING" });
@@ -141,9 +150,9 @@ export function PwaManager() {
   return (
     <div
       data-testid="pwa-update-banner"
-      className="fixed bottom-mobile-offset right-4 z-50 bg-[var(--surface)] border border-[var(--accent)] text-[var(--text)] p-3 rounded-xl shadow-xl flex items-center gap-3 animate-in fade-in slide-in-from-bottom-2 duration-200"
+      className="fixed bottom-mobile-offset left-4 right-4 sm:left-auto sm:right-6 sm:max-w-sm z-50 bg-[var(--surface)] border border-[var(--accent)]/35 text-[var(--text)] p-4 rounded-2xl shadow-xl flex items-center justify-between gap-3.5 animate-in fade-in slide-in-from-bottom-2 duration-200"
     >
-      <div className="flex flex-col">
+      <div className="flex flex-col min-w-0">
         <span className="text-xs font-semibold text-[var(--text)]">New version available</span>
         <span className="text-[11px] text-[var(--text-muted)]">Reload to apply the update</span>
       </div>
@@ -151,9 +160,9 @@ export function PwaManager() {
         type="button"
         data-testid="pwa-update-btn"
         onClick={handleUpdate}
-        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--accent)] text-white text-xs font-semibold hover:opacity-90 active:scale-95 transition-all"
+        className="h-9 flex items-center gap-1.5 px-3.5 rounded-xl bg-[var(--accent)] text-white text-xs font-semibold hover:opacity-95 active:scale-95 transition-all shrink-0 shadow-xs"
       >
-        <RefreshCw size={12} className="animate-spin" />
+        <RefreshCw size={13} className="animate-spin" />
         <span>Reload</span>
       </button>
     </div>

@@ -1,404 +1,568 @@
 "use client";
 
-import React, { useState, useMemo, useEffect } from "react";
-import { ArrowLeftRight, Moon, Sun, CreditCard } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
-import { MonthSwitcher } from "@/components/ui/month-switcher";
-import { SummaryBar } from "@/components/ui/summary-bar";
-import { SegmentedTabs } from "@/components/ui/segmented-tabs";
-import { EmptyState } from "@/components/ui/empty-state";
-import { useTheme } from "@/components/theme-provider";
-import { useMounted } from "@/lib/use-mounted";
-import { useCategories, useAccounts, useSync } from "@/components/sync-provider";
+import React from "react";
+import {
+  ArrowDownLeft,
+  ArrowLeftRight,
+  ArrowUpRight,
+  Banknote,
+  ChevronLeft,
+  ChevronRight,
+  CreditCard,
+  Inbox,
+  Landmark,
+  MessageSquare,
+  Moon,
+  Search,
+  Sun,
+  Wallet,
+  X,
+} from "lucide-react";
 import { formatMoney } from "@/lib/finance-core/money";
-import { TransFilterBar, TransFilterState } from "@/components/transaction/trans-filter-bar";
-import { DailyView } from "@/components/transaction/daily-view";
-import { CalendarView } from "@/components/transaction/calendar-view";
-import { MonthlyView } from "@/components/transaction/monthly-view";
-import { SummaryView } from "@/components/transaction/summary-view";
-import { TransactionEditModal } from "@/components/transaction/transaction-edit-modal";
-import { LocalTransaction } from "@/lib/db";
-import { localRestoreTransaction } from "@/lib/sync/client";
-import { listTransactions, getTransactionSummary } from "@/services/transaction-service";
-import { queryKeys } from "@/lib/api/query-keys";
-import { getPendingTransactions } from "@/lib/offline/transaction-queue";
+import { SyncIndicator } from "@/components/sync-provider";
+import { useHomeDashboard } from "@/hooks/use-home-dashboard";
+import {
+  DuplicateBanner,
+  getTxDisplayInfo,
+  HomeSharedOverlays,
+  SubNavAction,
+  TxAvatarIcon,
+} from "@/components/transaction/transaction-card-helpers";
 
-export default function TransactionsPage() {
-  const [currentDate, setCurrentDate] = useState(() => {
-    const now = new Date();
-    return new Date(now.getFullYear(), now.getMonth(), 1);
-  });
-  const [activeTab, setActiveTab] = useState<string>(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const saved = localStorage.getItem("trans-start-view");
-        if (saved && ["daily", "calendar", "monthly", "summary"].includes(saved)) {
-          return saved;
-        }
-      } catch {}
-    }
-    return "daily";
-  });
-  const [selectedTxForEdit, setSelectedTxForEdit] = useState<LocalTransaction | null>(null);
-  const [deletedTx, setDeletedTx] = useState<LocalTransaction | null>(null);
-  const [offlinePendingTxs, setOfflinePendingTxs] = useState<LocalTransaction[]>([]);
-
-  const [filters, setFilters] = useState<TransFilterState>({
-    searchQuery: "",
-    accountId: "",
-    categoryId: "",
-    type: "",
-  });
-
-  const { resolvedTheme, toggleTheme, toggleColorSwap, colorSwap } = useTheme();
-  const mounted = useMounted();
-  const { db, userId, pendingCount } = useSync();
-  const categories = useCategories();
-  const accounts = useAccounts();
-
-  // Current month prefix YYYY-MM
-  const monthPrefix = useMemo(() => {
-    const y = currentDate.getFullYear();
-    const m = String(currentDate.getMonth() + 1).padStart(2, "0");
-    return `${y}-${m}`;
-  }, [currentDate]);
-
-  // Load transactions scoped to the active month from the network
-  const monthTransactionsQuery = useQuery({
-    queryKey: queryKeys.transactions.byMonth(monthPrefix),
-    queryFn: () => listTransactions({ month: monthPrefix }),
-    enabled: !!userId,
-  });
-
-  // Load server-calculated summaries for the selected month
-  const summaryQuery = useQuery({
-    queryKey: queryKeys.transactions.summary(monthPrefix),
-    queryFn: () => getTransactionSummary(monthPrefix),
-    enabled: !!userId,
-  });
-
-  // Pull pending offline transactions from queue to show optimistically in the list
-  useEffect(() => {
-    let isMounted = true;
-    getPendingTransactions().then((records) => {
-      if (isMounted) {
-        setOfflinePendingTxs(
-          records
-            .map((r) => ({ ...r.optimisticTx, isPendingSync: true }))
-            .filter((t) => t.transactionDate.startsWith(monthPrefix))
-        );
-      }
-    });
-    return () => {
-      isMounted = false;
-    };
-  }, [monthPrefix, pendingCount]);
-
-  // Auto-dismiss undo toast after 6 seconds
-  useEffect(() => {
-    if (!deletedTx) return;
-    const timer = setTimeout(() => {
-      setDeletedTx(null);
-    }, 6000);
-    return () => clearTimeout(timer);
-  }, [deletedTx]);
-
-  const handleTabChange = (tab: string) => {
-    setActiveTab(tab);
-    try {
-      localStorage.setItem("trans-start-view", tab);
-    } catch {}
-  };
-
-  const tabs = [
-    { id: "daily", label: "Daily" },
-    { id: "calendar", label: "Calendar" },
-    { id: "monthly", label: "Monthly" },
-    { id: "summary", label: "Summary" },
-  ];
-
-  const categoryMap = useMemo(() => {
-    const map = new Map<string, { name: string; color: string }>();
-    for (const c of categories) {
-      map.set(c.id, { name: c.name, color: c.color });
-    }
-    return map;
-  }, [categories]);
-
-  const accountMap = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const a of accounts) {
-      map.set(a.id, a.name);
-    }
-    return map;
-  }, [accounts]);
-
-  // Combined month transactions: server-loaded + any un-synced offline pending items
-  const monthTransactions = useMemo(() => {
-    const serverList = monthTransactionsQuery.data ?? [];
-    if (offlinePendingTxs.length === 0) return serverList;
-
-    const serverIds = new Set(serverList.map((t) => t.id));
-    const extra = offlinePendingTxs.filter((t) => !serverIds.has(t.id));
-    return [...extra, ...serverList];
-  }, [monthTransactionsQuery.data, offlinePendingTxs]);
-
-  // Filtered transactions for the current view
-  const filteredTransactions = useMemo(() => {
-    return monthTransactions.filter((tx) => {
-      // Account filter
-      if (filters.accountId) {
-        if (tx.accountId !== filters.accountId && tx.toAccountId !== filters.accountId) {
-          return false;
-        }
-      }
-
-      // Category filter (support split items)
-      if (filters.categoryId) {
-        const directMatch = tx.categoryId === filters.categoryId;
-        const splitMatch =
-          tx.isSplit &&
-          Array.isArray(tx.splitItems) &&
-          tx.splitItems.some((s) => s.categoryId === filters.categoryId);
-
-        if (!directMatch && !splitMatch) {
-          return false;
-        }
-      }
-
-      // Type filter
-      if (filters.type) {
-        if (tx.type !== filters.type) {
-          return false;
-        }
-      }
-
-      // Search query (note, category, amount)
-      if (filters.searchQuery.trim()) {
-        const q = filters.searchQuery.toLowerCase();
-        const noteMatch = tx.note?.toLowerCase().includes(q);
-        const catName = tx.categoryId ? categoryMap.get(tx.categoryId)?.name?.toLowerCase() : "";
-        const catMatch = catName?.includes(q);
-        const amountStr = (tx.amountMinor / 100).toFixed(2);
-        const amountMatch =
-          amountStr.includes(q) ||
-          formatMoney(tx.amountMinor).toLowerCase().includes(q) ||
-          String(tx.amountMinor / 100).includes(q);
-
-        const splitMatch =
-          tx.isSplit &&
-          Array.isArray(tx.splitItems) &&
-          tx.splitItems.some(
-            (s) =>
-              s.note?.toLowerCase().includes(q) ||
-              categoryMap.get(s.categoryId)?.name?.toLowerCase().includes(q)
-          );
-
-        if (!noteMatch && !catMatch && !amountMatch && !splitMatch) {
-          return false;
-        }
-      }
-
-      return true;
-    });
-  }, [monthTransactions, filters, categoryMap]);
-
-  // Summaries from Server (fallback to local calculation while loading)
-  const { incomeMinor, expenseMinor, totalMinor, adjustmentsMinor } = useMemo(() => {
-    if (summaryQuery.data) {
-      return {
-        incomeMinor: summaryQuery.data.totalIncomeMinor,
-        expenseMinor: summaryQuery.data.totalExpenseMinor,
-        totalMinor: summaryQuery.data.netSavingsMinor,
-        adjustmentsMinor: 0,
-      };
-    }
-
-    let inc = 0;
-    let exp = 0;
-    let adj = 0;
-
-    for (const t of monthTransactions) {
-      if (t.excludeFromStats) {
-        if (t.source === "CALIBRATION" || t.type === "ADJUSTMENT") {
-          adj += t.direction === "IN" ? t.amountMinor : -t.amountMinor;
-        }
-        continue;
-      }
-      if (t.type === "INCOME") {
-        inc += t.amountMinor;
-      } else if (t.type === "EXPENSE") {
-        exp += t.amountMinor;
-      } else if (t.type === "REFUND") {
-        exp = Math.max(0, exp - t.amountMinor);
-      } else if (t.type === "ADJUSTMENT" || t.source === "CALIBRATION") {
-        adj += t.direction === "IN" ? t.amountMinor : -t.amountMinor;
-      }
-    }
-
-    return {
-      incomeMinor: inc,
-      expenseMinor: exp,
-      totalMinor: inc - exp,
-      adjustmentsMinor: adj,
-    };
-  }, [summaryQuery.data, monthTransactions]);
-
-  const handleUndoDelete = async () => {
-    if (!deletedTx) return;
-    try {
-      await localRestoreTransaction(db, deletedTx);
-      setDeletedTx(null);
-    } catch (e) {
-      console.error("Failed to restore transaction:", e);
-    }
-  };
+export default function HomePage() {
+  const data = useHomeDashboard();
+  const activeAccountId = data.filters.accountId;
+  const selectedAccount =
+    data.visibleAccounts.find((a) => a.id === activeAccountId) || null;
 
   return (
-    <main className="flex-1 max-w-4xl mx-auto w-full px-4 py-3 space-y-3">
-      {/* Top Bar with Single h1 and Mobile Controls */}
-      <div className="flex items-center justify-between py-1">
-        <h1
-          data-testid="app-title"
-          className="text-base font-semibold tracking-tight text-[var(--text)]"
-        >
-          Hard Money
-        </h1>
+    <main className="min-h-full bg-[var(--bg)] text-[var(--text)] pb-8">
+      {/* Sticky Header */}
+      <header className="sticky top-0 z-30 bg-[var(--bg)]/95 backdrop-blur-md border-b border-[var(--border)]/60 select-none">
+        <div className="max-w-4xl mx-auto px-5 sm:px-7 py-3 sm:py-4 flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p
+              data-testid="app-title"
+              className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]"
+            >
+              Hard Money · Wallet
+            </p>
+            <div className="flex items-center gap-1.5 mt-0.5">
+              <button
+                type="button"
+                data-testid="month-prev"
+                onClick={data.prevMonth}
+                aria-label="Previous month"
+                className="p-1.5 -ml-1.5 rounded-xl text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--surface)] transition-colors cursor-pointer"
+              >
+                <ChevronLeft size={19} />
+              </button>
+              <h1
+                data-testid="month-label"
+                onClick={!data.isCurrentMonth ? data.goToCurrentMonth : undefined}
+                title={!data.isCurrentMonth ? "Jump to current month" : undefined}
+                className={`text-lg sm:text-xl font-bold tracking-tight ${
+                  !data.isCurrentMonth ? "cursor-pointer hover:text-[var(--accent)]" : ""
+                }`}
+              >
+                {data.monthLabel}
+              </h1>
+              <button
+                type="button"
+                data-testid="month-next"
+                onClick={data.nextMonth}
+                aria-label="Next month"
+                className="p-1.5 rounded-xl text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--surface)] transition-colors cursor-pointer"
+              >
+                <ChevronRight size={19} />
+              </button>
+            </div>
+          </div>
 
-        {/* Mobile quick controls */}
-        <div className="mobile-only flex items-center gap-1.5">
-          <button
-            type="button"
-            data-testid="color-swap-toggle"
-            onClick={toggleColorSwap}
-            title={`Color swap: ${colorSwap ? "Active" : "Default"}`}
-            className="p-1.5 rounded text-[var(--text-muted)] hover:text-[var(--text)] transition-colors"
-            aria-label="Toggle Color Swap"
-          >
-            <CreditCard size={18} />
-          </button>
-
-          <button
-            type="button"
-            data-testid="theme-toggle"
-            onClick={toggleTheme}
-            title={mounted ? `Switch to ${resolvedTheme === "dark" ? "light" : "dark"} mode` : "Toggle Theme"}
-            className="p-1.5 rounded text-[var(--text-muted)] hover:text-[var(--text)] transition-colors"
-            aria-label="Toggle Theme"
-          >
-            {mounted && resolvedTheme === "dark" ? (
-              <Sun size={18} className="text-amber-400" />
-            ) : (
-              <Moon size={18} />
+          <div className="flex items-center gap-2 shrink-0">
+            {data.pendingInboxCount > 0 && (
+              <SubNavAction
+                target="/more/inbox"
+                dataTestId="sms-inbox-badge"
+                className="h-10 px-3.5 rounded-2xl bg-[var(--accent)]/12 text-[var(--accent)] flex items-center gap-1.5 text-xs font-bold hover:bg-[var(--accent)]/18 transition-colors"
+              >
+                <Inbox size={16} />
+                <span>{data.pendingInboxCount} SMS</span>
+              </SubNavAction>
             )}
-          </button>
+
+            {/* Mobile Top Controls (Desktop has these in Sidebar) */}
+            <div className="mobile-only flex items-center gap-2">
+              <SyncIndicator isMobile={true} />
+              <button
+                type="button"
+                data-testid="color-swap-toggle"
+                onClick={data.toggleColorSwap}
+                aria-label="Swap income/expense colors"
+                title={`Color swap: ${data.colorSwap ? "Active" : "Default"}`}
+                className="w-10 h-10 rounded-2xl bg-[var(--surface)] border border-[var(--border)] flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text)] transition-colors cursor-pointer"
+              >
+                <CreditCard size={17} />
+              </button>
+              <button
+                type="button"
+                data-testid="theme-toggle"
+                onClick={data.toggleTheme}
+                aria-label="Toggle theme"
+                className="w-10 h-10 rounded-2xl bg-[var(--surface)] border border-[var(--border)] flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text)] transition-colors cursor-pointer"
+              >
+                {data.mounted && data.resolvedTheme === "dark" ? (
+                  <Sun size={17} className="text-amber-400" />
+                ) : (
+                  <Moon size={17} />
+                )}
+              </button>
+            </div>
+          </div>
         </div>
+      </header>
+
+      <div className="max-w-4xl mx-auto pt-5 sm:pt-6 space-y-6">
+
+        {/* Horizontal Snap-Scrolling Wallet Cards */}
+        <section aria-label="Accounts Carousel" className="space-y-2.5">
+          <div className="flex gap-4 overflow-x-auto snap-x snap-mandatory px-5 sm:px-7 pb-2 no-scrollbar">
+            {/* Master All-Accounts Card */}
+            <button
+              type="button"
+              data-testid="wallet-card-all"
+              onClick={() =>
+                data.setFilters((prev) => ({ ...prev, accountId: "" }))
+              }
+              className={`snap-start shrink-0 w-[290px] sm:w-[325px] rounded-3xl p-5 text-left transition-all flex flex-col justify-between min-h-[176px] cursor-pointer ${
+                !activeAccountId
+                  ? "bg-gradient-to-br from-[#064E3B] via-[#065F46] to-[#022C22] text-white shadow-lg ring-2 ring-[var(--accent)]"
+                  : "bg-[var(--surface)] border border-[var(--border)] text-[var(--text)] hover:border-[var(--text-muted)]"
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold uppercase tracking-wider opacity-80">
+                  All Accounts ({data.visibleAccounts.length})
+                </span>
+                <Wallet size={20} className="opacity-85" />
+              </div>
+
+              <div className="space-y-1 my-3">
+                <p className="text-xs opacity-75">Total Net Worth</p>
+                <p
+                  data-testid="summary-total"
+                  className="text-2xl font-extrabold font-mono tabular-nums tracking-tight truncate"
+                >
+                  {formatMoney(data.netWorthTotal)}
+                </p>
+              </div>
+
+              <div className="flex items-center justify-between gap-2 text-xs pt-2.5 border-t border-current/15 font-mono tabular-nums">
+                <span data-testid="summary-income" className="opacity-90 truncate">
+                  In: {formatMoney(data.incomeMinor)}
+                </span>
+                <span data-testid="summary-expense" className="opacity-90 truncate">
+                  Out: {formatMoney(data.expenseMinor)}
+                </span>
+              </div>
+            </button>
+
+            {/* Individual Live Account Cards */}
+            {data.visibleAccounts.map((acc) => {
+              const selected = activeAccountId === acc.id;
+              const bal = data.balanceFor(acc);
+              const isCredit = acc.type === "CREDIT_CARD";
+              const isCash = acc.type === "CASH";
+
+              const cardTone = selected
+                ? isCredit
+                  ? "bg-gradient-to-br from-rose-700 to-rose-950 text-white shadow-lg ring-2 ring-rose-400"
+                  : isCash
+                    ? "bg-gradient-to-br from-emerald-700 to-teal-950 text-white shadow-lg ring-2 ring-emerald-400"
+                    : "bg-gradient-to-br from-slate-800 to-slate-950 text-white shadow-lg ring-2 ring-[var(--accent)]"
+                : "bg-[var(--surface)] border border-[var(--border)] text-[var(--text)] hover:border-[var(--text-muted)]";
+
+              return (
+                <button
+                  key={acc.id}
+                  type="button"
+                  data-testid={`wallet-card-${acc.id}`}
+                  onClick={() =>
+                    data.setFilters((prev) => ({
+                      ...prev,
+                      accountId: prev.accountId === acc.id ? "" : acc.id,
+                    }))
+                  }
+                  className={`snap-start shrink-0 w-[265px] sm:w-[295px] rounded-3xl p-5 text-left transition-all flex flex-col justify-between min-h-[176px] cursor-pointer ${cardTone}`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-semibold uppercase tracking-wider opacity-80 truncate">
+                      {isCredit
+                        ? "Credit Card"
+                        : isCash
+                          ? "Cash Wallet"
+                          : "Bank Account"}
+                    </span>
+                    {isCredit ? (
+                      <CreditCard size={19} className="shrink-0 opacity-85" />
+                    ) : isCash ? (
+                      <Banknote size={19} className="shrink-0 opacity-85" />
+                    ) : (
+                      <Landmark size={19} className="shrink-0 opacity-85" />
+                    )}
+                  </div>
+
+                  <div className="space-y-1 my-3">
+                    <p className="text-sm font-semibold truncate">{acc.name}</p>
+                    <p className="text-2xl font-extrabold font-mono tabular-nums tracking-tight truncate">
+                      {formatMoney(bal, acc.currency || "LKR")}
+                    </p>
+                  </div>
+
+                  <div className="flex items-center justify-between text-xs pt-2.5 border-t border-current/15 opacity-80">
+                    <span className="font-mono">
+                      {acc.accountNumberLast4
+                        ? `•••• ${acc.accountNumberLast4}`
+                        : acc.currency}
+                    </span>
+                    <span>
+                      {selected ? "Active Filter ✓" : "Tap to filter"}
+                    </span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+
+        {/* 4-Button Quick-Action Card Strip */}
+        <section aria-label="Quick Actions" className="px-5 sm:px-7">
+          <div className="grid grid-cols-4 gap-3 rounded-3xl bg-[var(--surface)] border border-[var(--border)] p-4">
+            <button
+              type="button"
+              data-testid="quick-action-spend"
+              onClick={() =>
+                data.openQuickAdd({
+                  type: "EXPENSE",
+                  accountId: activeAccountId || undefined,
+                })
+              }
+              className="flex flex-col items-center gap-2 cursor-pointer group"
+            >
+              <span className="w-12 h-12 rounded-2xl bg-[var(--expense)]/12 text-expense flex items-center justify-center group-hover:scale-103 group-active:scale-95 transition-transform">
+                <ArrowUpRight size={22} />
+              </span>
+              <span className="text-xs font-semibold">Spend</span>
+            </button>
+
+            <button
+              type="button"
+              data-testid="quick-action-receive"
+              onClick={() =>
+                data.openQuickAdd({
+                  type: "INCOME",
+                  accountId: activeAccountId || undefined,
+                })
+              }
+              className="flex flex-col items-center gap-2 cursor-pointer group"
+            >
+              <span className="w-12 h-12 rounded-2xl bg-[var(--income)]/12 text-income flex items-center justify-center group-hover:scale-103 group-active:scale-95 transition-transform">
+                <ArrowDownLeft size={22} />
+              </span>
+              <span className="text-xs font-semibold">Receive</span>
+            </button>
+
+            <button
+              type="button"
+              data-testid="quick-action-move"
+              onClick={() =>
+                data.openQuickAdd({
+                  type: "TRANSFER",
+                  accountId: activeAccountId || undefined,
+                })
+              }
+              className="flex flex-col items-center gap-2 cursor-pointer group"
+            >
+              <span className="w-12 h-12 rounded-2xl bg-[var(--bg)] border border-[var(--border)] text-[var(--text)] flex items-center justify-center group-hover:scale-103 group-active:scale-95 transition-transform">
+                <ArrowLeftRight size={20} />
+              </span>
+              <span className="text-xs font-semibold">Move</span>
+            </button>
+
+            <SubNavAction
+              target="accounts"
+              dataTestId="quick-action-manage"
+              className="flex flex-col items-center gap-2 group"
+            >
+              <span className="w-12 h-12 rounded-2xl bg-[var(--bg)] border border-[var(--border)] text-[var(--text)] flex items-center justify-center group-hover:scale-103 group-active:scale-95 transition-transform">
+                <Wallet size={20} />
+              </span>
+              <span className="text-xs font-semibold">Manage</span>
+            </SubNavAction>
+          </div>
+        </section>
+
+        {/* Search, Filter Chips & Active Scope Indicator */}
+        <section className="px-5 sm:px-7 space-y-3">
+          <div className="relative flex items-center">
+            <Search
+              size={17}
+              className="absolute left-4 text-[var(--text-muted)] pointer-events-none"
+            />
+            <input
+              type="text"
+              data-testid="search-input"
+              value={data.filters.searchQuery}
+              onChange={(e) =>
+                data.setFilters((prev) => ({
+                  ...prev,
+                  searchQuery: e.target.value,
+                }))
+              }
+              placeholder={
+                selectedAccount
+                  ? `Search in ${selectedAccount.name}...`
+                  : "Search notes, categories, or amounts..."
+              }
+              className="w-full pl-11 pr-16 py-3.5 rounded-2xl bg-[var(--surface)] border border-[var(--border)] text-sm text-[var(--text)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent)] transition-colors"
+            />
+            {data.hasActiveFilters && (
+              <button
+                type="button"
+                data-testid="filter-clear-btn"
+                onClick={data.resetFilters}
+                className="absolute right-3 px-2.5 py-1 rounded-xl bg-[var(--bg)] border border-[var(--border)] text-xs font-semibold text-[var(--text-muted)] hover:text-[var(--text)] cursor-pointer"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+
+          {/* Filter Chips (Type + Top Categories) */}
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
+            {(
+              [
+                { value: "", label: "All" },
+                { value: "EXPENSE", label: "Expenses" },
+                { value: "INCOME", label: "Income" },
+                { value: "TRANSFER", label: "Transfers" },
+              ] as const
+            ).map((chip) => {
+              const active =
+                data.filters.type === chip.value && !data.filters.categoryId;
+              return (
+                <button
+                  key={chip.label}
+                  type="button"
+                  onClick={() =>
+                    data.setFilters((prev) => ({
+                      ...prev,
+                      type: chip.value,
+                      categoryId: chip.value === "" ? "" : prev.categoryId,
+                    }))
+                  }
+                  className={`shrink-0 px-3.5 py-2 rounded-full text-xs font-semibold border transition-colors cursor-pointer ${
+                    active
+                      ? "bg-[var(--accent)] text-[var(--accent-fg)] border-[var(--accent)]"
+                      : "bg-[var(--surface)] text-[var(--text-muted)] border-[var(--border)] hover:text-[var(--text)]"
+                  }`}
+                >
+                  {chip.label}
+                </button>
+              );
+            })}
+
+            {data.categoryBreakdown.slice(0, 6).map((cat) => {
+              const active = data.filters.categoryId === cat.categoryId;
+              return (
+                <button
+                  key={cat.categoryId}
+                  type="button"
+                  onClick={() =>
+                    data.setFilters((prev) => ({
+                      ...prev,
+                      categoryId:
+                        prev.categoryId === cat.categoryId
+                          ? ""
+                          : cat.categoryId,
+                    }))
+                  }
+                  className={`shrink-0 px-3.5 py-2 rounded-full text-xs font-semibold border transition-colors inline-flex items-center gap-1.5 cursor-pointer ${
+                    active
+                      ? "bg-[var(--text)] text-[var(--bg)] border-[var(--text)]"
+                      : "bg-[var(--surface)] text-[var(--text)] border-[var(--border)] hover:border-[var(--text-muted)]"
+                  }`}
+                >
+                  <span
+                    className="w-2 h-2 rounded-full shrink-0"
+                    style={{ backgroundColor: cat.color }}
+                  />
+                  <span>{cat.name}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          {selectedAccount && (
+            <div className="flex items-center justify-between px-4 py-2.5 rounded-2xl bg-[var(--accent)]/10 border border-[var(--accent)]/25 text-xs font-semibold">
+              <span>Showing activity for {selectedAccount.name}</span>
+              <button
+                type="button"
+                onClick={() =>
+                  data.setFilters((prev) => ({ ...prev, accountId: "" }))
+                }
+                className="inline-flex items-center gap-1 text-[var(--accent)] cursor-pointer"
+              >
+                <span>Show all</span>
+                <X size={14} />
+              </button>
+            </div>
+          )}
+        </section>
+
+        {/* Day-Grouped Standalone Card Transaction Feed */}
+        <section
+          aria-label="Transactions List"
+          className="px-5 sm:px-7 space-y-5"
+        >
+          {data.groupedByDay.length === 0 ? (
+            <div
+              data-testid="empty-state"
+              className="rounded-3xl bg-[var(--surface)] border border-dashed border-[var(--border)] p-10 text-center space-y-2.5"
+            >
+              <div className="w-12 h-12 rounded-2xl bg-[var(--bg)] border border-[var(--border)] text-[var(--text-muted)] flex items-center justify-center mx-auto">
+                <ArrowLeftRight size={22} />
+              </div>
+              <p className="text-base font-bold text-[var(--text)]">
+                {data.hasActiveFilters
+                  ? "No matching transactions"
+                  : "No transactions this month"}
+              </p>
+              <p className="text-sm text-[var(--text-muted)] max-w-sm mx-auto">
+                {data.hasActiveFilters
+                  ? "Try clearing your search or account filter to see all entries."
+                  : `Tap Spend, Receive, or the + button to record your first entry${
+                      selectedAccount ? ` in ${selectedAccount.name}` : ""
+                    }.`}
+              </p>
+            </div>
+          ) : (
+            data.groupedByDay.map((group) => (
+              <div
+                key={group.dateKey}
+                data-testid={`day-group-${group.dateKey}`}
+                className="space-y-3"
+              >
+                <div
+                  data-testid={`day-header-${group.dateKey}`}
+                  className="flex items-center justify-between px-1"
+                >
+                  <h2 className="text-sm font-bold text-[var(--text)]">
+                    {group.titleLabel}
+                  </h2>
+                  <div className="flex items-center gap-3 text-xs font-mono font-semibold tabular-nums">
+                    {group.incomeMinor > 0 && (
+                      <span className="text-income">
+                        +{formatMoney(group.incomeMinor)}
+                      </span>
+                    )}
+                    {group.expenseMinor > 0 && (
+                      <span className="text-expense">
+                        -{formatMoney(group.expenseMinor)}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="space-y-2.5">
+                  {group.transactions.map((tx) => {
+                    const info = getTxDisplayInfo(
+                      tx,
+                      data.categoryMap,
+                      data.accountMap,
+                    );
+                    return (
+                      <div
+                        key={tx.id}
+                        data-testid={`transaction-row-${tx.id}`}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => data.setSelectedTxForEdit(tx)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            data.setSelectedTxForEdit(tx);
+                          }
+                        }}
+                        className="rounded-2xl bg-[var(--surface)] border border-[var(--border)] p-4 hover:border-[var(--text-muted)]/60 transition-all cursor-pointer"
+                      >
+                        <div className="flex items-center gap-3.5">
+                          <div
+                            className="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0"
+                            style={{
+                              backgroundColor: `${info.accentColor}1C`,
+                              color: info.accentColor,
+                            }}
+                          >
+                            <TxAvatarIcon
+                              tx={tx}
+                              category={info.category}
+                              size={21}
+                            />
+                          </div>
+
+                          <div className="flex-1 min-w-0 space-y-1">
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm sm:text-base font-bold text-[var(--text)] truncate">
+                                {info.title}
+                              </span>
+                              {info.hasSms && (
+                                <button
+                                  type="button"
+                                  data-testid={`sms-badge-${tx.id}`}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    data.openSmsModal(tx);
+                                  }}
+                                  className="px-2 py-0.5 rounded-lg bg-[var(--accent)]/12 text-[var(--accent)] text-2xs font-bold inline-flex items-center gap-1 shrink-0 cursor-pointer"
+                                >
+                                  <MessageSquare size={10} />
+                                  SMS
+                                </button>
+                              )}
+                            </div>
+
+                            <div className="flex items-center gap-2 text-xs text-[var(--text-muted)] min-w-0">
+                              <span className="px-2 py-0.5 rounded-lg bg-[var(--bg)] border border-[var(--border)] font-medium text-[var(--text)]/85 shrink-0 truncate max-w-[140px]">
+                                {info.fromAccount}
+                              </span>
+                              {tx.note && (
+                                <span className="truncate">{tx.note}</span>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="text-right shrink-0 pl-2">
+                            <span
+                              className={`text-sm sm:text-base font-extrabold font-mono tabular-nums whitespace-nowrap ${info.amountToneClass}`}
+                            >
+                              {info.signedAmount}
+                            </span>
+                          </div>
+                        </div>
+
+                        <DuplicateBanner tx={tx} data={data} />
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))
+          )}
+        </section>
       </div>
 
-      {/* Month Switcher */}
-      <MonthSwitcher
-        currentDate={currentDate}
-        onChange={(newDate) => setCurrentDate(newDate)}
-      />
-
-      {/* 3-cell Summary Bar: Income · Expense · Total (+ Adjustments) */}
-      <SummaryBar
-        incomeMinor={incomeMinor}
-        expenseMinor={expenseMinor}
-        totalMinor={totalMinor}
-        adjustmentsMinor={adjustmentsMinor}
-      />
-
-      {/* Search and Filters Bar */}
-      <TransFilterBar
-        filters={filters}
-        onChange={setFilters}
-        accounts={accounts}
-        categories={categories}
-      />
-
-      {/* Segmented text tabs without pill/elevation */}
-      <SegmentedTabs
-        tabs={tabs}
-        activeTab={activeTab}
-        onChange={handleTabChange}
-      />
-
-      {/* Views */}
-      {activeTab === "daily" && (
-        <>
-          {filteredTransactions.length === 0 ? (
-            <EmptyState
-              title="No transactions yet"
-              description="Tap the + button to record your first income, expense, or transfer."
-              icon={<ArrowLeftRight size={24} />}
-            />
-          ) : (
-            <DailyView
-              transactions={filteredTransactions}
-              categoryMap={categoryMap}
-              accountMap={accountMap}
-              onSelectTransaction={setSelectedTxForEdit}
-            />
-          )}
-        </>
-      )}
-
-      {activeTab === "calendar" && (
-        <CalendarView
-          currentDate={currentDate}
-          transactions={filteredTransactions}
-          categoryMap={categoryMap}
-          accountMap={accountMap}
-          onSelectTransaction={setSelectedTxForEdit}
-        />
-      )}
-
-      {activeTab === "monthly" && (
-        <MonthlyView
-          currentDate={currentDate}
-          allTransactions={monthTransactions}
-          onSelectMonth={(newDate) => {
-            setCurrentDate(newDate);
-            setActiveTab("daily");
-          }}
-        />
-      )}
-
-      {activeTab === "summary" && (
-        <SummaryView
-          transactions={filteredTransactions}
-          categoryMap={categoryMap}
-        />
-      )}
-
-      {/* Transaction Edit Sheet */}
-      {selectedTxForEdit && (
-        <TransactionEditModal
-          transaction={selectedTxForEdit}
-          isOpen={!!selectedTxForEdit}
-          onClose={() => setSelectedTxForEdit(null)}
-          onDeleted={(tx) => setDeletedTx(tx)}
-        />
-      )}
-
-      {/* Undo Toast */}
-      {deletedTx && (
-        <div
-          data-testid="undo-toast"
-          className="fixed bottom-mobile-offset left-1/2 -translate-x-1/2 z-50 bg-[var(--text)] text-[var(--bg)] px-4 py-2.5 rounded-lg shadow-lg flex items-center gap-3 text-xs font-medium"
-        >
-          <span>Transaction deleted</span>
-          <button
-            type="button"
-            data-testid="undo-delete-btn"
-            onClick={handleUndoDelete}
-            className="px-2 py-0.5 rounded bg-[var(--bg)] text-[var(--text)] font-semibold text-[11px] hover:opacity-90 active:scale-95 transition-all"
-          >
-            Undo
-          </button>
-        </div>
-      )}
+      <HomeSharedOverlays data={data} />
     </main>
   );
 }

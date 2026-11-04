@@ -12,16 +12,16 @@ async function RegisterContent({ searchParams }: RegisterPageProps) {
   const allowRegistration = process.env.ALLOW_REGISTRATION !== "false" && !isTestDisabled;
 
   return (
-    <div className="w-full max-w-sm space-y-6">
+    <div className="w-full max-w-md space-y-6">
       {/* Header */}
-      <div className="text-center space-y-2">
-        <div className="inline-flex items-center justify-center w-10 h-10 rounded bg-[var(--accent)] text-white font-bold text-lg mb-1">
-          H
+      <div className="text-center space-y-2.5">
+        <div className="inline-flex items-center justify-center w-14 h-14 rounded-3xl bg-gradient-to-br from-[#065F46] to-[#10B981] text-white font-bold text-xl shadow-md mb-1">
+          HM
         </div>
-        <h1 className="text-2xl font-bold tracking-tight text-[var(--text)]">
+        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-[var(--text)]">
           Create an Account
         </h1>
-        <p className="text-xs text-[var(--text-muted)]">
+        <p className="text-xs sm:text-sm text-[var(--text-muted)]">
           Start managing your personal treasury locally
         </p>
       </div>
@@ -30,17 +30,17 @@ async function RegisterContent({ searchParams }: RegisterPageProps) {
         <div
           data-testid="registration-closed-notice"
           role="alert"
-          className="flat-card p-6 text-center space-y-3"
+          className="rounded-3xl bg-[var(--surface)] border border-[var(--border)] p-7 text-center space-y-4 shadow-xs"
         >
-          <p className="text-sm font-semibold text-[var(--text)]">
+          <p className="text-base font-bold text-[var(--text)] capitalize">
             registration closed
           </p>
-          <p className="text-xs text-[var(--text-muted)]">
+          <p className="text-xs text-[var(--text-muted)] leading-relaxed">
             Public registration has been disabled by the server administrator.
           </p>
           <Link
             href="/login"
-            className="inline-block py-2 px-4 rounded text-xs font-semibold bg-[var(--border)] text-[var(--text)] hover:bg-[var(--border)]/80 transition-colors"
+            className="inline-flex items-center justify-center h-11 px-5 rounded-2xl text-xs font-bold bg-[var(--accent)] text-white hover:opacity-95 transition-all"
           >
             Back to Sign In
           </Link>
@@ -55,7 +55,7 @@ async function RegisterContent({ searchParams }: RegisterPageProps) {
             <Link
               href="/login"
               data-testid="login-link"
-              className="font-medium text-[var(--accent)] hover:underline"
+              className="font-bold text-[var(--accent)] hover:underline"
             >
               Sign In
             </Link>
@@ -68,7 +68,7 @@ async function RegisterContent({ searchParams }: RegisterPageProps) {
 
 export default function RegisterPage({ searchParams }: RegisterPageProps) {
   return (
-    <div className="min-h-full flex flex-col justify-center items-center px-4 py-12">
+    <div className="min-h-full flex flex-col justify-center items-center px-5 py-12">
       <Suspense fallback={<div className="text-xs text-[var(--text-muted)]">Loading…</div>}>
         <RegisterContent searchParams={searchParams} />
       </Suspense>

@@ -2,14 +2,14 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import Link from "next/link";
 import {
-  ArrowLeft,
+  Bell,
   Moon,
   Save,
   Smartphone,
   Sun,
 } from "lucide-react";
+import { AppHeader } from "@/components/navigation/app-header";
 import { useTheme } from "@/components/theme-provider";
 import { useMounted } from "@/lib/use-mounted";
 import { queryKeys } from "@/lib/api/query-keys";
@@ -94,10 +94,10 @@ export default function PreferencesPage() {
 
     try {
       const data = await saveSettingsMutation.mutateAsync({
-          name: name.trim(),
-          timezone: timezone.trim(),
-          defaultCurrency: currency.trim().toUpperCase(),
-          defaultWithholdingTaxRateBps: Math.round(parseFloat(whtRate || "0") * 100),
+        name: name.trim(),
+        timezone: timezone.trim(),
+        defaultCurrency: currency.trim().toUpperCase(),
+        defaultWithholdingTaxRateBps: Math.round(parseFloat(whtRate || "0") * 100),
       });
 
       isNameDirtyRef.current = false;
@@ -144,7 +144,6 @@ export default function PreferencesPage() {
             auth: "mockAuthKey123",
           },
         };
-
       }
 
       await savePushMutation.mutateAsync({ enabled: remindersEnabled, reminderTime, subscription });
@@ -157,38 +156,27 @@ export default function PreferencesPage() {
   };
 
   return (
-    <main className="flex-1 max-w-4xl mx-auto w-full px-4 py-3 space-y-4">
-      {/* Header */}
-      <div className="flex items-center justify-between py-1">
-        <div className="flex items-center gap-2">
-          <Link
-            href="/more" transitionTypes={["nav-back"]}
-            className="p-1.5 rounded text-[var(--text-muted)] hover:text-[var(--text)] transition-colors"
-          >
-            <ArrowLeft size={16} />
-          </Link>
-          <div>
-            <h1 className="text-base font-semibold tracking-tight text-[var(--text)]">
-              Preferences & Profile
-            </h1>
-            <p className="text-[11px] text-[var(--text-muted)]">
-              Customize appearance, currency, tax rates and daily reminders
-            </p>
-          </div>
-        </div>
-      </div>
+    <main className="flex-1 max-w-4xl mx-auto w-full px-5 sm:px-7 pt-4 sm:pt-6 pb-8 space-y-6">
+      <AppHeader
+        title="Preferences & Profile"
+        subtitle="Appearance, Currency & Reminders"
+        backHref="/more"
+      />
 
       {/* User Profile Form */}
-      <div className="space-y-1">
-        <span className="text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wider px-1">
+      <section className="space-y-2.5">
+        <h2 className="text-2xs font-bold text-[var(--text-muted)] uppercase tracking-wider px-1">
           Profile & Defaults
-        </span>
-        <form onSubmit={handleSaveSettings} className="flat-card p-4 space-y-3">
-          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
-            <div className="space-y-1">
+        </h2>
+        <form
+          onSubmit={handleSaveSettings}
+          className="rounded-3xl bg-[var(--surface)] border border-[var(--border)] p-5 sm:p-6 space-y-5 shadow-xs"
+        >
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-1.5">
               <label
                 htmlFor="settings-name"
-                className="block text-xs font-medium text-[var(--text-muted)]"
+                className="block text-xs font-semibold text-[var(--text-muted)]"
               >
                 Display Name
               </label>
@@ -204,14 +192,14 @@ export default function PreferencesPage() {
                   isNameDirtyRef.current = true;
                   setName(e.target.value);
                 }}
-                className="w-full h-8 px-2.5 rounded bg-[var(--bg)] border border-hairline text-xs text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
+                className="w-full h-12 px-4 rounded-2xl bg-[var(--bg)] border border-[var(--border)] text-sm text-[var(--text)] focus:outline-none focus:border-[var(--accent)] transition-colors"
               />
             </div>
 
-            <div className="space-y-1">
+            <div className="space-y-1.5">
               <label
                 htmlFor="settings-timezone"
-                className="block text-xs font-medium text-[var(--text-muted)]"
+                className="block text-xs font-semibold text-[var(--text-muted)]"
               >
                 Timezone
               </label>
@@ -228,7 +216,7 @@ export default function PreferencesPage() {
                   isTimezoneDirtyRef.current = true;
                   setTimezone(e.target.value);
                 }}
-                className="w-full h-8 px-2.5 rounded bg-[var(--bg)] border border-hairline text-xs text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
+                className="w-full h-12 px-4 rounded-2xl bg-[var(--bg)] border border-[var(--border)] text-sm text-[var(--text)] focus:outline-none focus:border-[var(--accent)] transition-colors"
               />
               <datalist id="timezones-list">
                 <option value="Asia/Colombo" />
@@ -243,10 +231,10 @@ export default function PreferencesPage() {
               </datalist>
             </div>
 
-            <div className="space-y-1">
+            <div className="space-y-1.5">
               <label
                 htmlFor="settings-currency"
-                className="block text-xs font-medium text-[var(--text-muted)]"
+                className="block text-xs font-semibold text-[var(--text-muted)]"
               >
                 Default Currency
               </label>
@@ -264,7 +252,7 @@ export default function PreferencesPage() {
                   isCurrencyDirtyRef.current = true;
                   setCurrency(e.target.value.toUpperCase());
                 }}
-                className="w-full h-8 px-2.5 rounded bg-[var(--bg)] border border-hairline text-xs text-[var(--text)] uppercase focus:outline-none focus:border-[var(--accent)]"
+                className="w-full h-12 px-4 rounded-2xl bg-[var(--bg)] border border-[var(--border)] text-sm font-mono font-semibold text-[var(--text)] uppercase focus:outline-none focus:border-[var(--accent)] transition-colors"
               />
               <datalist id="currencies-list">
                 <option value="LKR" />
@@ -278,10 +266,10 @@ export default function PreferencesPage() {
               </datalist>
             </div>
 
-            <div className="space-y-1">
+            <div className="space-y-1.5">
               <label
                 htmlFor="settings-wht-rate"
-                className="block text-xs font-medium text-[var(--text-muted)]"
+                className="block text-xs font-semibold text-[var(--text-muted)]"
               >
                 Default WHT (%)
               </label>
@@ -302,12 +290,12 @@ export default function PreferencesPage() {
                   isWhtDirtyRef.current = true;
                   setWhtRate(e.target.value);
                 }}
-                className="w-full h-8 px-2.5 rounded bg-[var(--bg)] border border-hairline text-xs text-[var(--text)] focus:outline-none focus:border-[var(--accent)] font-mono"
+                className="w-full h-12 px-4 rounded-2xl bg-[var(--bg)] border border-[var(--border)] text-sm text-[var(--text)] focus:outline-none focus:border-[var(--accent)] font-mono transition-colors"
               />
             </div>
           </div>
 
-          <div className="flex items-center justify-between pt-1">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 border-t border-[var(--border)]">
             {savedNotice ? (
               <span
                 data-testid="settings-saved"
@@ -316,92 +304,113 @@ export default function PreferencesPage() {
                 Settings saved successfully
               </span>
             ) : (
-              <span />
+              <span className="text-xs text-[var(--text-muted)]">
+                Applied across new accounts, Fixed Deposits & ledger defaults
+              </span>
             )}
 
             <button
               type="submit"
               data-testid="settings-save"
               disabled={saving}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-[var(--accent)] text-white text-xs font-semibold hover:opacity-90 active:scale-95 transition-all disabled:opacity-50"
+              className="h-11 px-5 inline-flex items-center justify-center gap-2 rounded-2xl bg-[var(--accent)] text-white text-xs font-bold hover:opacity-95 active:scale-[0.98] transition-all disabled:opacity-50 cursor-pointer shrink-0"
             >
-              <Save size={14} />
+              <Save size={15} />
               <span>{saving ? "Saving..." : "Save Settings"}</span>
             </button>
           </div>
         </form>
-      </div>
+      </section>
 
-      {/* Preferences Section: Theme & Color Swap */}
-      <div className="space-y-1">
-        <span className="text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wider px-1">
+      {/* Preferences Section: Light/Dark Mode & Color Swap */}
+      <section className="space-y-2.5">
+        <h2 className="text-2xs font-bold text-[var(--text-muted)] uppercase tracking-wider px-1">
           Appearance
-        </span>
-        <div className="flat-card divide-y divide-hairline">
-          <div className="flex items-center justify-between p-3">
-            <div className="flex items-center gap-3">
-              {mounted && resolvedTheme === "dark" ? (
-                <Sun size={18} className="text-amber-400" />
-              ) : (
-                <Moon size={18} className="text-[var(--text-muted)]" />
-              )}
-              <span className="text-sm font-medium text-[var(--text)]">Theme Mode</span>
+        </h2>
+        <div className="rounded-3xl bg-[var(--surface)] border border-[var(--border)] divide-y divide-[var(--border)] overflow-hidden shadow-xs">
+          <div className="flex items-center justify-between gap-4 p-4 sm:p-5">
+            <div className="flex items-center gap-3.5 min-w-0">
+              <div className="w-11 h-11 rounded-2xl bg-[var(--bg)] border border-[var(--border)] flex items-center justify-center shrink-0">
+                {mounted && resolvedTheme === "dark" ? (
+                  <Sun size={19} className="text-amber-400" />
+                ) : (
+                  <Moon size={19} className="text-[var(--text-muted)]" />
+                )}
+              </div>
+              <div className="min-w-0">
+                <span className="text-sm font-semibold text-[var(--text)] block">
+                  Theme Mode
+                </span>
+                <span className="text-xs text-[var(--text-muted)] block mt-0.5">
+                  Switch between light pearl and midnight slate surfaces
+                </span>
+              </div>
             </div>
             <button
               type="button"
               onClick={toggleTheme}
-              className="px-2.5 py-1 text-xs rounded border border-hairline font-medium hover:bg-surface text-[var(--text)]"
+              className="h-10 px-4 text-xs rounded-2xl border border-[var(--border)] bg-[var(--bg)] font-semibold hover:bg-[var(--surface-hover)] text-[var(--text)] transition-colors cursor-pointer shrink-0"
             >
               {mounted && resolvedTheme === "dark" ? "Dark Mode" : "Light Mode"}
             </button>
           </div>
 
-          <div className="flex items-center justify-between p-3">
-            <div className="flex items-center gap-3">
-              <span className="w-4 h-4 rounded-full border border-hairline flex overflow-hidden">
-                <span className="w-1/2 bg-[var(--income)]" />
-                <span className="w-1/2 bg-[var(--expense)]" />
-              </span>
-              <div>
-                <span className="text-sm font-medium text-[var(--text)] block">
+          <div className="flex items-center justify-between gap-4 p-4 sm:p-5">
+            <div className="flex items-center gap-3.5 min-w-0">
+              <div className="w-11 h-11 rounded-2xl bg-[var(--bg)] border border-[var(--border)] flex items-center justify-center shrink-0">
+                <span className="w-5 h-5 rounded-full border border-[var(--border)] flex overflow-hidden">
+                  <span className="w-1/2 bg-[var(--income)]" />
+                  <span className="w-1/2 bg-[var(--expense)]" />
+                </span>
+              </div>
+              <div className="min-w-0">
+                <span className="text-sm font-semibold text-[var(--text)] block">
                   Income / Expense Colors
                 </span>
-                <span className="text-[11px] text-[var(--text-muted)]">
+                <span className="text-xs text-[var(--text-muted)] block mt-0.5">
                   {colorSwap
-                    ? "Swapped (Red = income, Blue = expense)"
-                    : "Default (Blue = income, Red = expense)"}
+                    ? "Swapped (Coral = income, Emerald = expense)"
+                    : "Default (Emerald = income, Coral = expense)"}
                 </span>
               </div>
             </div>
             <button
               type="button"
               onClick={toggleColorSwap}
-              className="px-2.5 py-1 text-xs rounded border border-hairline font-medium hover:bg-surface text-[var(--text)]"
+              className="h-10 px-4 text-xs rounded-2xl border border-[var(--border)] bg-[var(--bg)] font-semibold hover:bg-[var(--surface-hover)] text-[var(--text)] transition-colors cursor-pointer shrink-0"
             >
-              {colorSwap ? "Reset to Default" : "Swap Colors"}
+              {colorSwap ? "Reset Default" : "Swap Colors"}
             </button>
           </div>
         </div>
-      </div>
+      </section>
 
       {/* Notifications & Daily Reminders */}
-      <div className="space-y-1">
-        <span className="text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wider px-1">
+      <section className="space-y-2.5">
+        <h2 className="text-2xs font-bold text-[var(--text-muted)] uppercase tracking-wider px-1">
           Notifications & Reminders
-        </span>
-        <form onSubmit={handleSaveReminders} className="flat-card p-4 space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
-              <span className="text-xs font-semibold text-[var(--text)] block">
-                Daily Spending Reminders
-              </span>
-              <p className="text-[11px] text-[var(--text-muted)]">
-                Receive a push reminder notification to review and log daily expenses.
-              </p>
+        </h2>
+        <form
+          onSubmit={handleSaveReminders}
+          className="rounded-3xl bg-[var(--surface)] border border-[var(--border)] p-5 sm:p-6 space-y-5 shadow-xs"
+        >
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3.5 min-w-0">
+              <div className="w-11 h-11 rounded-2xl bg-[var(--bg)] border border-[var(--border)] flex items-center justify-center text-[var(--accent)] shrink-0">
+                <Bell size={19} />
+              </div>
+              <div className="min-w-0">
+                <span className="text-sm font-semibold text-[var(--text)] block">
+                  Daily Spending Reminders
+                </span>
+                <p className="text-xs text-[var(--text-muted)] mt-0.5 leading-relaxed">
+                  Receive a push reminder notification to review and log daily expenses.
+                </p>
+              </div>
             </div>
             <label
               data-testid="toggle-reminders-label"
-              className="relative inline-flex items-center cursor-pointer"
+              className="relative inline-flex items-center cursor-pointer shrink-0"
             >
               <input
                 type="checkbox"
@@ -413,15 +422,15 @@ export default function PreferencesPage() {
                 }}
                 className="sr-only peer"
               />
-              <div className="w-9 h-5 bg-zinc-300 dark:bg-zinc-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[var(--accent)]" />
+              <div className="w-11 h-6 bg-[var(--border)] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-5 peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[var(--accent)]" />
             </label>
           </div>
 
           {remindersEnabled && (
-            <div className="flex items-center justify-between pt-2 border-t border-hairline">
+            <div className="flex items-center justify-between gap-4 pt-4 border-t border-[var(--border)]">
               <label
                 htmlFor="reminder-time-input"
-                className="text-xs font-medium text-[var(--text-muted)]"
+                className="text-xs font-semibold text-[var(--text-muted)]"
               >
                 Reminder Time
               </label>
@@ -434,44 +443,50 @@ export default function PreferencesPage() {
                   isPushDirtyRef.current = true;
                   setReminderTime(e.target.value);
                 }}
-                className="h-8 px-2.5 rounded bg-[var(--surface)] border border-hairline text-xs font-medium text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
+                className="h-11 px-4 rounded-2xl bg-[var(--bg)] border border-[var(--border)] text-sm font-mono font-semibold text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
               />
             </div>
           )}
 
-          <div className="flex items-center justify-between pt-1">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 border-t border-[var(--border)]">
             {reminderStatusNotice ? (
-              <span data-testid="reminder-status" className="text-xs font-medium text-[var(--income)]">
+              <span data-testid="reminder-status" className="text-xs font-semibold text-[var(--income)]">
                 {reminderStatusNotice}
               </span>
             ) : (
-              <span />
+              <span className="text-xs text-[var(--text-muted)]">
+                Web Push works across installed PWA and desktop browsers
+              </span>
             )}
             <button
               type="submit"
               data-testid="save-reminders-btn"
               disabled={reminderSaving}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-[var(--accent)] text-white text-xs font-semibold hover:opacity-90 active:scale-95 transition-all disabled:opacity-50"
+              className="h-11 px-5 inline-flex items-center justify-center gap-2 rounded-2xl bg-[var(--accent)] text-white text-xs font-bold hover:opacity-95 active:scale-[0.98] transition-all disabled:opacity-50 cursor-pointer shrink-0"
             >
-              <Save size={14} />
+              <Save size={15} />
               <span>{reminderSaving ? "Saving..." : "Save Settings"}</span>
             </button>
           </div>
         </form>
-      </div>
+      </section>
 
-      {/* iOS Install Note (Shown on iPhone/iPad WebKit when not in standalone mode) */}
+      {/* iOS Install Note */}
       {isIosDevice && (
         <div
           data-testid="ios-install-note"
-          className="flat-card p-4 space-y-2 bg-[var(--surface)] border-l-4 border-l-[var(--accent)]"
+          className="rounded-3xl bg-[var(--surface)] border border-[var(--accent)]/30 p-5 space-y-2 shadow-xs"
         >
-          <div className="flex items-center gap-2">
-            <Smartphone size={16} className="text-[var(--accent)]" />
-            <span className="text-xs font-semibold text-[var(--text)]">Install on iPhone / iPad</span>
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-2xl bg-[var(--accent)]/12 flex items-center justify-center text-[var(--accent)]">
+              <Smartphone size={18} />
+            </div>
+            <span className="text-sm font-bold text-[var(--text)]">Install on iPhone / iPad</span>
           </div>
           <p className="text-xs text-[var(--text-muted)] leading-relaxed">
-            To install Hard Money as a native app and enable web push notifications on iOS: Tap the <strong>Share</strong> button at the bottom of Safari, scroll down, and tap <strong>Add to Home Screen</strong>.
+            To install Hard Money as a native app and enable web push notifications on iOS: Tap the{" "}
+            <strong>Share</strong> button at the bottom of Safari, scroll down, and tap{" "}
+            <strong>Add to Home Screen</strong>.
           </p>
         </div>
       )}

@@ -7,7 +7,6 @@ import { QuickAddProvider } from "@/components/transaction/quick-add-context";
 import { QuickAddModal } from "@/components/transaction/quick-add-modal";
 import { Sidebar } from "@/components/navigation/sidebar";
 import { BottomNav } from "@/components/navigation/bottom-nav";
-import { Fab } from "@/components/ui/fab";
 import { PwaManager } from "@/components/pwa-manager";
 import { ScrollContainer } from "@/components/navigation/scroll-container";
 import { QueryProvider } from "@/components/query-provider";
@@ -20,8 +19,8 @@ export const viewport: Viewport = {
   viewportFit: "cover",
   interactiveWidget: "resizes-content",
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#FFFFFF" },
-    { media: "(prefers-color-scheme: dark)", color: "#121212" },
+    { media: "(prefers-color-scheme: light)", color: "#F6F8FB" },
+    { media: "(prefers-color-scheme: dark)", color: "#0B111E" },
   ],
 };
 
@@ -46,15 +45,15 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" data-theme-pack="private-wealth" suppressHydrationWarning>
       <head>
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var t=localStorage.getItem("hardmoney-theme");var m=window.matchMedia("(prefers-color-scheme: dark)");var d=t==="dark"||(!t&&m.matches);if(d){document.documentElement.classList.add("dark");document.documentElement.setAttribute("data-theme","dark");}else{document.documentElement.classList.remove("dark");document.documentElement.setAttribute("data-theme","light");}if(localStorage.getItem("hardmoney-color-swap")==="true"){document.documentElement.setAttribute("data-color-swap","true");}}catch(e){}})();`,
+            __html: `(function(){try{var t=localStorage.getItem("hardmoney-theme");var m=window.matchMedia("(prefers-color-scheme: dark)");var d=t==="dark"||(!t&&m.matches);if(d){document.documentElement.classList.add("dark");document.documentElement.setAttribute("data-theme","dark");}else{document.documentElement.classList.remove("dark");document.documentElement.setAttribute("data-theme","light");}if(localStorage.getItem("hardmoney-color-swap")==="true"){document.documentElement.setAttribute("data-color-swap","true");}document.documentElement.setAttribute("data-theme-pack","private-wealth");}catch(e){}})();`,
           }}
         />
       </head>
-      <body className="fixed inset-0 h-screen h-[100dvh] w-full overflow-hidden overscroll-none bg-app text-[var(--text)]">
+      <body className="fixed inset-0 w-full overflow-hidden overscroll-none bg-app text-[var(--text)]">
         <ThemeProvider>
           <Suspense fallback={null}>
             <QueryProvider>
@@ -65,20 +64,17 @@ export default function RootLayout({
                       {/* Desktop Collapsible Sidebar */}
                       <Sidebar />
 
-                      {/* Main Application Area */}
-                      <div className="flex-1 flex flex-col h-full min-w-0 overflow-hidden relative">
-                        <ScrollContainer className="flex-1 overflow-y-auto pb-nav-safe">
+                      {/* Main Application Column: Scrollable Content + Non-Overlapping Docked Mobile Footer */}
+                      <div className="flex-1 flex flex-col h-full min-h-0 min-w-0 overflow-hidden relative">
+                        <ScrollContainer className="flex-1 min-h-0 overflow-y-auto md:pb-8">
                           <NativeTabContainer>
                             {children}
                           </NativeTabContainer>
                         </ScrollContainer>
 
-                        {/* Floating Action Button */}
-                        <Fab />
+                        {/* Mobile Docked Bottom Navigation (Split Lens) */}
+                        <BottomNav />
                       </div>
-
-                      {/* Mobile Bottom Navigation */}
-                      <BottomNav />
 
                       {/* Global Quick-Add Modal */}
                       <QuickAddModal />

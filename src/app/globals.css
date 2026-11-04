@@ -11,9 +11,111 @@
   --color-hairline: var(--border);
   --color-primary: var(--primary);
   --color-accent: var(--accent);
+  --text-2xs: calc(0.6875rem * var(--hm-scale, 1));
+  --text-2xs--line-height: 1.35;
 }
 
+/* ============================================================================
+   DEFAULT ACTIVE THEME: EMERALD PRIVATE BANK ("private-wealth")
+   All 8 combo theme packs remain preserved below for future use.
+   ============================================================================ */
 :root {
+  --hm-scale: 1.04;
+  --hm-tracking: -0.011em;
+  --spacing: 0.265rem;
+
+  --text-xs: calc(0.75rem * var(--hm-scale));
+  --text-sm: calc(0.875rem * var(--hm-scale));
+  --text-base: calc(1rem * var(--hm-scale));
+  --text-lg: calc(1.125rem * var(--hm-scale));
+  --text-xl: calc(1.25rem * var(--hm-scale));
+  --text-2xl: calc(1.5rem * var(--hm-scale));
+  --text-3xl: calc(1.875rem * var(--hm-scale));
+  --text-4xl: calc(2.25rem * var(--hm-scale));
+
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+
+  --radius-md: 0.375rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.75rem;
+  --radius-2xl: 1rem;
+  --radius-3xl: 1.4rem;
+
+  --bg: #F6F8FB;
+  --surface: #FFFFFF;
+  --surface-hover: #EDF2F7;
+  --border: #DCE3EC;
+  --text: #0F172A;
+  --text-muted: #5B6B82;
+  --muted: #5B6B82;
+  --accent: #059669;
+  --accent-fg: #FFFFFF;
+  --primary: #059669;
+  --pack-positive: #047857;
+  --pack-negative: #E11D48;
+  --income: var(--pack-positive);
+  --expense: var(--pack-negative);
+  --transfer: #64748B;
+  --warning: #D97706;
+}
+
+.dark,
+[data-theme="dark"] {
+  --bg: #0B111E;
+  --surface: #131C2E;
+  --surface-hover: #1B2740;
+  --border: #22304C;
+  --text: #F1F5F9;
+  --text-muted: #8FA1B8;
+  --muted: #8FA1B8;
+  --accent: #10B981;
+  --accent-fg: #042F2E;
+  --primary: #10B981;
+  --pack-positive: #34D399;
+  --pack-negative: #FB7185;
+  --income: var(--pack-positive);
+  --expense: var(--pack-negative);
+  --transfer: #94A3B8;
+  --warning: #FBBF24;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0B111E;
+    --surface: #131C2E;
+    --surface-hover: #1B2740;
+    --border: #22304C;
+    --text: #F1F5F9;
+    --text-muted: #8FA1B8;
+    --muted: #8FA1B8;
+    --accent: #10B981;
+    --accent-fg: #042F2E;
+    --primary: #10B981;
+    --pack-positive: #34D399;
+    --pack-negative: #FB7185;
+    --income: var(--pack-positive);
+    --expense: var(--pack-negative);
+    --transfer: #94A3B8;
+    --warning: #FBBF24;
+  }
+}
+
+/* ============================================================================
+   1. HARD MONEY CLASSIC ("default" — Preserved Pack)
+   ============================================================================ */
+html[data-theme-pack="default"] {
+  --hm-scale: 1;
+  --hm-tracking: normal;
+  --spacing: 0.25rem;
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  --radius-md: 0.375rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.75rem;
+  --radius-2xl: 1rem;
+  --radius-3xl: 1.5rem;
+
   --bg: #FFFFFF;
   --surface: #F5F6F7;
   --surface-hover: #ECEEF0;
@@ -22,20 +124,16 @@
   --text-muted: #6B7075;
   --muted: #6B7075;
   --accent: #C72C38;
+  --accent-fg: #FFFFFF;
   --primary: #C72C38;
-  --income: #1D5BD2;
-  --expense: #C92A2A;
+  --pack-positive: #1D5BD2;
+  --pack-negative: #C92A2A;
   --transfer: #6B7075;
   --warning: #D98E04;
 }
 
-:root[data-color-swap="true"],
-html[data-color-swap="true"] {
-  --income: #C92A2A !important;
-  --expense: #1D5BD2 !important;
-}
-
-.dark, [data-theme="dark"] {
+html.dark[data-theme-pack="default"],
+html[data-theme="dark"][data-theme-pack="default"] {
   --bg: #121212;
   --surface: #1C1C1E;
   --surface-hover: #262628;
@@ -44,19 +142,496 @@ html[data-color-swap="true"] {
   --text-muted: #9A9EA3;
   --muted: #9A9EA3;
   --accent: #E8505B;
+  --accent-fg: #FFFFFF;
   --primary: #E8505B;
-  --income: #5B93F0;
-  --expense: #F06A6E;
+  --pack-positive: #5B93F0;
+  --pack-negative: #F06A6E;
   --transfer: #9A9EA3;
   --warning: #F0A92A;
 }
 
-.dark[data-color-swap="true"],
-[data-theme="dark"][data-color-swap="true"],
-html.dark[data-color-swap="true"],
-html[data-theme="dark"][data-color-swap="true"] {
-  --income: #F06A6E !important;
-  --expense: #5B93F0 !important;
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"])[data-theme-pack="default"] {
+    --bg: #121212;
+    --surface: #1C1C1E;
+    --surface-hover: #262628;
+    --border: #2C2C2E;
+    --text: #ECECEC;
+    --text-muted: #9A9EA3;
+    --muted: #9A9EA3;
+    --accent: #E8505B;
+    --accent-fg: #FFFFFF;
+    --primary: #E8505B;
+    --pack-positive: #5B93F0;
+    --pack-negative: #F06A6E;
+    --transfer: #9A9EA3;
+    --warning: #F0A92A;
+  }
+}
+
+/* ============================================================================
+   2. NORDIC LINEN & SAGE (Calm Scandi Fintech · 1.06x · Airy Spacing)
+   ============================================================================ */
+html[data-theme-pack="nordic-sage"] {
+  --hm-scale: 1.06;
+  --hm-tracking: -0.008em;
+  --spacing: 0.275rem;
+  --font-sans: "Plus Jakarta Sans", "Avenir Next", -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --radius-lg: 0.65rem;
+  --radius-xl: 0.95rem;
+  --radius-2xl: 1.25rem;
+  --radius-3xl: 1.85rem;
+
+  --bg: #F8F7F3;
+  --surface: #EFECE5;
+  --surface-hover: #E5E1D8;
+  --border: #DDD8CE;
+  --text: #1C2420;
+  --text-muted: #636E68;
+  --muted: #636E68;
+  --accent: #1F6F54;
+  --primary: #1F6F54;
+  --pack-positive: #0F766E;
+  --pack-negative: #C84B31;
+  --transfer: #636E68;
+  --warning: #CA8A04;
+}
+
+html.dark[data-theme-pack="nordic-sage"],
+html[data-theme="dark"][data-theme-pack="nordic-sage"] {
+  --bg: #111614;
+  --surface: #19211E;
+  --surface-hover: #222C28;
+  --border: #2A3631;
+  --text: #EDF2EF;
+  --text-muted: #92A199;
+  --muted: #92A199;
+  --accent: #34D399;
+  --accent-fg: #06281E;
+  --primary: #34D399;
+  --pack-positive: #2DD4BF;
+  --pack-negative: #F87171;
+  --transfer: #92A199;
+  --warning: #FBBF24;
+}
+
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"])[data-theme-pack="nordic-sage"] {
+    --bg: #111614;
+    --surface: #19211E;
+    --surface-hover: #222C28;
+    --border: #2A3631;
+    --text: #EDF2EF;
+    --text-muted: #92A199;
+    --muted: #92A199;
+    --accent: #34D399;
+    --primary: #34D399;
+    --pack-positive: #2DD4BF;
+    --pack-negative: #F87171;
+    --transfer: #92A199;
+    --warning: #FBBF24;
+  }
+}
+
+/* ============================================================================
+   3. EMERALD PRIVATE BANK (Executive Wealth · 1.04x · Generous Spacing)
+   ============================================================================ */
+html[data-theme-pack="private-wealth"] {
+  --hm-scale: 1.04;
+  --hm-tracking: -0.011em;
+  --spacing: 0.265rem;
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.75rem;
+  --radius-2xl: 1rem;
+  --radius-3xl: 1.4rem;
+
+  --bg: #F6F8FB;
+  --surface: #FFFFFF;
+  --surface-hover: #EDF2F7;
+  --border: #DCE3EC;
+  --text: #0F172A;
+  --text-muted: #5B6B82;
+  --muted: #5B6B82;
+  --accent: #059669;
+  --accent-fg: #FFFFFF;
+  --primary: #059669;
+  --pack-positive: #047857;
+  --pack-negative: #E11D48;
+  --transfer: #64748B;
+  --warning: #D97706;
+}
+
+html.dark[data-theme-pack="private-wealth"],
+html[data-theme="dark"][data-theme-pack="private-wealth"] {
+  --bg: #0B111E;
+  --surface: #131C2E;
+  --surface-hover: #1B2740;
+  --border: #22304C;
+  --text: #F1F5F9;
+  --text-muted: #8FA1B8;
+  --muted: #8FA1B8;
+  --accent: #10B981;
+  --accent-fg: #042F2E;
+  --primary: #10B981;
+  --pack-positive: #34D399;
+  --pack-negative: #FB7185;
+  --transfer: #94A3B8;
+  --warning: #FBBF24;
+}
+
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"])[data-theme-pack="private-wealth"] {
+    --bg: #0B111E;
+    --surface: #131C2E;
+    --surface-hover: #1B2740;
+    --border: #22304C;
+    --text: #F1F5F9;
+    --text-muted: #8FA1B8;
+    --muted: #8FA1B8;
+    --accent: #10B981;
+    --accent-fg: #042F2E;
+    --primary: #10B981;
+    --pack-positive: #34D399;
+    --pack-negative: #FB7185;
+    --transfer: #94A3B8;
+    --warning: #FBBF24;
+  }
+}
+
+/* ============================================================================
+   4. REVOLUT COBALT (Crisp Neo-Bank · 1.05x · Modern Rounded)
+   ============================================================================ */
+html[data-theme-pack="ocean-cobalt"] {
+  --hm-scale: 1.05;
+  --hm-tracking: -0.006em;
+  --spacing: 0.27rem;
+  --font-sans: "DM Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --radius-lg: 0.65rem;
+  --radius-xl: 0.9rem;
+  --radius-2xl: 1.2rem;
+  --radius-3xl: 1.75rem;
+
+  --bg: #F3F6FC;
+  --surface: #FFFFFF;
+  --surface-hover: #E9EFFA;
+  --border: #DAE3F2;
+  --text: #0C1222;
+  --text-muted: #5B677D;
+  --muted: #5B677D;
+  --accent: #2563EB;
+  --primary: #2563EB;
+  --pack-positive: #0D9488;
+  --pack-negative: #E11D48;
+  --transfer: #64748B;
+  --warning: #D97706;
+}
+
+html.dark[data-theme-pack="ocean-cobalt"],
+html[data-theme="dark"][data-theme-pack="ocean-cobalt"] {
+  --bg: #090C14;
+  --surface: #131826;
+  --surface-hover: #1B2235;
+  --border: #242E46;
+  --text: #F8FAFC;
+  --text-muted: #93A0B8;
+  --muted: #93A0B8;
+  --accent: #3B82F6;
+  --primary: #3B82F6;
+  --pack-positive: #2DD4BF;
+  --pack-negative: #FB7185;
+  --transfer: #94A3B8;
+  --warning: #FBBF24;
+}
+
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"])[data-theme-pack="ocean-cobalt"] {
+    --bg: #090C14;
+    --surface: #131826;
+    --surface-hover: #1B2235;
+    --border: #242E46;
+    --text: #F8FAFC;
+    --text-muted: #93A0B8;
+    --muted: #93A0B8;
+    --accent: #3B82F6;
+    --primary: #3B82F6;
+    --pack-positive: #2DD4BF;
+    --pack-negative: #FB7185;
+    --transfer: #94A3B8;
+    --warning: #FBBF24;
+  }
+}
+
+/* ============================================================================
+   5. ESPRESSO & SAND (Warm Editorial Craft · 1.08x · Relaxed Spacing)
+   ============================================================================ */
+html[data-theme-pack="warm-espresso"] {
+  --hm-scale: 1.08;
+  --hm-tracking: -0.005em;
+  --spacing: 0.28rem;
+  --font-sans: "Outfit", "Avenir Next", -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --radius-lg: 0.625rem;
+  --radius-xl: 0.9rem;
+  --radius-2xl: 1.2rem;
+  --radius-3xl: 1.75rem;
+
+  --bg: #FAF6F0;
+  --surface: #F1EAE0;
+  --surface-hover: #E7DDD0;
+  --border: #DED3C3;
+  --text: #231C16;
+  --text-muted: #736559;
+  --muted: #736559;
+  --accent: #B45309;
+  --primary: #B45309;
+  --pack-positive: #15803D;
+  --pack-negative: #B91C1C;
+  --transfer: #78716C;
+  --warning: #D97706;
+}
+
+html.dark[data-theme-pack="warm-espresso"],
+html[data-theme="dark"][data-theme-pack="warm-espresso"] {
+  --bg: #15110E;
+  --surface: #211B17;
+  --surface-hover: #2C241E;
+  --border: #362C25;
+  --text: #F5EFE8;
+  --text-muted: #A8998C;
+  --muted: #A8998C;
+  --accent: #F59E0B;
+  --accent-fg: #1F1300;
+  --primary: #F59E0B;
+  --pack-positive: #4ADE80;
+  --pack-negative: #F87171;
+  --transfer: #A8A29E;
+  --warning: #FBBF24;
+}
+
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"])[data-theme-pack="warm-espresso"] {
+    --bg: #15110E;
+    --surface: #211B17;
+    --surface-hover: #2C241E;
+    --border: #362C25;
+    --text: #F5EFE8;
+    --text-muted: #A8998C;
+    --muted: #A8998C;
+    --accent: #F59E0B;
+    --primary: #F59E0B;
+    --pack-positive: #4ADE80;
+    --pack-negative: #F87171;
+    --transfer: #A8A29E;
+    --warning: #FBBF24;
+  }
+}
+
+/* ============================================================================
+   6. LINEAR INDIGO (Precision Minimalist · 0.98x · Tailored Geometry)
+   ============================================================================ */
+html[data-theme-pack="linear-violet"] {
+  --hm-scale: 0.98;
+  --hm-tracking: -0.012em;
+  --spacing: 0.255rem;
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --radius-lg: 0.375rem;
+  --radius-xl: 0.5rem;
+  --radius-2xl: 0.75rem;
+  --radius-3xl: 1rem;
+
+  --bg: #FAFAFC;
+  --surface: #F2F3F8;
+  --surface-hover: #E7E9F2;
+  --border: #DFE2EC;
+  --text: #16171D;
+  --text-muted: #686D7C;
+  --muted: #686D7C;
+  --accent: #5E6AD2;
+  --primary: #5E6AD2;
+  --pack-positive: #16A34A;
+  --pack-negative: #E11D48;
+  --transfer: #686D7C;
+  --warning: #D97706;
+}
+
+html.dark[data-theme-pack="linear-violet"],
+html[data-theme="dark"][data-theme-pack="linear-violet"] {
+  --bg: #0D0E12;
+  --surface: #161821;
+  --surface-hover: #1E212D;
+  --border: #262A38;
+  --text: #EEEEF2;
+  --text-muted: #8E93A6;
+  --muted: #8E93A6;
+  --accent: #818CF8;
+  --primary: #818CF8;
+  --pack-positive: #4ADE80;
+  --pack-negative: #FB7185;
+  --transfer: #8E93A6;
+  --warning: #FBBF24;
+}
+
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"])[data-theme-pack="linear-violet"] {
+    --bg: #0D0E12;
+    --surface: #161821;
+    --surface-hover: #1E212D;
+    --border: #262A38;
+    --text: #EEEEF2;
+    --text-muted: #8E93A6;
+    --muted: #8E93A6;
+    --accent: #818CF8;
+    --primary: #818CF8;
+    --pack-positive: #4ADE80;
+    --pack-negative: #FB7185;
+    --transfer: #8E93A6;
+    --warning: #FBBF24;
+  }
+}
+
+/* ============================================================================
+   7. SWISS MONOCHROME (Architectural Ink · 1.05x · Sharp Corners)
+   ============================================================================ */
+html[data-theme-pack="swiss-ink"] {
+  --hm-scale: 1.05;
+  --hm-tracking: -0.015em;
+  --spacing: 0.27rem;
+  --font-sans: "Space Grotesk", "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --radius-md: 0.125rem;
+  --radius-lg: 0.25rem;
+  --radius-xl: 0.375rem;
+  --radius-2xl: 0.5rem;
+  --radius-3xl: 0.625rem;
+
+  --bg: #FFFFFF;
+  --surface: #F4F4F5;
+  --surface-hover: #E4E4E7;
+  --border: #D4D4D8;
+  --text: #09090B;
+  --text-muted: #52525B;
+  --muted: #52525B;
+  --accent: #18181B;
+  --primary: #18181B;
+  --pack-positive: #0F766E;
+  --pack-negative: #DC2626;
+  --transfer: #52525B;
+  --warning: #D97706;
+}
+
+html.dark[data-theme-pack="swiss-ink"],
+html[data-theme="dark"][data-theme-pack="swiss-ink"] {
+  --bg: #050505;
+  --surface: #121214;
+  --surface-hover: #1C1C20;
+  --border: #27272A;
+  --text: #FAFAFA;
+  --text-muted: #A1A1AA;
+  --muted: #A1A1AA;
+  --accent: #E4E4E7;
+  --accent-fg: #09090B;
+  --primary: #71717A;
+  --pack-positive: #2DD4BF;
+  --pack-negative: #F87171;
+  --transfer: #A1A1AA;
+  --warning: #FBBF24;
+}
+
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"])[data-theme-pack="swiss-ink"] {
+    --bg: #050505;
+    --surface: #121214;
+    --surface-hover: #1C1C20;
+    --border: #27272A;
+    --text: #FAFAFA;
+    --text-muted: #A1A1AA;
+    --muted: #A1A1AA;
+    --accent: #E4E4E7;
+    --primary: #71717A;
+    --pack-positive: #2DD4BF;
+    --pack-negative: #F87171;
+    --transfer: #A1A1AA;
+    --warning: #FBBF24;
+  }
+}
+
+/* ============================================================================
+   8. AIRY COMFORT XL (Maximum Mobile Readability · 1.14x · +18% Spacing)
+   ============================================================================ */
+html[data-theme-pack="airy-comfort"] {
+  --hm-scale: 1.14;
+  --hm-tracking: -0.005em;
+  --spacing: 0.295rem;
+  --font-sans: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+  --radius-2xl: 1.35rem;
+  --radius-3xl: 2rem;
+
+  --bg: #F7FAFC;
+  --surface: #EDF3F8;
+  --surface-hover: #E1EBF3;
+  --border: #CFDCE8;
+  --text: #0F172A;
+  --text-muted: #475569;
+  --muted: #475569;
+  --accent: #0284C7;
+  --primary: #0284C7;
+  --pack-positive: #15803D;
+  --pack-negative: #DC2626;
+  --transfer: #64748B;
+  --warning: #D97706;
+}
+
+html.dark[data-theme-pack="airy-comfort"],
+html[data-theme="dark"][data-theme-pack="airy-comfort"] {
+  --bg: #0C1219;
+  --surface: #151F2B;
+  --surface-hover: #1E2B3B;
+  --border: #263649;
+  --text: #F8FAFC;
+  --text-muted: #94A3B8;
+  --muted: #94A3B8;
+  --accent: #38BDF8;
+  --accent-fg: #082032;
+  --primary: #38BDF8;
+  --pack-positive: #4ADE80;
+  --pack-negative: #FB7185;
+  --transfer: #94A3B8;
+  --warning: #FBBF24;
+}
+
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"])[data-theme-pack="airy-comfort"] {
+    --bg: #0C1219;
+    --surface: #151F2B;
+    --surface-hover: #1E2B3B;
+    --border: #263649;
+    --text: #F8FAFC;
+    --text-muted: #94A3B8;
+    --muted: #94A3B8;
+    --accent: #38BDF8;
+    --primary: #38BDF8;
+    --pack-positive: #4ADE80;
+    --pack-negative: #FB7185;
+    --transfer: #94A3B8;
+    --warning: #FBBF24;
+  }
+}
+
+/* ============================================================================
+   COLOR SWAP (Works dynamically with every Theme Pack in Light & Dark!)
+   ============================================================================ */
+:root[data-color-swap="true"],
+html[data-color-swap="true"] {
+  --income: var(--pack-negative) !important;
+  --expense: var(--pack-positive) !important;
 }
 
 @media (min-width: 768px) {
@@ -77,37 +652,17 @@ html[data-theme="dark"][data-color-swap="true"] {
   }
 }
 
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --bg: #121212;
-    --surface: #1C1C1E;
-    --border: #2C2C2E;
-    --text: #ECECEC;
-    --text-muted: #9A9EA3;
-    --accent: #E8505B;
-    --income: #5B93F0;
-    --expense: #F06A6E;
-    --transfer: #9A9EA3;
-    --warning: #F0A92A;
-  }
-
-  :root:not([data-theme="light"])[data-color-swap="true"] {
-    --income: #F06A6E;
-    --expense: #5B93F0;
-  }
-}
-
 html, body {
   background-color: var(--bg);
   color: var(--text);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-family: var(--font-sans);
+  letter-spacing: var(--hm-tracking, normal);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   margin: 0;
   padding: 0;
   width: 100%;
   height: 100%;
-  height: 100dvh;
   overflow: hidden;
   overscroll-behavior: none;
   -webkit-overflow-scrolling: touch;
@@ -150,14 +705,14 @@ html, body {
 .flat-card {
   background-color: var(--bg);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-md, 6px);
   box-shadow: none !important;
 }
 
 .flat-panel {
   background-color: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-md, 6px);
   box-shadow: none !important;
 }
 
@@ -206,8 +761,17 @@ html.dark select {
   input:not([type="checkbox"]):not([type="radio"]),
   textarea,
   select {
-    font-size: 16px !important;
+    font-size: max(16px, var(--text-sm)) !important;
   }
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
 }
 
 /* Safe-area utilities for notched mobile displays & PWA standalone mode (+5px notch clearance) */
@@ -219,37 +783,52 @@ html.dark select {
 }
 
 .bottom-nav-safe {
-  height: calc(4rem + env(safe-area-inset-bottom, 0px));
-  padding-bottom: env(safe-area-inset-bottom, 0px);
+  min-height: calc(4.5rem + env(safe-area-inset-bottom, 0px));
+  padding-top: 0.45rem;
+  padding-bottom: calc(0.45rem + env(safe-area-inset-bottom, 0px));
 }
 
 .bottom-mobile-offset {
-  bottom: calc(5rem + env(safe-area-inset-bottom, 0px));
+  bottom: calc(5.75rem + env(safe-area-inset-bottom, 0px));
 }
 
 @media (min-width: 768px) {
   .bottom-mobile-offset {
-    bottom: 1.5rem; /* bottom-6 */
+    bottom: 1.75rem;
   }
 }
 
 .pb-nav-safe {
-  padding-bottom: calc(4rem + env(safe-area-inset-bottom, 0px));
+  padding-bottom: calc(8.5rem + env(safe-area-inset-bottom, 0px));
 }
 
 @media (min-width: 768px) {
   .pb-nav-safe {
-    padding-bottom: 0px;
+    padding-bottom: 2rem;
+  }
+}
+
+.mobile-footer-spacer {
+  display: block;
+  width: 100%;
+  flex-shrink: 0;
+  pointer-events: none;
+  height: calc(5.5rem + env(safe-area-inset-bottom, 0px));
+}
+
+@media (min-width: 768px) {
+  .mobile-footer-spacer {
+    display: none !important;
   }
 }
 
 .pb-sheet-safe {
-  padding-bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px));
+  padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
 }
 
 @media (min-width: 768px) {
   .pb-sheet-safe {
-    padding-bottom: 0.75rem;
+    padding-bottom: 1.25rem;
   }
 }
 
@@ -263,11 +842,7 @@ html.dark select {
   }
 }
 
-
-
-
 /* ===================== Page transitions (React <ViewTransition>) ===================== */
-/* Shell (header, sidebar, bottom nav) stays still; only page content animates. */
 ::view-transition-old(root),
 ::view-transition-new(root),
 ::view-transition-group(bottom-nav) {
@@ -275,32 +850,28 @@ html.dark select {
 }
 
 :root {
-  --vt-ease: cubic-bezier(0.32, 0.72, 0, 1); /* iOS-like */
+  --vt-ease: cubic-bezier(0.32, 0.72, 0, 1);
   --vt-push: 280ms;
 }
 
-/* Drill-in: new screen slides in from right, old shifts left & dims (iOS push) */
 ::view-transition-old(.nav-forward) {
   animation: var(--vt-push) var(--vt-ease) both vt-to-left;
 }
 ::view-transition-new(.nav-forward) {
   animation: var(--vt-push) var(--vt-ease) both vt-from-right;
 }
-/* Back: reverse */
 ::view-transition-old(.nav-back) {
   animation: var(--vt-push) var(--vt-ease) both vt-to-right;
 }
 ::view-transition-new(.nav-back) {
   animation: var(--vt-push) var(--vt-ease) both vt-from-left;
 }
-/* Tab switch: Material fade-through */
 ::view-transition-old(.nav-tab) {
   animation: 90ms ease-in both vt-fade-out;
 }
 ::view-transition-new(.nav-tab) {
   animation: 210ms ease-out 90ms both vt-fade-scale-in;
 }
-/* Untyped (browser back, redirects) */
 ::view-transition-old(.nav-fade) {
   animation: 120ms ease-in both vt-fade-out;
 }
@@ -316,7 +887,6 @@ html.dark select {
 @keyframes vt-fade-in    { from { opacity: 0; } }
 @keyframes vt-fade-scale-in { from { opacity: 0; scale: 0.98; } }
 
-/* Desktop: keep it subtle — slides become short fades */
 @media (min-width: 768px) {
   ::view-transition-old(.nav-forward),
   ::view-transition-old(.nav-back) { animation: 120ms ease-in both vt-fade-out; }
@@ -324,7 +894,6 @@ html.dark select {
   ::view-transition-new(.nav-back) { animation: 180ms ease-out both vt-fade-in; }
 }
 
-/* New page paints on top during push; old one underneath during pop */
 ::view-transition-new(.nav-forward) { z-index: 2; }
 ::view-transition-old(.nav-back) { z-index: 2; }
 

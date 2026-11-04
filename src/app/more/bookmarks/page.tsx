@@ -1,8 +1,8 @@
 "use client";
 
 import React, { useState } from "react";
-import Link from "next/link";
-import { ArrowLeft, Plus, Bookmark, Trash2, Edit2, X } from "lucide-react";
+import { Plus, Bookmark, Trash2, Edit2, X } from "lucide-react";
+import { AppHeader } from "@/components/navigation/app-header";
 import { useAccounts, useCategories, useTemplates, useSync } from "@/components/sync-provider";
 import { localCreateTemplate, localUpdateTemplate, localDeleteTemplate } from "@/lib/sync/client";
 import { LocalTemplate } from "@/lib/db";
@@ -106,82 +106,73 @@ export default function BookmarksPage() {
   };
 
   return (
-    <main className="flex-1 max-w-4xl mx-auto w-full px-4 py-4 space-y-4">
-      {/* Top Header */}
-      <div className="flex items-center justify-between pb-2 border-b border-hairline">
-        <div className="flex items-center gap-3">
-          <Link
-            href="/more" transitionTypes={["nav-back"]}
-            data-testid="back-button"
-            className="p-1 rounded text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--border)] transition-colors"
-            title="Back to More"
+    <main className="flex-1 max-w-4xl mx-auto w-full px-5 sm:px-7 pt-4 sm:pt-6 pb-8 space-y-6">
+      <AppHeader
+        title="Bookmarks & Templates"
+        subtitle="1-Tap Quick-Add Presets"
+        backHref="/more"
+        backLabel="Back to More"
+        rightSlot={
+          <button
+            type="button"
+            data-testid="create-bookmark-btn"
+            onClick={handleOpenCreate}
+            className="h-10 px-4 inline-flex items-center gap-1.5 rounded-2xl bg-[var(--accent)] text-white text-xs font-bold hover:opacity-95 active:scale-[0.98] transition-all shadow-xs cursor-pointer"
           >
-            <ArrowLeft size={18} />
-          </Link>
-          <div>
-            <h1 className="text-base font-semibold tracking-tight text-[var(--text)] flex items-center gap-2">
-              <Bookmark size={18} className="text-[var(--text-muted)]" />
-              <span>Bookmarks & Templates</span>
-            </h1>
-            <p className="text-xs text-[var(--text-muted)]">
-              Quick transaction presets for 1-tap entry in Quick-Add
-            </p>
-          </div>
-        </div>
+            <Plus size={15} />
+            <span className="hidden sm:inline">New Bookmark</span>
+            <span className="sm:hidden">New</span>
+          </button>
+        }
+      />
 
-        <button
-          type="button"
-          data-testid="create-bookmark-btn"
-          onClick={handleOpenCreate}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-[var(--text)] text-[var(--bg)] text-xs font-semibold hover:opacity-90 active:scale-95 transition-all"
-        >
-          <Plus size={14} />
-          <span>New Bookmark</span>
-        </button>
-      </div>
-
-      {/* Template Form (Inline Card / Modal) */}
+      {/* Template Form */}
       {isFormOpen && (
         <form
           onSubmit={handleSave}
-          className="flat-card p-4 space-y-3 bg-[var(--surface)] border border-hairline rounded-lg shadow-sm"
+          className="rounded-3xl bg-[var(--surface)] border border-[var(--border)] p-5 sm:p-6 space-y-5 shadow-sm animate-in fade-in"
         >
-          <div className="flex items-center justify-between pb-2 border-b border-hairline">
-            <span className="font-semibold text-xs text-[var(--text)]">
-              {editingTemplate ? "Edit Bookmark" : "Create New Bookmark"}
-            </span>
+          <div className="flex items-center justify-between pb-3.5 border-b border-[var(--border)]">
+            <div>
+              <h2 className="font-bold text-sm text-[var(--text)]">
+                {editingTemplate ? "Edit Bookmark" : "Create New Bookmark"}
+              </h2>
+              <p className="text-xs text-[var(--text-muted)] mt-0.5">
+                Pre-configure account, category, amount, and note for fast entry
+              </p>
+            </div>
             <button
               type="button"
               data-testid="template-cancel-btn"
               onClick={() => setIsFormOpen(false)}
-              className="p-1 text-[var(--text-muted)] hover:text-[var(--text)]"
+              className="w-9 h-9 rounded-xl flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--bg)] transition-colors cursor-pointer"
             >
-              <X size={16} />
+              <X size={18} />
             </button>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
             {/* Name */}
-            <div className="space-y-1">
-              <label className="text-[11px] font-medium text-[var(--text-muted)]">Name *</label>
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-[var(--text-muted)] block">Name *</label>
               <input
                 type="text"
                 data-testid="template-name-input"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="e.g. Morning Milk, Monthly Rent"
-                className="w-full px-2.5 py-1.5 rounded border border-hairline bg-[var(--bg)] text-[var(--text)] focus:outline-none focus:ring-1 focus:ring-[var(--text)]"
+                className="w-full h-12 px-4 rounded-2xl border border-[var(--border)] bg-[var(--bg)] text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
               />
             </div>
 
             {/* Type */}
-            <div className="space-y-1">
-              <label className="text-[11px] font-medium text-[var(--text-muted)]">Type</label>
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-[var(--text-muted)] block">Type</label>
               <select
                 data-testid="template-type-select"
                 value={type}
                 onChange={(e) => setType(e.target.value as "EXPENSE" | "INCOME" | "TRANSFER")}
-                className="w-full px-2.5 py-1.5 rounded border border-hairline bg-[var(--bg)] text-[var(--text)] focus:outline-none focus:ring-1 focus:ring-[var(--text)]"
+                className="w-full h-12 px-4 rounded-2xl border border-[var(--border)] bg-[var(--bg)] text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
               >
                 <option value="EXPENSE">Expense</option>
                 <option value="INCOME">Income</option>
@@ -190,13 +181,13 @@ export default function BookmarksPage() {
             </div>
 
             {/* Account */}
-            <div className="space-y-1">
-              <label className="text-[11px] font-medium text-[var(--text-muted)]">Account</label>
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-[var(--text-muted)] block">Account</label>
               <select
                 data-testid="template-account-select"
                 value={accountId}
                 onChange={(e) => setAccountId(e.target.value)}
-                className="w-full px-2.5 py-1.5 rounded border border-hairline bg-[var(--bg)] text-[var(--text)] focus:outline-none focus:ring-1 focus:ring-[var(--text)]"
+                className="w-full h-12 px-4 rounded-2xl border border-[var(--border)] bg-[var(--bg)] text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
               >
                 <option value="">(None)</option>
                 {activeAccounts.map((a) => (
@@ -209,13 +200,15 @@ export default function BookmarksPage() {
 
             {/* Category / To Account */}
             {type === "TRANSFER" ? (
-              <div className="space-y-1">
-                <label className="text-[11px] font-medium text-[var(--text-muted)]">To Account</label>
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-[var(--text-muted)] block">
+                  To Account
+                </label>
                 <select
                   data-testid="template-to-account-select"
                   value={toAccountId}
                   onChange={(e) => setToAccountId(e.target.value)}
-                  className="w-full px-2.5 py-1.5 rounded border border-hairline bg-[var(--bg)] text-[var(--text)] focus:outline-none focus:ring-1 focus:ring-[var(--text)]"
+                  className="w-full h-12 px-4 rounded-2xl border border-[var(--border)] bg-[var(--bg)] text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
                 >
                   <option value="">(None)</option>
                   {activeAccounts
@@ -228,13 +221,15 @@ export default function BookmarksPage() {
                 </select>
               </div>
             ) : (
-              <div className="space-y-1">
-                <label className="text-[11px] font-medium text-[var(--text-muted)]">Category</label>
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-[var(--text-muted)] block">
+                  Category
+                </label>
                 <select
                   data-testid="template-category-select"
                   value={categoryId}
                   onChange={(e) => setCategoryId(e.target.value)}
-                  className="w-full px-2.5 py-1.5 rounded border border-hairline bg-[var(--bg)] text-[var(--text)] focus:outline-none focus:ring-1 focus:ring-[var(--text)]"
+                  className="w-full h-12 px-4 rounded-2xl border border-[var(--border)] bg-[var(--bg)] text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
                 >
                   <option value="">(None)</option>
                   {categories.map((c) => (
@@ -247,8 +242,8 @@ export default function BookmarksPage() {
             )}
 
             {/* Default Amount */}
-            <div className="space-y-1">
-              <label className="text-[11px] font-medium text-[var(--text-muted)]">
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-[var(--text-muted)] block">
                 Default Amount (LKR, optional)
               </label>
               <input
@@ -257,38 +252,40 @@ export default function BookmarksPage() {
                 value={amountStr}
                 onChange={(e) => setAmountStr(e.target.value)}
                 placeholder="e.g. 250"
-                className="w-full px-2.5 py-1.5 rounded border border-hairline bg-[var(--bg)] text-[var(--text)] font-mono focus:outline-none focus:ring-1 focus:ring-[var(--text)]"
+                className="w-full h-12 px-4 rounded-2xl border border-[var(--border)] bg-[var(--bg)] text-[var(--text)] font-mono focus:outline-none focus:border-[var(--accent)]"
               />
             </div>
 
             {/* Note */}
-            <div className="space-y-1">
-              <label className="text-[11px] font-medium text-[var(--text-muted)]">Note (optional)</label>
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-[var(--text-muted)] block">
+                Note (optional)
+              </label>
               <input
                 type="text"
                 data-testid="template-note-input"
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
                 placeholder="e.g. Morning fresh milk"
-                className="w-full px-2.5 py-1.5 rounded border border-hairline bg-[var(--bg)] text-[var(--text)] focus:outline-none focus:ring-1 focus:ring-[var(--text)]"
+                className="w-full h-12 px-4 rounded-2xl border border-[var(--border)] bg-[var(--bg)] text-[var(--text)] focus:outline-none focus:border-[var(--accent)]"
               />
             </div>
           </div>
 
-          {errorMsg && <p className="text-xs text-red-500 font-medium">{errorMsg}</p>}
+          {errorMsg && <p className="text-xs text-[var(--expense)] font-semibold">{errorMsg}</p>}
 
-          <div className="flex justify-end gap-2 pt-2 border-t border-hairline">
+          <div className="flex justify-end gap-2.5 pt-3 border-t border-[var(--border)]">
             <button
               type="button"
               onClick={() => setIsFormOpen(false)}
-              className="py-1.5 px-3 rounded border border-hairline text-xs hover:bg-[var(--border)] transition-colors"
+              className="h-11 px-4 rounded-2xl border border-[var(--border)] text-xs font-semibold text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--surface-hover)] transition-colors cursor-pointer"
             >
               Cancel
             </button>
             <button
               type="submit"
               data-testid="template-save-btn"
-              className="py-1.5 px-4 rounded bg-[var(--text)] text-[var(--bg)] text-xs font-semibold hover:opacity-90 active:scale-95 transition-all"
+              className="h-11 px-5 rounded-2xl bg-[var(--accent)] text-white text-xs font-bold hover:opacity-95 active:scale-[0.98] transition-all cursor-pointer"
             >
               Save Bookmark
             </button>
@@ -304,7 +301,7 @@ export default function BookmarksPage() {
           icon={<Bookmark size={24} />}
         />
       ) : (
-        <div className="border border-hairline rounded-lg divide-y divide-hairline bg-[var(--surface)] overflow-hidden">
+        <div className="space-y-3">
           {templates.map((t) => {
             const cat = t.categoryId ? categories.find((c) => c.id === t.categoryId) : null;
             const acc = t.accountId ? accounts.find((a) => a.id === t.accountId) : null;
@@ -313,26 +310,33 @@ export default function BookmarksPage() {
               <div
                 key={t.id}
                 data-testid={`template-item-${t.id}`}
-                className="flex items-center justify-between p-3 hover:bg-[var(--border)]/30 transition-colors"
+                className="rounded-3xl bg-[var(--surface)] border border-[var(--border)] p-4 sm:p-5 flex items-center justify-between gap-4 hover:border-[var(--accent)]/40 transition-colors shadow-xs"
               >
-                <div className="space-y-0.5 min-w-0 pr-2">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-semibold text-[var(--text)]">{t.name}</span>
-                    <span className="text-[10px] px-1.5 py-0.2 rounded bg-[var(--border)] text-[var(--text-muted)] font-mono uppercase">
-                      {t.type}
-                    </span>
+                <div className="flex items-center gap-3.5 min-w-0">
+                  <div className="w-11 h-11 rounded-2xl bg-[var(--accent)]/12 border border-[var(--accent)]/25 flex items-center justify-center text-[var(--accent)] shrink-0">
+                    <Bookmark size={18} />
                   </div>
+                  <div className="space-y-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-sm font-bold text-[var(--text)] truncate">
+                        {t.name}
+                      </span>
+                      <span className="text-2xs px-2 py-0.5 rounded-full bg-[var(--bg)] border border-[var(--border)] text-[var(--text-muted)] font-mono font-semibold uppercase">
+                        {t.type}
+                      </span>
+                    </div>
 
-                  <div className="text-[11px] text-[var(--text-muted)] flex items-center gap-2">
-                    {acc && <span>{acc.name}</span>}
-                    {cat && <span>• {cat.name}</span>}
-                    {t.note && <span>• {t.note}</span>}
+                    <div className="text-xs text-[var(--text-muted)] flex items-center gap-2 flex-wrap">
+                      {acc && <span>{acc.name}</span>}
+                      {cat && <span>• {cat.name}</span>}
+                      {t.note && <span className="truncate">• {t.note}</span>}
+                    </div>
                   </div>
                 </div>
 
                 <div className="flex items-center gap-3 shrink-0">
                   {t.defaultAmountMinor && (
-                    <span className="font-mono font-semibold text-xs tabular-nums text-[var(--text)]">
+                    <span className="font-mono font-bold text-sm tabular-nums text-[var(--text)]">
                       {formatMoney(t.defaultAmountMinor)}
                     </span>
                   )}
@@ -342,19 +346,19 @@ export default function BookmarksPage() {
                       type="button"
                       data-testid={`template-edit-${t.id}`}
                       onClick={() => handleOpenEdit(t)}
-                      className="p-1 rounded text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--border)] transition-colors"
+                      className="w-9 h-9 rounded-xl flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--bg)] transition-colors cursor-pointer"
                       title="Edit bookmark"
                     >
-                      <Edit2 size={14} />
+                      <Edit2 size={15} />
                     </button>
                     <button
                       type="button"
                       data-testid={`template-delete-${t.id}`}
                       onClick={() => handleDelete(t.id)}
-                      className="p-1 rounded text-[var(--text-muted)] hover:text-red-500 hover:bg-red-500/10 transition-colors"
+                      className="w-9 h-9 rounded-xl flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--expense)] hover:bg-[var(--expense)]/10 transition-colors cursor-pointer"
                       title="Delete bookmark"
                     >
-                      <Trash2 size={14} />
+                      <Trash2 size={15} />
                     </button>
                   </div>
                 </div>

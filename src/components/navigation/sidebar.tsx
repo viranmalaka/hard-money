@@ -4,13 +4,13 @@ import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  ArrowLeftRight,
   BarChart3,
   ChevronLeft,
   ChevronRight,
   CreditCard,
+  Home,
+  Landmark,
   Moon,
-  PieChart,
   Plus,
   Settings,
   Sun,
@@ -37,7 +37,13 @@ export function Sidebar() {
     }
   }, []);
 
-  if (pathname === "/login" || pathname === "/register") return null;
+  if (
+    pathname === "/login" ||
+    pathname === "/register" ||
+    pathname === "/offline"
+  ) {
+    return null;
+  }
 
   const handleToggle = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -46,37 +52,57 @@ export function Sidebar() {
       const next = !prev;
       try {
         localStorage.setItem("sidebar-collapsed", next ? "true" : "false");
-      } catch {}
+      } catch {
+        // ignore
+      }
       return next;
     });
   };
 
-  const navItems: { id: TabId; name: string; href: string; icon: typeof ArrowLeftRight }[] = [
-    { id: "trans", name: "Trans.", href: "/", icon: ArrowLeftRight },
+  const navItems: {
+    id: TabId;
+    name: string;
+    href: string;
+    icon: typeof Home;
+  }[] = [
+    { id: "trans", name: "Home", href: "/", icon: Home },
     { id: "stats", name: "Stats", href: "/stats", icon: BarChart3 },
-    { id: "budget", name: "Budget", href: "/budget", icon: PieChart },
     { id: "accounts", name: "Accounts", href: "/accounts", icon: Wallet },
     { id: "more", name: "More", href: "/more", icon: Settings },
   ];
+
+  const isNavActive = (id: TabId, href: string) => {
+    if (activeTab) return activeTab === id;
+    if (id === "more" && (pathname === "/budget" || pathname.startsWith("/more"))) {
+      return true;
+    }
+    if (href === "/") return pathname === "/";
+    return pathname.startsWith(href);
+  };
 
   return (
     <aside
       data-testid="sidebar"
       data-collapsed={collapsed ? "true" : "false"}
-      className={`desktop-only flex flex-col border-r border-hairline bg-surface transition-all duration-200 select-none ${
-        collapsed ? "w-16" : "w-60"
+      className={`desktop-only flex flex-col border-r border-[var(--border)] bg-[var(--surface)] transition-all duration-200 select-none ${
+        collapsed ? "w-20" : "w-68"
       }`}
     >
       {/* Brand & Collapse Header */}
-      <div className="flex items-center justify-between h-14 px-4 border-b border-hairline">
+      <div className="flex items-center justify-between h-18 px-4 border-b border-[var(--border)]">
         {!collapsed && (
-          <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded bg-[var(--accent)] flex items-center justify-center text-white font-bold text-xs">
-              H
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-10 h-10 rounded-2xl bg-[var(--accent)] text-[var(--accent-fg)] flex items-center justify-center shadow-xs shrink-0">
+              <Landmark size={19} strokeWidth={2.2} />
             </div>
-            <span className="font-semibold text-sm tracking-tight text-[var(--text)]">
-              Hard Money
-            </span>
+            <div className="min-w-0">
+              <p className="font-bold text-sm tracking-tight text-[var(--text)] truncate">
+                Hard Money
+              </p>
+              <p className="text-2xs font-medium text-[var(--text-muted)] truncate">
+                Private Treasury
+              </p>
+            </div>
           </div>
         )}
         <button
@@ -84,20 +110,32 @@ export function Sidebar() {
           data-testid="sidebar-toggle"
           onClick={handleToggle}
           title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-          className="p-1.5 rounded hover:bg-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text)] transition-colors mx-auto md:mx-0"
+          className="w-9 h-9 rounded-xl border border-[var(--border)] bg-[var(--bg)] flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text)] hover:border-[var(--text-muted)] transition-colors mx-auto md:mx-0 cursor-pointer shrink-0"
         >
-          {collapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
+          {collapsed ? <ChevronRight size={17} /> : <ChevronLeft size={17} />}
+        </button>
+      </div>
+
+      {/* Primary Quick-Add Action */}
+      <div className="px-3.5 pt-5 pb-2">
+        <button
+          type="button"
+          data-testid="sidebar-quick-add-btn"
+          onClick={() => openQuickAdd({ type: "EXPENSE" })}
+          title="New Transaction"
+          className={`w-full flex items-center gap-2.5 h-12 px-4 rounded-2xl bg-[var(--accent)] text-[var(--accent-fg)] font-bold text-sm shadow-xs hover:opacity-95 active:scale-98 transition-all cursor-pointer ${
+            collapsed ? "justify-center px-0" : ""
+          }`}
+        >
+          <Plus size={19} strokeWidth={2.6} className="shrink-0" />
+          {!collapsed && <span>New Transaction</span>}
         </button>
       </div>
 
       {/* Navigation Links */}
-      <nav className="flex-1 py-4 px-2 space-y-1">
+      <nav aria-label="Desktop Navigation" className="flex-1 py-3 px-3.5 space-y-1.5">
         {navItems.map((item) => {
-          const isActive = activeTab
-            ? activeTab === item.id
-            : item.href === "/"
-            ? pathname === "/"
-            : pathname.startsWith(item.href);
+          const isActive = isNavActive(item.id, item.href);
           const Icon = item.icon;
 
           return (
@@ -113,39 +151,28 @@ export function Sidebar() {
                 switchToTab(item.id);
               }}
               onMouseEnter={() => prefetchTab(item.id)}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded text-sm font-medium transition-colors ${
+              className={`flex items-center gap-3.5 px-3.5 py-3 rounded-2xl text-sm transition-all ${
                 isActive
-                  ? "bg-[var(--border)] text-[var(--text)] font-semibold"
-                  : "text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--border)]/50"
+                  ? "bg-[var(--accent)]/12 text-[var(--accent)] font-bold"
+                  : "text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--surface-hover)] font-medium"
               } ${collapsed ? "justify-center px-0" : ""}`}
               title={collapsed ? item.name : undefined}
             >
-              <Icon size={18} className="shrink-0" />
+              <Icon
+                size={20}
+                className={`shrink-0 ${isActive ? "stroke-[2.3px]" : "stroke-[1.8px]"}`}
+              />
               {!collapsed && <span>{item.name}</span>}
             </Link>
           );
         })}
-
-        {/* Quick Add Button in Sidebar */}
-        <div className="pt-3 px-1">
-          <button
-            type="button"
-            data-testid="sidebar-quick-add-btn"
-            onClick={() => openQuickAdd()}
-            title="Add Transaction"
-            className={`w-full flex items-center gap-2.5 py-2 px-3 rounded bg-[var(--text)] text-[var(--bg)] font-semibold text-xs hover:opacity-90 active:scale-98 transition-all ${
-              collapsed ? "justify-center px-0" : ""
-            }`}
-          >
-            <Plus size={16} strokeWidth={2.5} className="shrink-0" />
-            {!collapsed && <span>New Transaction</span>}
-          </button>
-        </div>
       </nav>
 
       {/* Footer Controls: Sync, Theme & Color Swap */}
-      <div className="p-3 border-t border-hairline space-y-2">
-        <div className={`flex ${collapsed ? "justify-center" : "items-center"}`}>
+      <div className="p-3.5 border-t border-[var(--border)] space-y-1.5">
+        <div
+          className={`flex px-1 py-1 ${collapsed ? "justify-center" : "items-center"}`}
+        >
           <SyncIndicator isMobile={false} />
         </div>
 
@@ -153,18 +180,24 @@ export function Sidebar() {
           type="button"
           data-testid="theme-toggle"
           onClick={toggleTheme}
-          title={mounted ? `Switch to ${resolvedTheme === "dark" ? "light" : "dark"} mode` : "Toggle Theme"}
-          className={`w-full flex items-center gap-3 p-2 rounded text-xs text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--border)] transition-colors ${
-            collapsed ? "justify-center" : ""
+          title={
+            mounted
+              ? `Switch to ${resolvedTheme === "dark" ? "light" : "dark"} mode`
+              : "Toggle Theme"
+          }
+          className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--surface-hover)] transition-colors cursor-pointer ${
+            collapsed ? "justify-center px-0" : ""
           }`}
         >
           {mounted && resolvedTheme === "dark" ? (
-            <Sun size={16} className="text-amber-400 shrink-0" />
+            <Sun size={17} className="text-amber-400 shrink-0" />
           ) : (
-            <Moon size={16} className="shrink-0" />
+            <Moon size={17} className="shrink-0" />
           )}
           {!collapsed && (
-            <span>{mounted && resolvedTheme === "dark" ? "Light Mode" : "Dark Mode"}</span>
+            <span>
+              {mounted && resolvedTheme === "dark" ? "Light Mode" : "Dark Mode"}
+            </span>
           )}
         </button>
 
@@ -172,12 +205,14 @@ export function Sidebar() {
           type="button"
           data-testid="color-swap-toggle"
           onClick={toggleColorSwap}
-          title={`Color swap: ${colorSwap ? "Active (Red income, Blue expense)" : "Default (Blue income, Red expense)"}`}
-          className={`w-full flex items-center gap-3 p-2 rounded text-xs text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--border)] transition-colors ${
-            collapsed ? "justify-center" : ""
+          title={`Color swap: ${
+            colorSwap ? "Active (Swapped)" : "Default (Emerald in, Rose out)"
+          }`}
+          className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--surface-hover)] transition-colors cursor-pointer ${
+            collapsed ? "justify-center px-0" : ""
           }`}
         >
-          <CreditCard size={16} className="shrink-0" />
+          <CreditCard size={17} className="shrink-0" />
           {!collapsed && (
             <span>{colorSwap ? "Default Colors" : "Swap In/Out Colors"}</span>
           )}

@@ -17,7 +17,7 @@ export function SegmentedTabs({ tabs, activeTab, onChange }: SegmentedTabsProps)
   return (
     <div
       data-testid="segmented-tabs"
-      className="flex border-b border-hairline bg-surface select-none"
+      className="flex gap-1.5 p-1.5 rounded-2xl bg-[var(--surface)] border border-[var(--border)] select-none"
     >
       {tabs.map((tab) => {
         const isActive = activeTab === tab.id;
@@ -27,10 +27,10 @@ export function SegmentedTabs({ tabs, activeTab, onChange }: SegmentedTabsProps)
             type="button"
             data-testid={`tab-${tab.id}`}
             onClick={() => onChange(tab.id)}
-            className={`flex-1 py-2 text-center text-xs font-medium transition-colors border-b-2 ${
+            className={`flex-1 py-2.5 px-3 rounded-xl text-center text-xs sm:text-sm font-semibold transition-all cursor-pointer ${
               isActive
-                ? "border-[var(--accent)] text-[var(--text)] font-semibold"
-                : "border-transparent text-[var(--text-muted)] hover:text-[var(--text)]"
+                ? "bg-[var(--accent)] text-[var(--accent-fg)] shadow-xs"
+                : "text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--bg)]/60"
             }`}
           >
             {tab.label}
