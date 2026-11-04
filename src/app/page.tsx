@@ -122,11 +122,11 @@ export default function HomePage() {
         </div>
       </header>
 
-      <div className="max-w-4xl mx-auto pt-5 sm:pt-6 space-y-6">
+      <div className="max-w-4xl mx-auto pt-2 sm:pt-4 space-y-4 sm:space-y-5">
 
         {/* Horizontal Snap-Scrolling Wallet Cards */}
-        <section aria-label="Accounts Carousel" className="space-y-2.5">
-          <div className="flex gap-4 overflow-x-auto snap-x snap-mandatory px-5 sm:px-7 pb-2 no-scrollbar">
+        <section aria-label="Accounts Carousel">
+          <div className="flex items-stretch gap-3.5 md:gap-4 overflow-x-auto snap-x snap-mandatory px-6 sm:px-8 py-4 scroll-px-6 sm:scroll-px-8 no-scrollbar">
             {/* Master All-Accounts Card */}
             <button
               type="button"
@@ -134,30 +134,30 @@ export default function HomePage() {
               onClick={() =>
                 data.setFilters((prev) => ({ ...prev, accountId: "" }))
               }
-              className={`snap-start shrink-0 w-[290px] sm:w-[325px] rounded-3xl p-5 text-left transition-all flex flex-col justify-between min-h-[176px] cursor-pointer ${
+              className={`snap-start shrink-0 w-[240px] md:w-[325px] rounded-2xl md:rounded-3xl p-4 md:p-5 text-left transition-all duration-200 flex flex-col justify-between min-h-[142px] md:min-h-[180px] cursor-pointer ${
                 !activeAccountId
-                  ? "bg-gradient-to-br from-[#064E3B] via-[#065F46] to-[#022C22] text-white shadow-lg ring-2 ring-[var(--accent)]"
+                  ? "bg-gradient-to-br from-[#064E3B] via-[#065F46] to-[#022C22] text-white shadow-md ring-2 ring-[var(--accent)] ring-offset-2 ring-offset-[var(--bg)] scale-[1.02]"
                   : "bg-[var(--surface)] border border-[var(--border)] text-[var(--text)] hover:border-[var(--text-muted)]"
               }`}
             >
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold uppercase tracking-wider opacity-80">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[11px] md:text-xs font-semibold uppercase tracking-wider opacity-80 truncate">
                   All Accounts ({data.visibleAccounts.length})
                 </span>
-                <Wallet size={20} className="opacity-85" />
+                <Wallet size={18} className="opacity-85 shrink-0 md:w-5 md:h-5" />
               </div>
 
-              <div className="space-y-1 my-3">
-                <p className="text-xs opacity-75">Total Net Worth</p>
+              <div className="space-y-0.5 md:space-y-1 my-2 md:my-3">
+                <p className="text-[11px] md:text-xs opacity-75">Total Net Worth</p>
                 <p
                   data-testid="summary-total"
-                  className="text-2xl font-extrabold font-mono tabular-nums tracking-tight truncate"
+                  className="text-xl md:text-2xl font-extrabold font-mono tabular-nums tracking-tight truncate"
                 >
                   {formatMoney(data.netWorthTotal)}
                 </p>
               </div>
 
-              <div className="flex items-center justify-between gap-2 text-xs pt-2.5 border-t border-current/15 font-mono tabular-nums">
+              <div className="flex items-center justify-between gap-2 text-[11px] md:text-xs pt-2 md:pt-2.5 border-t border-current/15 font-mono tabular-nums">
                 <span data-testid="summary-income" className="opacity-90 truncate">
                   In: {formatMoney(data.incomeMinor)}
                 </span>
@@ -176,10 +176,10 @@ export default function HomePage() {
 
               const cardTone = selected
                 ? isCredit
-                  ? "bg-gradient-to-br from-rose-700 to-rose-950 text-white shadow-lg ring-2 ring-rose-400"
+                  ? "bg-gradient-to-br from-rose-700 to-rose-950 text-white shadow-md ring-2 ring-rose-400 ring-offset-2 ring-offset-[var(--bg)] scale-[1.02]"
                   : isCash
-                    ? "bg-gradient-to-br from-emerald-700 to-teal-950 text-white shadow-lg ring-2 ring-emerald-400"
-                    : "bg-gradient-to-br from-slate-800 to-slate-950 text-white shadow-lg ring-2 ring-[var(--accent)]"
+                    ? "bg-gradient-to-br from-emerald-700 to-teal-950 text-white shadow-md ring-2 ring-emerald-400 ring-offset-2 ring-offset-[var(--bg)] scale-[1.02]"
+                    : "bg-gradient-to-br from-slate-800 to-slate-950 text-white shadow-md ring-2 ring-[var(--accent)] ring-offset-2 ring-offset-[var(--bg)] scale-[1.02]"
                 : "bg-[var(--surface)] border border-[var(--border)] text-[var(--text)] hover:border-[var(--text-muted)]";
 
               return (
@@ -193,10 +193,10 @@ export default function HomePage() {
                       accountId: prev.accountId === acc.id ? "" : acc.id,
                     }))
                   }
-                  className={`snap-start shrink-0 w-[265px] sm:w-[295px] rounded-3xl p-5 text-left transition-all flex flex-col justify-between min-h-[176px] cursor-pointer ${cardTone}`}
+                  className={`snap-start shrink-0 w-[220px] md:w-[295px] rounded-2xl md:rounded-3xl p-4 md:p-5 text-left transition-all duration-200 flex flex-col justify-between min-h-[142px] md:min-h-[180px] cursor-pointer ${cardTone}`}
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs font-semibold uppercase tracking-wider opacity-80 truncate">
+                    <span className="text-[11px] md:text-xs font-semibold uppercase tracking-wider opacity-80 truncate">
                       {isCredit
                         ? "Credit Card"
                         : isCash
@@ -204,22 +204,22 @@ export default function HomePage() {
                           : "Bank Account"}
                     </span>
                     {isCredit ? (
-                      <CreditCard size={19} className="shrink-0 opacity-85" />
+                      <CreditCard size={17} className="shrink-0 opacity-85 md:w-[19px] md:h-[19px]" />
                     ) : isCash ? (
-                      <Banknote size={19} className="shrink-0 opacity-85" />
+                      <Banknote size={17} className="shrink-0 opacity-85 md:w-[19px] md:h-[19px]" />
                     ) : (
-                      <Landmark size={19} className="shrink-0 opacity-85" />
+                      <Landmark size={17} className="shrink-0 opacity-85 md:w-[19px] md:h-[19px]" />
                     )}
                   </div>
 
-                  <div className="space-y-1 my-3">
-                    <p className="text-sm font-semibold truncate">{acc.name}</p>
-                    <p className="text-2xl font-extrabold font-mono tabular-nums tracking-tight truncate">
+                  <div className="space-y-0.5 md:space-y-1 my-2 md:my-3">
+                    <p className="text-xs md:text-sm font-semibold truncate">{acc.name}</p>
+                    <p className="text-xl md:text-2xl font-extrabold font-mono tabular-nums tracking-tight truncate">
                       {formatMoney(bal, acc.currency || "LKR")}
                     </p>
                   </div>
 
-                  <div className="flex items-center justify-between text-xs pt-2.5 border-t border-current/15 opacity-80">
+                  <div className="flex items-center justify-between text-[11px] md:text-xs pt-2 md:pt-2.5 border-t border-current/15 opacity-80">
                     <span className="font-mono">
                       {acc.accountNumberLast4
                         ? `•••• ${acc.accountNumberLast4}`

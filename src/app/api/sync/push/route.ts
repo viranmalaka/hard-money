@@ -843,15 +843,15 @@ export async function POST(request: NextRequest) {
             where: { id: mutation.id, userId: user.id },
             data: {
               ...(payload.name !== undefined && { name: payload.name }),
-              ...(payload.accountId !== undefined && { accountId: payload.accountId }),
-              ...(payload.toAccountId !== undefined && { toAccountId: payload.toAccountId }),
-              ...(payload.categoryId !== undefined && { categoryId: payload.categoryId }),
+              ...(payload.accountId !== undefined && { accountId: payload.accountId || null }),
+              ...(payload.toAccountId !== undefined && { toAccountId: payload.toAccountId || null }),
+              ...(payload.categoryId !== undefined && { categoryId: payload.categoryId || null }),
               ...(payload.type !== undefined && { type: payload.type }),
               ...(payload.defaultAmountMinor !== undefined && {
-                defaultAmountMinor: payload.defaultAmountMinor,
+                defaultAmountMinor: payload.defaultAmountMinor ?? null,
               }),
-              ...(payload.note !== undefined && { note: payload.note }),
-              ...(payload.icon !== undefined && { icon: payload.icon }),
+              ...(payload.note !== undefined && { note: payload.note || null }),
+              ...(payload.icon !== undefined && { icon: payload.icon || null }),
               serverSeq: nextSeq,
             },
           });

@@ -10,6 +10,11 @@ export async function getCategories() {
   return data.categories;
 }
 
+export async function getTemplates() {
+  const { data } = await apiClient.get("/user/templates");
+  return data.templates ?? [];
+}
+
 export async function getSettings() {
   const { data } = await apiClient.get("/user/settings");
   return data;

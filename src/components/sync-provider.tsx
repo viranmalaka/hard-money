@@ -15,9 +15,9 @@ import {
 import { syncNow, SyncState } from "@/lib/sync/client";
 import { queryKeys } from "@/lib/api/query-keys";
 import { getSession } from "@/services/auth-service";
-import { getAccounts, getCategories } from "@/services/user-service";
+import { getAccounts, getCategories, getTemplates } from "@/services/user-service";
 import { listTransactions } from "@/services/transaction-service";
-import { warmReferenceDataCache } from "@/lib/offline/warmed-cache";
+import { warmReferenceDataCache, warmTemplatesCache } from "@/lib/offline/warmed-cache";
 import { cleanupLegacyDexieDatabases } from "@/lib/offline/cleanup";
 import { flushPendingTransactions, getPendingTransactions } from "@/lib/offline/transaction-queue";
 
@@ -206,7 +206,22 @@ export function useTransactions(): LocalTransaction[] {
 }
 
 export function useTemplates(): LocalTemplate[] {
-  return EMPTY as LocalTemplate[];
+  const { userId } = useSync();
+  const query = useQuery<LocalTemplate[]>({
+    queryKey: queryKeys.templates.all(),
+    queryFn: getTemplates,
+    enabled: !!userId,
+  });
+
+  const templates = query.data ?? (EMPTY as LocalTemplate[]);
+
+  useEffect(() => {
+    if (query.isSuccess) {
+      warmTemplatesCache(templates);
+    }
+  }, [query.isSuccess, templates]);
+
+  return templates;
 }
 
 export function useBudgets(): LocalBudget[] {

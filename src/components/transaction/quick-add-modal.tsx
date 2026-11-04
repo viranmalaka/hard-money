@@ -3,7 +3,11 @@
 import React, { useState, useMemo, useCallback, useRef } from "react";
 import { X, AlertCircle, Calculator } from "lucide-react";
 import { useAccounts, useCategories, useTemplates, useSync } from "@/components/sync-provider";
-import { getWarmedAccounts, getWarmedCategories } from "@/lib/offline/warmed-cache";
+import {
+  getWarmedAccounts,
+  getWarmedCategories,
+  getWarmedTemplates,
+} from "@/lib/offline/warmed-cache";
 import { LocalAccount, LocalCategory, LocalTemplate } from "@/lib/db";
 import { localCreateTransaction } from "@/lib/sync/client";
 import {
@@ -63,11 +67,19 @@ function getInitialDraft() {
   return null;
 }
 
+function formatTemplateAmount(amountMinor?: number | null): string {
+  if (!amountMinor || amountMinor <= 0) return "";
+  return amountMinor % 100 === 0
+    ? String(amountMinor / 100)
+    : (amountMinor / 100).toFixed(2);
+}
+
 function QuickAddModalContent() {
   const { closeQuickAdd, initialType, initialAccountId } = useQuickAdd();
   useModalHistory(true, closeQuickAdd, "quick-add");
   const liveAccounts = useAccounts();
   const liveCategories = useCategories();
+  const liveTemplates = useTemplates();
   const accounts: LocalAccount[] = useMemo(() => {
     if (liveAccounts && liveAccounts.length > 0) return liveAccounts;
     if (typeof window !== "undefined" && !navigator.onLine) {
@@ -84,12 +96,19 @@ function QuickAddModalContent() {
     return liveCategories;
   }, [liveCategories]);
 
+  const templates: LocalTemplate[] = useMemo(() => {
+    if (liveTemplates && liveTemplates.length > 0) return liveTemplates;
+    if (typeof window !== "undefined" && !navigator.onLine) {
+      return getWarmedTemplates();
+    }
+    return liveTemplates;
+  }, [liveTemplates]);
+
   const { db, userId } = useSync();
 
   const activeAccounts = useMemo(() => accounts.filter((a) => !a.isArchived), [accounts]);
 
   const [initialDraft] = useState(() => getInitialDraft());
-  const templates = useTemplates();
   const [type, setType] = useState<TransactionType>(initialDraft?.type || initialType || "EXPENSE");
   const [date, setDate] = useState<string>(initialDraft?.date || getTodayDateString());
   const [expression, setExpression] = useState<string>(initialDraft?.expression || "");
@@ -106,26 +125,35 @@ function QuickAddModalContent() {
   );
   const [errorMsg, setErrorMsg] = useState<string>("");
   const [isKeypadOpen, setIsKeypadOpen] = useState(false);
+  const [appliedTemplateId, setAppliedTemplateId] = useState<string | null>(null);
+  const lastTemplateAmountRef = useRef<string | null>(null);
 
   const handleApplyTemplate = (tmpl: LocalTemplate) => {
-    if (tmpl.type === "EXPENSE" || tmpl.type === "INCOME" || tmpl.type === "TRANSFER") {
-      setType(tmpl.type);
+    setAppliedTemplateId(tmpl.id);
+    setErrorMsg("");
+
+    const nextType: TransactionType =
+      tmpl.type === "EXPENSE" || tmpl.type === "INCOME" || tmpl.type === "TRANSFER"
+        ? tmpl.type
+        : "EXPENSE";
+    setType(nextType);
+    setAccountId(tmpl.accountId || initialAccountId || "");
+    setToAccountId(nextType === "TRANSFER" ? tmpl.toAccountId || "" : "");
+    setCategoryId(nextType !== "TRANSFER" ? tmpl.categoryId || "" : "");
+
+    const formattedAmount = formatTemplateAmount(tmpl.defaultAmountMinor);
+    if (formattedAmount) {
+      lastTemplateAmountRef.current = formattedAmount;
+      setExpression(formattedAmount);
+    } else if (
+      lastTemplateAmountRef.current !== null &&
+      expression === lastTemplateAmountRef.current
+    ) {
+      lastTemplateAmountRef.current = null;
+      setExpression("");
     }
-    if (tmpl.accountId) {
-      setAccountId(tmpl.accountId);
-    }
-    if (tmpl.toAccountId) {
-      setToAccountId(tmpl.toAccountId);
-    }
-    if (tmpl.categoryId) {
-      setCategoryId(tmpl.categoryId);
-    }
-    if (tmpl.defaultAmountMinor) {
-      setExpression(String(tmpl.defaultAmountMinor / 100));
-    }
-    if (tmpl.note) {
-      setNote(tmpl.note);
-    }
+
+    setNote(tmpl.note || "");
   };
 
   const amountInputRef = useRef<HTMLInputElement>(null);
@@ -361,6 +389,7 @@ function QuickAddModalContent() {
         activeAccounts={activeAccounts}
         categories={categories}
         templates={templates}
+        appliedTemplateId={appliedTemplateId}
         handleApplyTemplate={handleApplyTemplate}
         errorMsg={errorMsg}
         setErrorMsg={setErrorMsg}
@@ -449,22 +478,40 @@ function QuickAddModalContent() {
               data-testid="bookmark-chips"
               className="flex items-center gap-2 overflow-x-auto px-6 py-3 border-b border-[var(--border)] bg-[var(--bg)]/50 no-scrollbar shrink-0"
             >
-              {templates.map((tmpl) => (
-                <button
-                  key={tmpl.id}
-                  type="button"
-                  data-testid={`bookmark-chip-${tmpl.id}`}
-                  onClick={() => handleApplyTemplate(tmpl)}
-                  className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-2xl border border-[var(--border)] bg-[var(--surface)] hover:border-[var(--accent)]/40 text-xs text-[var(--text)] whitespace-nowrap shrink-0 transition-colors cursor-pointer shadow-2xs"
-                >
-                  <span className="font-semibold">{tmpl.name}</span>
-                  {tmpl.defaultAmountMinor && (
-                    <span className="text-2xs text-[var(--text-muted)] font-mono">
-                      {(tmpl.defaultAmountMinor / 100).toFixed(0)}
-                    </span>
-                  )}
-                </button>
-              ))}
+              {templates.map((tmpl) => {
+                const isSelected = appliedTemplateId === tmpl.id;
+                const tmplCat = tmpl.categoryId
+                  ? categories.find((c) => c.id === tmpl.categoryId)
+                  : null;
+                return (
+                  <button
+                    key={tmpl.id}
+                    type="button"
+                    data-testid={`bookmark-chip-${tmpl.id}`}
+                    onClick={() => handleApplyTemplate(tmpl)}
+                    className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-2xl border text-xs whitespace-nowrap shrink-0 transition-all cursor-pointer shadow-2xs ${
+                      isSelected
+                        ? "border-[var(--accent)] bg-[var(--accent)]/12 text-[var(--accent)] font-bold"
+                        : "border-[var(--border)] bg-[var(--surface)] hover:border-[var(--accent)]/40 text-[var(--text)]"
+                    }`}
+                  >
+                    {tmplCat && (
+                      <span
+                        className="w-4 h-4 rounded-md flex items-center justify-center text-white shrink-0"
+                        style={{ backgroundColor: tmplCat.color || "#059669" }}
+                      >
+                        <CategoryIcon name={tmplCat.icon} size={10} className="text-white" />
+                      </span>
+                    )}
+                    <span className="font-semibold">{tmpl.name}</span>
+                    {tmpl.defaultAmountMinor ? (
+                      <span className="text-2xs text-[var(--text-muted)] font-mono">
+                        {formatTemplateAmount(tmpl.defaultAmountMinor)}
+                      </span>
+                    ) : null}
+                  </button>
+                );
+              })}
             </div>
           )}
 

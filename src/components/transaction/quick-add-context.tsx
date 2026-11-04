@@ -25,8 +25,8 @@ export function QuickAddProvider({ children }: { children: React.ReactNode }) {
   const [initialAccountId, setInitialAccountId] = useState<string | undefined>(undefined);
 
   const openQuickAdd = useCallback((options?: QuickAddOptions) => {
-    if (options?.type) setInitialType(options.type);
-    if (options?.accountId) setInitialAccountId(options.accountId);
+    setInitialType(options?.type ?? "EXPENSE");
+    setInitialAccountId(options?.accountId);
     setIsOpen(true);
   }, []);
 

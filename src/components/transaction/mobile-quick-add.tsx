@@ -50,6 +50,7 @@ interface MobileQuickAddProps {
   activeAccounts: LocalAccount[];
   categories: LocalCategory[];
   templates: LocalTemplate[];
+  appliedTemplateId?: string | null;
   handleApplyTemplate: (tmpl: LocalTemplate) => void;
   errorMsg: string;
   setErrorMsg: (msg: string) => void;
@@ -107,6 +108,7 @@ export function MobileQuickAdd({
   activeAccounts,
   categories,
   templates,
+  appliedTemplateId,
   handleApplyTemplate,
   errorMsg,
   setErrorMsg,
@@ -121,7 +123,7 @@ export function MobileQuickAdd({
 }: MobileQuickAddProps) {
   const router = useRouter();
   const [activeField, setActiveField] = useState<MobileActiveField>("amount");
-  const [showBookmarks, setShowBookmarks] = useState(false);
+  const [showBookmarks, setShowBookmarks] = useState(true);
 
   const typeTone = useMemo(() => {
     switch (type) {
@@ -318,24 +320,89 @@ export function MobileQuickAdd({
           data-testid="quick-add-mobile-bookmarks"
           className="flex items-center gap-2 overflow-x-auto px-4 pb-3 no-scrollbar shrink-0"
         >
-          {templates.map((tmpl) => (
-            <button
-              key={tmpl.id}
-              type="button"
-              onClick={() => {
-                handleApplyTemplate(tmpl);
-                setShowBookmarks(false);
-              }}
-              className="inline-flex items-center gap-2 px-3.5 py-2 rounded-2xl border border-[var(--border)] bg-[var(--surface)] text-xs font-semibold text-[var(--text)] whitespace-nowrap shrink-0 active:scale-95 transition-all shadow-2xs"
-            >
-              <span>{tmpl.name}</span>
-              {tmpl.defaultAmountMinor && (
-                <span className="text-2xs text-[var(--text-muted)] font-mono">
-                  {(tmpl.defaultAmountMinor / 100).toFixed(0)}
-                </span>
-              )}
-            </button>
-          ))}
+          {templates.map((tmpl) => {
+            const isSelected = appliedTemplateId === tmpl.id;
+            const tmplCat = tmpl.categoryId
+              ? categories.find((c) => c.id === tmpl.categoryId)
+              : null;
+            const formattedAmt =
+              tmpl.defaultAmountMinor && tmpl.defaultAmountMinor > 0
+                ? tmpl.defaultAmountMinor % 100 === 0
+                  ? String(tmpl.defaultAmountMinor / 100)
+                  : (tmpl.defaultAmountMinor / 100).toFixed(2)
+                : null;
+
+            return (
+              <button
+                key={tmpl.id}
+                type="button"
+                onClick={() => {
+                  handleApplyTemplate(tmpl);
+                  const nextType: TransactionType =
+                    tmpl.type === "EXPENSE" || tmpl.type === "INCOME" || tmpl.type === "TRANSFER"
+                      ? tmpl.type
+                      : "EXPENSE";
+                  const hasTemplateAmount = Boolean(
+                    tmpl.defaultAmountMinor && tmpl.defaultAmountMinor > 0
+                  );
+                  const hasTypedAmount = Boolean(
+                    evalResult.isValid && evalResult.value && evalResult.value > 0
+                  );
+                  const nextAcc =
+                    tmpl.accountId && activeAccounts.some((a) => a.id === tmpl.accountId)
+                      ? tmpl.accountId
+                      : "";
+                  const nextToAcc =
+                    nextType === "TRANSFER" &&
+                    tmpl.toAccountId &&
+                    tmpl.toAccountId !== nextAcc &&
+                    activeAccounts.some((a) => a.id === tmpl.toAccountId)
+                      ? tmpl.toAccountId
+                      : "";
+                  const nextCatGroup =
+                    nextType === "INCOME" ? categoryGroups.income : categoryGroups.expense;
+                  const nextCat =
+                    nextType !== "TRANSFER" &&
+                    tmpl.categoryId &&
+                    nextCatGroup.some((c) => c.id === tmpl.categoryId)
+                      ? tmpl.categoryId
+                      : "";
+
+                  if (!hasTemplateAmount && !hasTypedAmount) {
+                    setActiveField("amount");
+                  } else if (nextType !== "TRANSFER" && !nextCat) {
+                    setActiveField("category");
+                  } else if (!nextAcc) {
+                    setActiveField("account");
+                  } else if (nextType === "TRANSFER" && !nextToAcc) {
+                    setActiveField("toAccount");
+                  } else {
+                    setActiveField("amount");
+                  }
+                }}
+                className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-2xl border text-xs font-semibold whitespace-nowrap shrink-0 active:scale-95 transition-all shadow-2xs cursor-pointer ${
+                  isSelected
+                    ? "border-[var(--accent)] bg-[var(--accent)]/12 text-[var(--accent)]"
+                    : "border-[var(--border)] bg-[var(--surface)] text-[var(--text)]"
+                }`}
+              >
+                {tmplCat && (
+                  <span
+                    className="w-4 h-4 rounded-md flex items-center justify-center text-white shrink-0"
+                    style={{ backgroundColor: tmplCat.color || "#059669" }}
+                  >
+                    <CategoryIcon name={tmplCat.icon} size={10} className="text-white" />
+                  </span>
+                )}
+                <span>{tmpl.name}</span>
+                {formattedAmt && (
+                  <span className="text-2xs text-[var(--text-muted)] font-mono">
+                    {formattedAmt}
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </div>
       )}
 

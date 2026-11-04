@@ -15,6 +15,7 @@ import {
   AlertTriangle,
   PiggyBank,
   Landmark,
+  ChevronRight,
 } from "lucide-react";
 import { AppHeader } from "@/components/navigation/app-header";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -352,17 +353,18 @@ export default function AccountsPage() {
   return (
     <main className="flex-1 max-w-4xl mx-auto w-full px-5 sm:px-7 pt-4 sm:pt-6 pb-8 space-y-6">
       <AppHeader
-        title="Accounts & Portfolio"
-        subtitle="Treasury, Credit & Investments"
+        title="Accounts"
+        subtitle="Treasury & Portfolio"
         rightSlot={
           <button
             type="button"
             data-testid="add-account-btn"
             onClick={openCreateForm}
-            className="inline-flex items-center gap-1.5 h-10 px-4 text-xs font-bold rounded-2xl bg-[var(--accent)] text-[var(--accent-fg)] hover:opacity-95 transition-opacity cursor-pointer shadow-xs"
+            className="inline-flex items-center gap-1.5 h-10 px-3.5 sm:px-4 text-xs font-bold rounded-2xl bg-[var(--accent)] text-[var(--accent-fg)] hover:opacity-95 transition-opacity cursor-pointer shadow-xs"
           >
             <Plus size={16} strokeWidth={2.5} />
-            <span>Add Account</span>
+            <span className="sm:hidden">Add</span>
+            <span className="hidden sm:inline">Add Account</span>
           </button>
         }
       />
@@ -683,86 +685,72 @@ export default function AccountsPage() {
                     <div
                       key={plan.id}
                       data-testid={`installment-plan-card-${plan.id}`}
-                      className="p-5 rounded-3xl border border-[var(--border)] bg-[var(--surface)] space-y-4"
+                      className="p-4 sm:p-5 rounded-3xl border border-[var(--border)] bg-[var(--surface)] space-y-4 shadow-2xs"
                     >
-                      <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div className="space-y-1">
+                      {/* Tier 1: Merchant Identity */}
+                      <div className="space-y-1.5">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
                           <span
                             data-testid="installment-merchant"
-                            className="text-base font-bold text-[var(--text)] block"
+                            className="text-base font-bold text-[var(--text)] leading-snug"
                           >
                             {plan.merchantName}
                           </span>
-                          <div className="text-xs text-[var(--text-muted)] flex flex-wrap items-center gap-2">
-                            {account && (
-                              <span className="px-2 py-0.5 rounded-lg bg-[var(--bg)] border border-[var(--border)] font-medium text-[var(--text)]">
-                                {account.name}
-                              </span>
-                            )}
-                            <span className="font-mono">
-                              Total: {formatMoney(plan.totalAmountMinor)}
+                          {plan.status === "COMPLETED" && (
+                            <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 font-bold text-2xs">
+                              COMPLETED
                             </span>
-                            {plan.status === "COMPLETED" && (
-                              <span className="px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 font-bold text-2xs">
-                                COMPLETED
-                              </span>
-                            )}
-                          </div>
+                          )}
                         </div>
-
-                        {plan.status === "ACTIVE" && (
-                          <div className="flex flex-wrap items-center gap-2">
-                            <button
-                              type="button"
-                              data-testid="edit-installment-plan-btn"
-                              onClick={() => {
-                                setEditingInstallmentPlan(plan);
-                                setIsInstallmentModalOpen(true);
-                              }}
-                              className="px-3 py-1.5 rounded-xl bg-[var(--bg)] border border-[var(--border)] text-xs font-semibold hover:border-[var(--text-muted)] text-[var(--text)] transition-colors cursor-pointer"
-                            >
-                              Edit
-                            </button>
-                            <button
-                              type="button"
-                              data-testid="installment-early-payoff-btn"
-                              onClick={() => {
-                                setPayoffPlan(plan);
-                                setPayoffRemainingMinor(
-                                  prog.remainingPrincipalMinor
-                                );
-                              }}
-                              className="px-3 py-1.5 rounded-xl bg-[var(--bg)] border border-[var(--border)] text-xs font-semibold hover:border-[var(--text-muted)] text-[var(--text)] transition-colors cursor-pointer"
-                            >
-                              Early Payoff
-                            </button>
-                            <button
-                              type="button"
-                              data-testid="cancel-plan-btn"
-                              onClick={() => handleCancelPlan(plan)}
-                              className="px-3 py-1.5 rounded-xl bg-rose-500/10 text-xs font-semibold text-rose-600 dark:text-rose-400 hover:bg-rose-500/18 transition-colors cursor-pointer"
-                            >
-                              Cancel Plan
-                            </button>
-                          </div>
-                        )}
+                        <div className="text-xs text-[var(--text-muted)] flex flex-wrap items-center gap-2">
+                          {account && (
+                            <span className="px-2.5 py-0.5 rounded-lg bg-[var(--bg)] border border-[var(--border)] font-medium text-[var(--text)]">
+                              {account.name}
+                            </span>
+                          )}
+                          <span className="font-mono">
+                            Total: {formatMoney(plan.totalAmountMinor)}
+                          </span>
+                        </div>
                       </div>
 
-                      {/* Progress Bar & Stats */}
-                      <div className="space-y-2">
+                      {/* Tier 2: 2-Column KPI Tiles */}
+                      <div className="grid grid-cols-2 gap-2.5">
+                        <div className="rounded-2xl bg-[var(--bg)] border border-[var(--border)] p-3 space-y-1">
+                          <span className="text-2xs uppercase tracking-wider font-semibold text-[var(--text-muted)] block">
+                            Monthly Installment
+                          </span>
+                          <span
+                            data-testid="installment-monthly-amount"
+                            className="font-mono font-extrabold text-sm tabular-nums text-[var(--text)] block truncate"
+                          >
+                            {formatMoney(plan.monthlyAmountMinor)} / mo
+                          </span>
+                        </div>
+                        <div className="rounded-2xl bg-[var(--bg)] border border-[var(--border)] p-3 space-y-1">
+                          <span className="text-2xs uppercase tracking-wider font-semibold text-[var(--text-muted)] block">
+                            Remaining Principal
+                          </span>
+                          <span
+                            data-testid="installment-remaining-amount"
+                            className="font-mono font-extrabold text-sm tabular-nums text-[var(--text)] block truncate"
+                          >
+                            {formatMoney(prog.remainingPrincipalMinor)}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Tier 3: Progress Bar */}
+                      <div className="space-y-1.5">
                         <div className="flex items-center justify-between text-xs">
                           <span
                             data-testid="installment-progress-text"
                             className="text-[var(--text-muted)] font-medium"
                           >
-                            {prog.paidInstallments} of {plan.tenureMonths}{" "}
-                            installments paid
+                            {prog.paidInstallments} of {plan.tenureMonths} installments paid
                           </span>
-                          <span
-                            data-testid="installment-monthly-amount"
-                            className="font-mono font-bold tabular-nums text-[var(--text)]"
-                          >
-                            {formatMoney(plan.monthlyAmountMinor)} / mo
+                          <span className="font-mono font-bold text-[var(--text)] tabular-nums">
+                            {percent}%
                           </span>
                         </div>
                         <div
@@ -776,15 +764,43 @@ export default function AccountsPage() {
                         </div>
                       </div>
 
-                      <div className="flex items-center justify-between text-xs pt-3 border-t border-[var(--border)] text-[var(--text-muted)]">
-                        <span>Remaining Principal</span>
-                        <span
-                          data-testid="installment-remaining-amount"
-                          className="font-mono font-extrabold text-sm tabular-nums text-[var(--text)]"
-                        >
-                          {formatMoney(prog.remainingPrincipalMinor)}
-                        </span>
-                      </div>
+                      {/* Tier 4: Actions */}
+                      {plan.status === "ACTIVE" && (
+                        <div className="flex flex-wrap items-center gap-2 pt-3 border-t border-[var(--border)]">
+                          <button
+                            type="button"
+                            data-testid="edit-installment-plan-btn"
+                            onClick={() => {
+                              setEditingInstallmentPlan(plan);
+                              setIsInstallmentModalOpen(true);
+                            }}
+                            className="flex-1 sm:flex-initial h-9 px-3.5 rounded-xl bg-[var(--bg)] border border-[var(--border)] text-xs font-semibold hover:border-[var(--text-muted)] text-[var(--text)] transition-colors cursor-pointer"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            data-testid="installment-early-payoff-btn"
+                            onClick={() => {
+                              setPayoffPlan(plan);
+                              setPayoffRemainingMinor(
+                                prog.remainingPrincipalMinor
+                              );
+                            }}
+                            className="flex-1 sm:flex-initial h-9 px-3.5 rounded-xl bg-[var(--bg)] border border-[var(--border)] text-xs font-semibold hover:border-[var(--text-muted)] text-[var(--text)] transition-colors cursor-pointer"
+                          >
+                            Early Payoff
+                          </button>
+                          <button
+                            type="button"
+                            data-testid="cancel-plan-btn"
+                            onClick={() => handleCancelPlan(plan)}
+                            className="flex-1 sm:flex-initial h-9 px-3.5 rounded-xl bg-rose-500/10 text-xs font-semibold text-rose-600 dark:text-rose-400 hover:bg-rose-500/18 transition-colors cursor-pointer"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -832,92 +848,96 @@ export default function AccountsPage() {
                     <div
                       key={loan.id}
                       data-testid={`loan-item-${loan.id}`}
-                      className="p-5 rounded-3xl border border-[var(--border)] bg-[var(--surface)] space-y-4"
+                      className="p-4 sm:p-5 rounded-3xl border border-[var(--border)] bg-[var(--surface)] space-y-4 shadow-2xs"
                     >
-                      <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div className="space-y-2 min-w-0">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span
-                              data-testid="loan-lender-name"
-                              className="text-base font-bold text-[var(--text)]"
-                            >
-                              {loan.lenderName}
-                            </span>
-                            <span
-                              className={`px-2 py-0.5 rounded-full font-bold text-2xs ${
-                                loan.kind === "LEASE"
-                                  ? "bg-purple-500/15 text-purple-600 dark:text-purple-400"
-                                  : "bg-blue-500/15 text-blue-600 dark:text-blue-400"
-                              }`}
-                            >
-                              {loan.kind}
-                            </span>
-                            <span
-                              className={`px-2 py-0.5 rounded-full font-bold text-2xs ${
-                                loan.status === "ACTIVE"
-                                  ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
-                                  : "bg-slate-500/15 text-[var(--text-muted)]"
-                              }`}
-                            >
-                              {loan.status}
-                            </span>
-                            <span className="px-2 py-0.5 rounded-full font-bold text-2xs bg-[var(--bg)] border border-[var(--border)] text-[var(--text-muted)]">
-                              {loan.calculationType === "FLAT_RATE"
-                                ? "FLAT RATE"
-                                : "REDUCING BAL"}
-                            </span>
-                          </div>
-                          <div className="text-xs text-[var(--text-muted)] flex flex-wrap items-center gap-x-4 gap-y-1 font-mono">
-                            <span>
-                              Principal:{" "}
-                              {formatMoney(loan.originalPrincipalMinor)}
-                            </span>
-                            <span>
-                              APR: {(loan.annualInterestRateBps / 100).toFixed(2)}%
-                            </span>
-                            <span>Tenure: {loan.tenureMonths} mo</span>
-                            <span>Paid: {loan.paidInstallments || 0}</span>
-                            {loan.residualValueMinor ? (
-                              <span>
-                                Residual: {formatMoney(loan.residualValueMinor)}
-                              </span>
-                            ) : null}
-                          </div>
+                      {/* Tier 1: Lender Identity & Badges */}
+                      <div className="space-y-1.5">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span
+                            data-testid="loan-lender-name"
+                            className="text-base font-bold text-[var(--text)] leading-snug"
+                          >
+                            {loan.lenderName}
+                          </span>
+                          <span
+                            className={`px-2 py-0.5 rounded-full font-bold text-2xs ${
+                              loan.kind === "LEASE"
+                                ? "bg-purple-500/15 text-purple-600 dark:text-purple-400"
+                                : "bg-blue-500/15 text-blue-600 dark:text-blue-400"
+                            }`}
+                          >
+                            {loan.kind}
+                          </span>
+                          <span
+                            className={`px-2 py-0.5 rounded-full font-bold text-2xs ${
+                              loan.status === "ACTIVE"
+                                ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
+                                : "bg-slate-500/15 text-[var(--text-muted)]"
+                            }`}
+                          >
+                            {loan.status}
+                          </span>
+                          <span className="px-2 py-0.5 rounded-full font-bold text-2xs bg-[var(--bg)] border border-[var(--border)] text-[var(--text-muted)]">
+                            {loan.calculationType === "FLAT_RATE"
+                              ? "FLAT RATE"
+                              : "REDUCING BAL"}
+                          </span>
                         </div>
+                        <div className="text-xs text-[var(--text-muted)] flex flex-wrap items-center gap-x-3 gap-y-1 font-mono">
+                          <span>APR: {(loan.annualInterestRateBps / 100).toFixed(2)}%</span>
+                          <span>•</span>
+                          <span>Tenure: {loan.tenureMonths} mo</span>
+                          <span>•</span>
+                          <span>Paid: {loan.paidInstallments || 0}</span>
+                        </div>
+                      </div>
 
-                        <div className="text-left sm:text-right rounded-2xl bg-[var(--bg)] border border-[var(--border)] px-3.5 py-2 shrink-0">
+                      {/* Tier 2: 2x2 / 3-col KPI Grid */}
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                        <div className="rounded-2xl bg-[var(--bg)] border border-[var(--border)] p-3 space-y-1">
                           <span className="text-2xs uppercase tracking-wider font-semibold text-[var(--text-muted)] block">
                             Monthly EMI
                           </span>
                           <span
                             data-testid="loan-monthly-emi"
-                            className="text-sm font-extrabold font-mono tabular-nums text-[var(--text)]"
+                            className="text-sm font-extrabold font-mono tabular-nums text-[var(--text)] block truncate"
                           >
                             {formatMoney(loan.monthlyEmiAmountMinor)}
                           </span>
                         </div>
-                      </div>
 
-                      <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-[var(--border)] text-xs">
-                        <div className="flex items-center gap-2">
-                          <span className="text-[var(--text-muted)]">
-                            Remaining Principal:
+                        <div className="rounded-2xl bg-[var(--bg)] border border-[var(--border)] p-3 space-y-1">
+                          <span className="text-2xs uppercase tracking-wider font-semibold text-[var(--text-muted)] block">
+                            Remaining Principal
                           </span>
                           <span
                             data-testid="loan-remaining-principal"
-                            className="font-mono font-extrabold text-sm tabular-nums text-[var(--text)]"
+                            className="text-sm font-extrabold font-mono tabular-nums text-expense block truncate"
                           >
                             {formatMoney(remPrincipal)}
                           </span>
                         </div>
 
+                        <div className="col-span-2 sm:col-span-1 rounded-2xl bg-[var(--bg)] border border-[var(--border)] p-3 space-y-1">
+                          <span className="text-2xs uppercase tracking-wider font-semibold text-[var(--text-muted)] block">
+                            Original Principal
+                          </span>
+                          <span className="text-sm font-bold font-mono tabular-nums text-[var(--text)] block truncate">
+                            {formatMoney(loan.originalPrincipalMinor)}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Tier 3: Schedule Action */}
+                      <div className="pt-1">
                         <button
                           type="button"
                           data-testid="loan-details-btn"
                           onClick={() => setSelectedLoan(loan)}
-                          className="px-3.5 py-2 rounded-xl bg-[var(--bg)] border border-[var(--border)] text-xs font-bold text-[var(--text)] hover:border-[var(--accent)] transition-colors cursor-pointer"
+                          className="w-full sm:w-auto h-10 px-4 rounded-2xl bg-[var(--bg)] border border-[var(--border)] text-xs font-bold text-[var(--text)] hover:border-[var(--accent)] transition-colors cursor-pointer inline-flex items-center justify-center gap-1.5"
                         >
-                          Details &amp; Schedule
+                          <span>Details &amp; Schedule</span>
+                          <ChevronRight size={15} />
                         </button>
                       </div>
                     </div>
@@ -957,7 +977,7 @@ export default function AccountsPage() {
                   className="inline-flex items-center gap-1.5 text-xs font-bold text-[var(--text)] px-3 py-1.5 rounded-xl bg-[var(--surface)] border border-[var(--border)] hover:border-[var(--text-muted)] transition-colors cursor-pointer normal-case tracking-normal"
                 >
                   <Plus size={14} />
-                  <span>Add Fixed Deposit</span>
+                  <span>Add FD</span>
                 </button>
               </div>
             </div>
@@ -999,83 +1019,91 @@ export default function AccountsPage() {
                     <div
                       key={fd.id}
                       data-testid={`fd-item-${fd.id}`}
-                      className="p-5 rounded-3xl border border-[var(--border)] bg-[var(--surface)] space-y-4"
+                      className="p-4 sm:p-5 rounded-3xl border border-[var(--border)] bg-[var(--surface)] space-y-4 shadow-2xs"
                     >
-                      <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div className="space-y-2 min-w-0">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className="text-base font-bold text-[var(--text)]">
-                              {fd.bankName}
+                      {/* Tier 1: Bank Identity & Badges */}
+                      <div className="space-y-1.5">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-base font-bold text-[var(--text)] leading-snug">
+                            {fd.bankName}
+                          </span>
+                          {fd.accountNumber && (
+                            <span className="text-xs text-[var(--text-muted)] font-mono">
+                              #{fd.accountNumber}
                             </span>
-                            {fd.accountNumber && (
-                              <span className="text-xs text-[var(--text-muted)] font-mono">
-                                #{fd.accountNumber}
-                              </span>
-                            )}
-                            <span
-                              className={`px-2 py-0.5 rounded-full font-bold text-2xs ${
-                                fd.status === "ACTIVE"
-                                  ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
-                                  : fd.status === "MATURED"
-                                    ? "bg-amber-500/15 text-amber-600 dark:text-amber-400"
-                                    : "bg-slate-500/15 text-[var(--text-muted)]"
-                              }`}
-                            >
-                              {fd.status}
+                          )}
+                          <span
+                            className={`px-2 py-0.5 rounded-full font-bold text-2xs ${
+                              fd.status === "ACTIVE"
+                                ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
+                                : fd.status === "MATURED"
+                                  ? "bg-amber-500/15 text-amber-600 dark:text-amber-400"
+                                  : "bg-slate-500/15 text-[var(--text-muted)]"
+                            }`}
+                          >
+                            {fd.status}
+                          </span>
+                          {fd.autoRenew && (
+                            <span className="px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-600 dark:text-purple-400 font-bold text-2xs">
+                              AUTO-RENEW
                             </span>
-                            {fd.autoRenew && (
-                              <span className="px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-600 dark:text-purple-400 font-bold text-2xs">
-                                AUTO-RENEW
-                              </span>
-                            )}
-                          </div>
-                          <div className="text-xs text-[var(--text-muted)] flex flex-wrap items-center gap-x-4 gap-y-1 font-mono">
-                            <span>
-                              Principal: {formatMoney(fd.principalAmountMinor)}
-                            </span>
-                            <span>
-                              APR: {(fd.annualInterestRateBps / 100).toFixed(2)}%
-                            </span>
-                            <span>Tenure: {fd.tenureMonths} mo</span>
-                            <span>Elapsed: {fd.paidPeriods || 0} mo</span>
-                            <span>
-                              WHT: {(fd.withholdingTaxRateBps / 100).toFixed(1)}%
-                            </span>
-                          </div>
+                          )}
+                        </div>
+                        <div className="text-xs text-[var(--text-muted)] flex flex-wrap items-center gap-x-3 gap-y-1 font-mono">
+                          <span>APR: {(fd.annualInterestRateBps / 100).toFixed(2)}%</span>
+                          <span>•</span>
+                          <span>WHT: {(fd.withholdingTaxRateBps / 100).toFixed(1)}%</span>
+                          <span>•</span>
+                          <span>
+                            Maturity: {new Date(fd.maturityDate).toLocaleDateString()}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Tier 2: 2-Column KPI Tiles */}
+                      <div className="grid grid-cols-2 gap-2.5">
+                        <div className="rounded-2xl bg-[var(--bg)] border border-[var(--border)] p-3 space-y-1">
+                          <span className="text-2xs uppercase tracking-wider font-semibold text-[var(--text-muted)] block">
+                            Principal
+                          </span>
+                          <span className="text-sm font-extrabold font-mono text-[var(--text)] tabular-nums block truncate">
+                            {formatMoney(fd.principalAmountMinor)}
+                          </span>
                         </div>
 
-                        <div className="text-left sm:text-right rounded-2xl bg-[var(--bg)] border border-[var(--border)] px-3.5 py-2 shrink-0">
+                        <div className="rounded-2xl bg-[var(--bg)] border border-[var(--border)] p-3 space-y-1">
                           {isMonthly ? (
-                            <div>
+                            <>
                               <span className="text-2xs uppercase tracking-wider font-semibold text-[var(--text-muted)] block">
                                 Monthly Net
                               </span>
                               <span
                                 data-testid="fd-monthly-net"
-                                className="text-sm font-extrabold font-mono text-[var(--income)] tabular-nums"
+                                className="text-sm font-extrabold font-mono text-[var(--income)] tabular-nums block truncate"
                               >
                                 {formatMoney(monthlyPayout.netInterestMinor)}
                               </span>
-                            </div>
+                            </>
                           ) : (
-                            <div>
+                            <>
                               <span className="text-2xs uppercase tracking-wider font-semibold text-[var(--text-muted)] block">
                                 Maturity Net
                               </span>
                               <span
                                 data-testid="fd-maturity-net"
-                                className="text-sm font-extrabold font-mono text-[var(--income)] tabular-nums"
+                                className="text-sm font-extrabold font-mono text-[var(--income)] tabular-nums block truncate"
                               >
                                 {formatMoney(
                                   compoundMaturity.maturityNetAmountMinor
                                 )}
                               </span>
-                            </div>
+                            </>
                           )}
                         </div>
                       </div>
 
-                      <div className="space-y-2">
+                      {/* Tier 3: Tenure Progress */}
+                      <div className="space-y-1.5">
                         <div className="flex items-center justify-between text-xs">
                           <span
                             data-testid="fd-progress-text"
@@ -1098,48 +1126,40 @@ export default function AccountsPage() {
                         </div>
                       </div>
 
-                      <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-[var(--border)] text-xs">
-                        <span className="text-[var(--text-muted)] font-mono">
-                          Maturity:{" "}
-                          {new Date(fd.maturityDate).toLocaleDateString()}
-                        </span>
-
-                        <div className="flex flex-wrap items-center gap-2">
+                      {/* Tier 4: Actions */}
+                      {fd.status !== "CLOSED" && (
+                        <div className="flex flex-wrap items-center gap-2 pt-3 border-t border-[var(--border)]">
                           {fd.status === "MATURED" && (
                             <button
                               type="button"
                               data-testid="fd-deposit-proceeds-btn"
                               onClick={() => handleDepositProceeds(fd)}
-                              className="px-3.5 py-2 rounded-xl bg-[var(--accent)] text-[var(--accent-fg)] text-xs font-bold hover:opacity-95 active:scale-95 transition-all cursor-pointer"
+                              className="flex-1 sm:flex-initial h-9 px-3.5 rounded-xl bg-[var(--accent)] text-[var(--accent-fg)] text-xs font-bold hover:opacity-95 active:scale-95 transition-all cursor-pointer"
                             >
                               Deposit proceeds
                             </button>
                           )}
 
-                          {fd.status !== "CLOSED" && (
-                            <>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setEditingFd(fd);
-                                  setIsFdModalOpen(true);
-                                }}
-                                className="px-3 py-1.5 rounded-xl bg-[var(--bg)] border border-[var(--border)] text-xs font-semibold hover:border-[var(--text-muted)] cursor-pointer"
-                              >
-                                Edit
-                              </button>
-                              <button
-                                type="button"
-                                data-testid="fd-close-btn"
-                                onClick={() => setCloseFd(fd)}
-                                className="px-3 py-1.5 rounded-xl bg-rose-500/10 text-xs font-semibold text-rose-600 dark:text-rose-400 hover:bg-rose-500/18 transition-colors cursor-pointer"
-                              >
-                                Premature Close
-                              </button>
-                            </>
-                          )}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingFd(fd);
+                              setIsFdModalOpen(true);
+                            }}
+                            className="flex-1 sm:flex-initial h-9 px-3.5 rounded-xl bg-[var(--bg)] border border-[var(--border)] text-xs font-semibold hover:border-[var(--text-muted)] cursor-pointer"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            data-testid="fd-close-btn"
+                            onClick={() => setCloseFd(fd)}
+                            className="flex-1 sm:flex-initial h-9 px-3.5 rounded-xl bg-rose-500/10 text-xs font-semibold text-rose-600 dark:text-rose-400 hover:bg-rose-500/18 transition-colors cursor-pointer"
+                          >
+                            Premature Close
+                          </button>
                         </div>
-                      </div>
+                      )}
                     </div>
                   );
                 })}
@@ -1558,61 +1578,78 @@ const AccountCard = memo(function AccountCard({
   return (
     <div
       data-testid={`account-item-${account.id}`}
-      className={`p-4 sm:p-5 rounded-3xl border border-[var(--border)] bg-[var(--surface)] hover:border-[var(--text-muted)]/60 transition-all space-y-3 ${
+      className={`p-4 sm:p-5 rounded-3xl border border-[var(--border)] bg-[var(--surface)] hover:border-[var(--text-muted)]/60 transition-all space-y-3.5 shadow-2xs ${
         account.isArchived ? "opacity-60" : ""
       }`}
     >
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <Link
-          href={`/accounts/${account.id}`}
-          transitionTypes={["nav-forward"]}
-          data-testid="account-detail-link"
-          className="flex items-center gap-3.5 min-w-0 flex-1 hover:opacity-85 transition-opacity cursor-pointer"
-        >
-          <div className="w-12 h-12 rounded-2xl bg-[var(--accent)]/12 text-[var(--accent)] flex items-center justify-center shrink-0">
-            {isCash ? <Banknote size={21} /> : <Building2 size={21} />}
+      {/* Tier 1: Full-Width Account Identity Link */}
+      <Link
+        href={`/accounts/${account.id}`}
+        transitionTypes={["nav-forward"]}
+        data-testid="account-detail-link"
+        className="flex items-start justify-between gap-3 w-full group cursor-pointer"
+      >
+        <div className="flex items-start gap-3.5 min-w-0 flex-1">
+          <div className="w-11 h-11 rounded-2xl bg-[var(--accent)]/12 text-[var(--accent)] flex items-center justify-center shrink-0 mt-0.5">
+            {isCash ? <Banknote size={20} /> : <Building2 size={20} />}
           </div>
 
-          <div className="space-y-1 min-w-0">
+          <div className="space-y-1.5 min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
               <span
                 data-testid="account-card-name"
-                className="text-base font-bold text-[var(--text)] truncate"
+                className="text-base font-bold text-[var(--text)] leading-snug break-words group-hover:text-[var(--accent)] transition-colors"
               >
                 {account.name}
               </span>
               {account.accessScope === "SHARED_HOUSEHOLD" && (
                 <span
                   data-testid="account-scope-badge"
-                  className="text-2xs font-bold px-2 py-0.5 rounded-full bg-[var(--accent)]/15 text-[var(--accent)]"
+                  className="text-2xs font-bold px-2 py-0.5 rounded-full bg-[var(--accent)]/15 text-[var(--accent)] shrink-0"
                 >
                   Shared
                 </span>
               )}
               {account.isArchived && (
-                <span className="text-2xs font-bold px-2 py-0.5 rounded-full bg-[var(--bg)] border border-[var(--border)] text-[var(--text-muted)]">
+                <span className="text-2xs font-bold px-2 py-0.5 rounded-full bg-[var(--bg)] border border-[var(--border)] text-[var(--text-muted)] shrink-0">
                   Archived
                 </span>
               )}
             </div>
-            <div className="text-xs text-[var(--text-muted)] flex flex-wrap items-center gap-2 font-mono">
-              <span>{account.currency || "LKR"}</span>
+
+            <div className="flex flex-wrap items-center gap-1.5 text-xs text-[var(--text-muted)] font-mono">
+              <span className="font-semibold text-[var(--text)]/80">
+                {account.currency || "LKR"}
+              </span>
               {account.accountNumberLast4 && (
-                <span>• •••• {account.accountNumberLast4}</span>
+                <>
+                  <span className="opacity-50">•</span>
+                  <span>•••• {account.accountNumberLast4}</span>
+                </>
               )}
               {account.bankSenderIds?.[0] && (
-                <span className="px-2 py-0.5 rounded-md bg-[var(--bg)] border border-[var(--border)] text-2xs">
+                <span className="px-2 py-0.5 rounded-lg bg-[var(--bg)] border border-[var(--border)] text-2xs font-medium text-[var(--text-muted)] max-w-full truncate">
                   {account.bankSenderIds[0]}
                 </span>
               )}
             </div>
           </div>
-        </Link>
+        </div>
 
-        <div className="flex items-center gap-3 ml-auto shrink-0">
+        <div className="w-8 h-8 rounded-xl flex items-center justify-center text-[var(--text-muted)] group-hover:text-[var(--text)] group-hover:bg-[var(--bg)] transition-colors shrink-0 mt-0.5">
+          <ChevronRight size={18} />
+        </div>
+      </Link>
+
+      {/* Tier 2: Recessed Balance & Action Bar */}
+      <div className="rounded-2xl bg-[var(--bg)] border border-[var(--border)] px-4 py-3 flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <span className="text-2xs font-semibold uppercase tracking-wider text-[var(--text-muted)] block">
+            {isCash ? "Cash Balance" : "Available Balance"}
+          </span>
           <span
             data-testid="account-balance"
-            className={`font-extrabold font-mono text-base sm:text-lg tabular-nums ${
+            className={`font-extrabold font-mono text-lg sm:text-xl tabular-nums block truncate mt-0.5 ${
               isContributor
                 ? "text-[var(--text-muted)]"
                 : balance < 0
@@ -1626,62 +1663,69 @@ const AccountCard = memo(function AccountCard({
               {isContributor ? "—" : formatMoney(balance, account.currency)}
             </span>
           </span>
-
-          {!isViewer && (
-            <div className="flex items-center gap-1">
-              <button
-                type="button"
-                data-testid="account-edit-btn"
-                onClick={onEdit}
-                title="Edit"
-                className="w-9 h-9 rounded-xl bg-[var(--bg)] border border-[var(--border)] flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text)] transition-colors cursor-pointer"
-              >
-                <Edit2 size={14} />
-              </button>
-              <button
-                type="button"
-                data-testid="account-archive-btn"
-                onClick={onArchive}
-                title={account.isArchived ? "Unarchive" : "Archive"}
-                className="w-9 h-9 rounded-xl bg-[var(--bg)] border border-[var(--border)] flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text)] transition-colors cursor-pointer"
-              >
-                <Archive size={14} />
-              </button>
-              <button
-                type="button"
-                data-testid="account-delete-btn"
-                onClick={onDelete}
-                title="Delete"
-                className="w-9 h-9 rounded-xl bg-[var(--bg)] border border-[var(--border)] flex items-center justify-center text-[var(--text-muted)] hover:text-rose-500 transition-colors cursor-pointer"
-              >
-                <Trash2 size={14} />
-              </button>
-            </div>
-          )}
         </div>
+
+        {!isViewer && (
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button
+              type="button"
+              data-testid="account-edit-btn"
+              onClick={onEdit}
+              title="Edit"
+              aria-label={`Edit ${account.name}`}
+              className="w-9 h-9 rounded-xl bg-[var(--surface)] border border-[var(--border)] flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text)] hover:border-[var(--text-muted)] transition-colors cursor-pointer"
+            >
+              <Edit2 size={14} />
+            </button>
+            <button
+              type="button"
+              data-testid="account-archive-btn"
+              onClick={onArchive}
+              title={account.isArchived ? "Unarchive" : "Archive"}
+              aria-label={account.isArchived ? `Unarchive ${account.name}` : `Archive ${account.name}`}
+              className="w-9 h-9 rounded-xl bg-[var(--surface)] border border-[var(--border)] flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text)] hover:border-[var(--text-muted)] transition-colors cursor-pointer"
+            >
+              <Archive size={14} />
+            </button>
+            <button
+              type="button"
+              data-testid="account-delete-btn"
+              onClick={onDelete}
+              title="Delete"
+              aria-label={`Delete ${account.name}`}
+              className="w-9 h-9 rounded-xl bg-[var(--surface)] border border-[var(--border)] flex items-center justify-center text-[var(--text-muted)] hover:text-rose-500 hover:border-rose-500/40 transition-colors cursor-pointer"
+            >
+              <Trash2 size={14} />
+            </button>
+          </div>
+        )}
       </div>
 
+      {/* Tier 3: Balance Mismatch Calibration Banner */}
       {account.balanceMismatchHint && (
         <div
           data-testid="balance-mismatch-hint"
-          className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex flex-wrap items-center justify-between gap-2 text-xs"
+          className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
         >
-          <div className="space-y-0.5">
+          <div className="space-y-1 min-w-0">
             <div className="flex items-center gap-1.5 text-amber-600 dark:text-amber-400 font-bold">
-              <AlertTriangle size={14} />
-              <span>Balance mismatch detected from bank SMS</span>
+              <AlertTriangle size={14} className="shrink-0" />
+              <span>Balance mismatch detected from SMS</span>
             </div>
-            <div className="text-xs text-[var(--text-muted)] font-mono">
-              SMS: {formatMoney(account.balanceMismatchHint.statedBalanceMinor)}{" "}
-              • Ledger:{" "}
-              {formatMoney(account.balanceMismatchHint.ledgerBalanceMinor)}
+            <div className="text-xs text-[var(--text-muted)] font-mono flex flex-wrap gap-x-3 gap-y-0.5">
+              <span>
+                SMS: {formatMoney(account.balanceMismatchHint.statedBalanceMinor, account.currency)}
+              </span>
+              <span>
+                Ledger: {formatMoney(account.balanceMismatchHint.ledgerBalanceMinor, account.currency)}
+              </span>
             </div>
           </div>
           <Link
             href={`/accounts/${account.id}?calibrate=true`}
             transitionTypes={["nav-forward"]}
             data-testid="calibrate-btn"
-            className="px-3.5 py-1.5 rounded-xl bg-amber-500 text-white font-bold text-xs hover:bg-amber-600 transition-colors"
+            className="h-9 px-4 rounded-xl bg-amber-500 text-white font-bold text-xs hover:bg-amber-600 transition-colors inline-flex items-center justify-center shrink-0"
           >
             Calibrate
           </Link>
@@ -1739,44 +1783,46 @@ const CreditCardAccountCard = memo(function CreditCardAccountCard({
   return (
     <div
       data-testid={`account-item-${account.id}`}
-      className={`p-5 rounded-3xl border border-[var(--border)] bg-[var(--surface)] space-y-4 transition-all ${
+      className={`p-4 sm:p-5 rounded-3xl border border-[var(--border)] bg-[var(--surface)] space-y-4 transition-all shadow-2xs ${
         account.isArchived ? "opacity-60" : ""
       }`}
     >
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <Link
-          href={`/accounts/${account.id}`}
-          transitionTypes={["nav-forward"]}
-          data-testid="account-detail-link"
-          className="flex items-start gap-3.5 min-w-0 flex-1 hover:opacity-85 transition-opacity cursor-pointer"
-        >
-          <div className="w-12 h-12 rounded-2xl bg-[var(--expense)]/12 text-expense flex items-center justify-center shrink-0">
-            <CreditCard size={21} />
+      {/* Tier 1: Full-Width Card Identity Link */}
+      <Link
+        href={`/accounts/${account.id}`}
+        transitionTypes={["nav-forward"]}
+        data-testid="account-detail-link"
+        className="flex items-start justify-between gap-3 w-full group cursor-pointer"
+      >
+        <div className="flex items-start gap-3.5 min-w-0 flex-1">
+          <div className="w-11 h-11 rounded-2xl bg-[var(--expense)]/12 text-expense flex items-center justify-center shrink-0 mt-0.5">
+            <CreditCard size={20} />
           </div>
 
-          <div className="space-y-1 min-w-0">
+          <div className="space-y-1.5 min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
               <span
                 data-testid="account-card-name"
-                className="text-base font-bold text-[var(--text)] truncate"
+                className="text-base font-bold text-[var(--text)] leading-snug break-words group-hover:text-[var(--accent)] transition-colors"
               >
                 {account.name}
               </span>
               {account.accessScope === "SHARED_HOUSEHOLD" && (
                 <span
                   data-testid="account-scope-badge"
-                  className="text-2xs font-bold px-2 py-0.5 rounded-full bg-[var(--accent)]/15 text-[var(--accent)]"
+                  className="text-2xs font-bold px-2 py-0.5 rounded-full bg-[var(--accent)]/15 text-[var(--accent)] shrink-0"
                 >
                   Shared
                 </span>
               )}
               <span
                 data-testid="credit-due-countdown"
-                className="text-2xs px-2.5 py-0.5 rounded-full font-bold bg-[var(--bg)] border border-[var(--border)] text-[var(--text-muted)]"
+                className="text-2xs px-2.5 py-0.5 rounded-full font-bold bg-[var(--bg)] border border-[var(--border)] text-[var(--text-muted)] shrink-0"
               >
                 {cycle.dueCountdownText}
               </span>
             </div>
+
             <div className="text-xs text-[var(--text-muted)] flex flex-wrap items-center gap-x-3 gap-y-1 font-mono">
               {account.accountNumberLast4 && (
                 <span>•••• {account.accountNumberLast4}</span>
@@ -1792,55 +1838,14 @@ const CreditCardAccountCard = memo(function CreditCardAccountCard({
               )}
             </div>
           </div>
-        </Link>
-
-        <div className="flex items-center gap-2 shrink-0 ml-auto">
-          {!isViewer && !isContributor && (
-            <button
-              type="button"
-              data-testid="credit-settle-btn"
-              onClick={onSettle}
-              className="h-9 px-3.5 rounded-xl bg-[var(--accent)] text-[var(--accent-fg)] text-xs font-bold hover:opacity-95 active:scale-95 transition-all cursor-pointer"
-            >
-              Settle
-            </button>
-          )}
-
-          {!isViewer && (
-            <div className="flex items-center gap-1">
-              <button
-                type="button"
-                data-testid="account-edit-btn"
-                onClick={onEdit}
-                title="Edit"
-                className="w-9 h-9 rounded-xl bg-[var(--bg)] border border-[var(--border)] flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text)] transition-colors cursor-pointer"
-              >
-                <Edit2 size={14} />
-              </button>
-              <button
-                type="button"
-                data-testid="account-archive-btn"
-                onClick={onArchive}
-                title={account.isArchived ? "Unarchive" : "Archive"}
-                className="w-9 h-9 rounded-xl bg-[var(--bg)] border border-[var(--border)] flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text)] transition-colors cursor-pointer"
-              >
-                <Archive size={14} />
-              </button>
-              <button
-                type="button"
-                data-testid="account-delete-btn"
-                onClick={onDelete}
-                title="Delete"
-                className="w-9 h-9 rounded-xl bg-[var(--bg)] border border-[var(--border)] flex items-center justify-center text-[var(--text-muted)] hover:text-rose-500 transition-colors cursor-pointer"
-              >
-                <Trash2 size={14} />
-              </button>
-            </div>
-          )}
         </div>
-      </div>
 
-      {/* Credit Card 2x2 / 4-col Metric Tiles (Zero Mobile Overlap!) */}
+        <div className="w-8 h-8 rounded-xl flex items-center justify-center text-[var(--text-muted)] group-hover:text-[var(--text)] group-hover:bg-[var(--bg)] transition-colors shrink-0 mt-0.5">
+          <ChevronRight size={18} />
+        </div>
+      </Link>
+
+      {/* Tier 2: Credit Card 2x2 / 4-col Metric Tiles */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
         <div className="rounded-2xl bg-[var(--bg)] border border-[var(--border)] p-3 space-y-1">
           <span className="text-2xs uppercase tracking-wider text-[var(--text-muted)] font-semibold block">
@@ -1888,56 +1893,111 @@ const CreditCardAccountCard = memo(function CreditCardAccountCard({
         </div>
       </div>
 
-      {/* Balance Footer */}
-      <div className="flex flex-wrap items-center justify-between gap-2 text-xs pt-2 border-t border-[var(--border)] text-[var(--text-muted)]">
-        <div>
-          {isOverpaid ? (
-            <span
-              data-testid="credit-card-credit"
-              className="text-income font-bold font-mono tabular-nums"
-            >
-              Credit Balance: {isContributor ? "—" : `+${formatMoney(balance)}`}
+      {/* Tier 3: Outstanding Balance & Action Bar */}
+      <div className="rounded-2xl bg-[var(--bg)] border border-[var(--border)] px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex items-center justify-between sm:block gap-2">
+          <div>
+            <span className="text-2xs font-semibold uppercase tracking-wider text-[var(--text-muted)] block">
+              {isOverpaid ? "Credit Balance" : "Total Outstanding"}
             </span>
-          ) : (
-            <span>
-              Total Outstanding:{" "}
+            {isOverpaid ? (
+              <span
+                data-testid="credit-card-credit"
+                className="text-income font-extrabold font-mono text-base sm:text-lg tabular-nums block mt-0.5"
+              >
+                {isContributor ? "—" : `+${formatMoney(balance)}`}
+              </span>
+            ) : (
               <span
                 data-testid="card-outstanding"
-                className="font-bold font-mono text-expense tabular-nums"
+                className="font-extrabold font-mono text-base sm:text-lg text-expense tabular-nums block mt-0.5"
               >
                 {isContributor ? "—" : formatMoney(cycle.outstandingDebtMinor)}
               </span>
+            )}
+          </div>
+
+          <div
+            data-testid="account-card-balance"
+            className="text-right sm:text-left font-mono text-xs text-[var(--text-muted)] tabular-nums sm:mt-0.5"
+          >
+            <span className="sm:hidden block text-2xs uppercase tracking-wider">Ledger</span>
+            <span data-testid="account-balance">
+              {isContributor ? "—" : formatMoney(balance)}
             </span>
-          )}
+          </div>
         </div>
-        <div data-testid="account-card-balance" className="font-mono tabular-nums">
-          <span data-testid="account-balance">
-            {isContributor ? "—" : formatMoney(balance)}
-          </span>
-        </div>
+
+        {!isViewer && (
+          <div className="flex items-center gap-2 pt-2 sm:pt-0 border-t sm:border-t-0 border-[var(--border)]">
+            {!isContributor && (
+              <button
+                type="button"
+                data-testid="credit-settle-btn"
+                onClick={onSettle}
+                className="flex-1 sm:flex-initial h-9 px-4 rounded-xl bg-[var(--accent)] text-[var(--accent-fg)] text-xs font-bold hover:opacity-95 active:scale-95 transition-all cursor-pointer"
+              >
+                Settle Card
+              </button>
+            )}
+
+            <div className="flex items-center gap-1.5 ml-auto">
+              <button
+                type="button"
+                data-testid="account-edit-btn"
+                onClick={onEdit}
+                title="Edit"
+                className="w-9 h-9 rounded-xl bg-[var(--surface)] border border-[var(--border)] flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text)] transition-colors cursor-pointer"
+              >
+                <Edit2 size={14} />
+              </button>
+              <button
+                type="button"
+                data-testid="account-archive-btn"
+                onClick={onArchive}
+                title={account.isArchived ? "Unarchive" : "Archive"}
+                className="w-9 h-9 rounded-xl bg-[var(--surface)] border border-[var(--border)] flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text)] transition-colors cursor-pointer"
+              >
+                <Archive size={14} />
+              </button>
+              <button
+                type="button"
+                data-testid="account-delete-btn"
+                onClick={onDelete}
+                title="Delete"
+                className="w-9 h-9 rounded-xl bg-[var(--surface)] border border-[var(--border)] flex items-center justify-center text-[var(--text-muted)] hover:text-rose-500 transition-colors cursor-pointer"
+              >
+                <Trash2 size={14} />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {account.balanceMismatchHint && (
         <div
           data-testid="balance-mismatch-hint"
-          className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex flex-wrap items-center justify-between gap-2 text-xs"
+          className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
         >
-          <div className="space-y-0.5">
+          <div className="space-y-1">
             <div className="flex items-center gap-1.5 text-amber-600 dark:text-amber-400 font-bold">
-              <AlertTriangle size={14} />
-              <span>Balance mismatch detected from bank SMS</span>
+              <AlertTriangle size={14} className="shrink-0" />
+              <span>Balance mismatch detected from SMS</span>
             </div>
-            <div className="text-xs text-[var(--text-muted)] font-mono">
-              SMS: {formatMoney(account.balanceMismatchHint.statedBalanceMinor)}{" "}
-              • Ledger:{" "}
-              {formatMoney(account.balanceMismatchHint.ledgerBalanceMinor)}
+            <div className="text-xs text-[var(--text-muted)] font-mono flex flex-wrap gap-x-3 gap-y-0.5">
+              <span>
+                SMS: {formatMoney(account.balanceMismatchHint.statedBalanceMinor)}
+              </span>
+              <span>
+                Ledger: {formatMoney(account.balanceMismatchHint.ledgerBalanceMinor)}
+              </span>
             </div>
           </div>
           <Link
             href={`/accounts/${account.id}?calibrate=true`}
             transitionTypes={["nav-forward"]}
             data-testid="calibrate-btn"
-            className="px-3.5 py-1.5 rounded-xl bg-amber-500 text-white font-bold text-xs hover:bg-amber-600 transition-colors"
+            className="h-9 px-4 rounded-xl bg-amber-500 text-white font-bold text-xs hover:bg-amber-600 transition-colors inline-flex items-center justify-center shrink-0"
           >
             Calibrate
           </Link>
