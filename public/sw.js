@@ -1,6 +1,7 @@
 // Hard Money Service Worker - Local-first PWA Shell & Push Notifications
-const CACHE_VERSION = "hardmoney-v5";
+const CACHE_VERSION = "hardmoney-v6";
 const PRECACHE_ASSETS = [
+  "/",
   "/offline",
   "/manifest.json",
   "/icon-192.png",
@@ -66,7 +67,7 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Navigation & HTML document requests: Network-First with Cache fallback, then /offline
+  // Navigation & HTML document requests: Stale-While-Revalidate for instant native launch
   const isHtmlRequest =
     event.request.mode === "navigate" ||
     event.request.destination === "document" ||
@@ -74,29 +75,34 @@ self.addEventListener("fetch", (event) => {
 
   if (isHtmlRequest) {
     event.respondWith(
-      fetch(event.request)
-        .then((networkResponse) => {
-          if (networkResponse && networkResponse.status === 200) {
-            const responseClone = networkResponse.clone();
-            caches.open(CACHE_VERSION).then((cache) => {
-              cache.put(event.request, responseClone);
+      (async () => {
+        // 1. Check local cache first: render cached HTML shell on frame 0 (0ms)
+        const cachedResponse =
+          (await caches.match(event.request, { ignoreSearch: true })) ||
+          (await caches.match("/", { ignoreSearch: true }));
+
+        // 2. Fetch network in background to revalidate shell
+        const networkFetchPromise = fetch(event.request)
+          .then((networkResponse) => {
+            if (networkResponse && networkResponse.status === 200) {
+              const responseClone = networkResponse.clone();
+              caches.open(CACHE_VERSION).then((cache) => {
+                cache.put(event.request, responseClone);
+              });
+            }
+            return networkResponse;
+          })
+          .catch(async () => {
+            if (cachedResponse) return cachedResponse;
+            const offlineFallback = await caches.match("/offline");
+            if (offlineFallback) return offlineFallback;
+            return new Response("You are currently offline.", {
+              headers: { "Content-Type": "text/html" },
             });
-          }
-          return networkResponse;
-        })
-        .catch(async () => {
-          const cachedResponse = await caches.match(event.request, { ignoreSearch: true });
-          if (cachedResponse) {
-            return cachedResponse;
-          }
-          const offlineFallback = await caches.match("/offline");
-          if (offlineFallback) {
-            return offlineFallback;
-          }
-          return new Response("You are currently offline.", {
-            headers: { "Content-Type": "text/html" },
           });
-        })
+
+        return cachedResponse || networkFetchPromise;
+      })()
     );
     return;
   }

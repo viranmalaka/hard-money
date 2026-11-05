@@ -13,11 +13,17 @@ import type {
   LocalShoppingListItem,
 } from "../db";
 import { enqueuePendingTransaction, flushPendingTransactions } from "../offline/transaction-queue";
+import { enqueueOutboxMutation, flushOutboxQueue, type OutboxEntity, type OutboxOp } from "../offline/outbox-queue";
+import {
+  optimisticCreateTransaction,
+  optimisticUpdateTransaction,
+  optimisticDeleteTransaction,
+} from "./optimistic-mutations";
 
 /**
  * Universal optimistic mutation executor.
  * Dispatches the mutation to the backend via /api/sync/push, updates React Query cache immediately,
- * and falls back to offline queue if transaction creation fails while offline.
+ * and falls back to offline outbox queue if network fails or device is offline.
  */
 async function pushSingleMutation(
   entity: string,
@@ -28,12 +34,17 @@ async function pushSingleMutation(
 ): Promise<void> {
   const mutation = {
     mutationId: uuidv4(),
-    entity,
-    op,
+    entity: entity as OutboxEntity,
+    op: op as OutboxOp,
     id,
     payload,
     createdAt: new Date().toISOString(),
   };
+
+  if (typeof window !== "undefined" && !navigator.onLine) {
+    await enqueueOutboxMutation(mutation);
+    return;
+  }
 
   try {
     const res = await fetch("/api/sync/push", {
@@ -45,36 +56,9 @@ async function pushSingleMutation(
     if (!res.ok) {
       throw new Error(`Push failed with HTTP ${res.status}`);
     }
-  } catch (err) {
-    // If it's a transaction creation and network failed, store in offline queue
-    if (entity === "transaction" && op === "CREATE") {
-      const fullTx = payload as LocalTransaction;
-      await enqueuePendingTransaction({
-        tempId: id,
-        payload: {
-          accountId: fullTx.accountId,
-          toAccountId: fullTx.toAccountId,
-          amountMinor: fullTx.amountMinor,
-          destinationAmountMinor: fullTx.destinationAmountMinor,
-          exchangeRateMicros: fullTx.exchangeRateMicros,
-          categoryId: fullTx.categoryId,
-          note: fullTx.note,
-          type: fullTx.type,
-          transactionDate: fullTx.transactionDate,
-          isSplit: fullTx.isSplit,
-          splitItems: fullTx.splitItems?.map((s) => ({
-            categoryId: s.categoryId,
-            amountMinor: s.amountMinor,
-            note: s.note,
-          })),
-        },
-        optimisticTx: fullTx,
-        queuedAt: new Date().toISOString(),
-        retryCount: 0,
-      });
-      return;
-    }
-    throw err;
+  } catch {
+    // If network failed, safely store in offline outbox queue for automatic retry
+    await enqueueOutboxMutation(mutation);
   } finally {
     if (queryKeyToInvalidate) {
       const qc = getQueryClient();
@@ -185,49 +169,7 @@ export async function localCreateTransaction(
   _db: any,
   tx: Omit<LocalTransaction, "id" | "serverSeq" | "createdAt" | "updatedAt"> & { id?: string }
 ): Promise<LocalTransaction> {
-  const now = new Date().toISOString();
-  const id = tx.id || uuidv4();
-  const fullTx: LocalTransaction = {
-    ...tx,
-    id,
-    serverSeq: 0,
-    createdAt: now,
-    updatedAt: now,
-  };
-
-  const qc = getQueryClient();
-  qc.setQueryData<LocalTransaction[]>(queryKeys.transactions.all(), (old = []) => [fullTx, ...old]);
-
-  if (typeof window !== "undefined" && !navigator.onLine) {
-    // Save to offline queue directly
-    await enqueuePendingTransaction({
-      tempId: id,
-      payload: {
-        accountId: fullTx.accountId,
-        toAccountId: fullTx.toAccountId,
-        amountMinor: fullTx.amountMinor,
-        destinationAmountMinor: fullTx.destinationAmountMinor,
-        exchangeRateMicros: fullTx.exchangeRateMicros,
-        categoryId: fullTx.categoryId,
-        note: fullTx.note,
-        type: fullTx.type,
-        transactionDate: fullTx.transactionDate,
-        isSplit: fullTx.isSplit,
-        splitItems: fullTx.splitItems?.map((s) => ({
-          categoryId: s.categoryId,
-          amountMinor: s.amountMinor,
-          note: s.note,
-        })),
-      },
-      optimisticTx: fullTx,
-      queuedAt: now,
-      retryCount: 0,
-    });
-    return fullTx;
-  }
-
-  await pushSingleMutation("transaction", "CREATE", id, fullTx, queryKeys.transactions.all());
-  return fullTx;
+  return optimisticCreateTransaction(tx);
 }
 
 export async function localUpdateTransaction(
@@ -235,29 +177,16 @@ export async function localUpdateTransaction(
   id: string,
   patch: Partial<LocalTransaction>
 ): Promise<void> {
-  const qc = getQueryClient();
-  qc.setQueryData<LocalTransaction[]>(queryKeys.transactions.all(), (old = []) =>
-    old.map((t) => (t.id === id ? { ...t, ...patch, updatedAt: new Date().toISOString() } : t))
-  );
-
-  await pushSingleMutation("transaction", "UPDATE", id, patch, queryKeys.transactions.all());
+  return optimisticUpdateTransaction(id, patch);
 }
 
 export async function localDeleteTransaction(_db: any, id: string): Promise<void> {
-  const qc = getQueryClient();
-  qc.setQueryData<LocalTransaction[]>(queryKeys.transactions.all(), (old = []) =>
-    old.filter((t) => t.id !== id)
-  );
-
-  await pushSingleMutation("transaction", "DELETE", id, { id }, queryKeys.transactions.all());
+  return optimisticDeleteTransaction(id);
 }
 
 export async function localRestoreTransaction(_db: any, tx: LocalTransaction): Promise<void> {
   const restoredTx = { ...tx, deletedAt: null, updatedAt: new Date().toISOString() };
-  const qc = getQueryClient();
-  qc.setQueryData<LocalTransaction[]>(queryKeys.transactions.all(), (old = []) => [restoredTx, ...old]);
-
-  await pushSingleMutation("transaction", "CREATE", tx.id, restoredTx, queryKeys.transactions.all());
+  await optimisticCreateTransaction(restoredTx);
 }
 
 // -------------------------------------------------------------

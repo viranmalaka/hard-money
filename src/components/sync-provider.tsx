@@ -69,7 +69,7 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
     else localStorage.removeItem("hardmoney_active_user");
   }, [queryClient, sessionQuery.data, userId]);
 
-  // Online / Offline listeners & pending queue monitoring
+  // Online / Offline listeners, outbox monitoring & multi-device sync
   const updatePendingCount = useCallback(async () => {
     const queue = await getPendingTransactions();
     setPendingCount(queue.length);
@@ -82,27 +82,51 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
       setIsOnline(true);
       await flushPendingTransactions();
       await updatePendingCount();
-      queryClient.invalidateQueries();
+      void queryClient.invalidateQueries();
     };
 
     const handleOffline = () => {
       setIsOnline(false);
     };
 
-    window.addEventListener("online", handleOnline);
-    window.addEventListener("offline", handleOffline);
-
-    // Periodic check to drain pending transactions when online
-    const interval = setInterval(async () => {
-      if (navigator.onLine) {
+    const handleVisibilityChange = async () => {
+      if (document.visibilityState === "visible" && navigator.onLine) {
         await flushPendingTransactions();
         await updatePendingCount();
+        void queryClient.invalidateQueries({ queryKey: queryKeys.transactions.all() });
+        void queryClient.invalidateQueries({ queryKey: queryKeys.accounts.all() });
       }
-    }, 5000);
+    };
+
+    const handleOutboxChange = (e: Event) => {
+      const customEvent = e as CustomEvent<{ count?: number }>;
+      if (typeof customEvent.detail?.count === "number") {
+        setPendingCount(customEvent.detail.count);
+      } else {
+        void updatePendingCount();
+      }
+    };
+
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("hardmoney_outbox_change", handleOutboxChange);
+
+    // Light background multi-device polling (every 40s when active)
+    const interval = setInterval(async () => {
+      if (typeof document !== "undefined" && document.visibilityState === "visible" && navigator.onLine) {
+        await flushPendingTransactions();
+        await updatePendingCount();
+        void queryClient.invalidateQueries({ queryKey: queryKeys.transactions.all() });
+        void queryClient.invalidateQueries({ queryKey: queryKeys.accounts.all() });
+      }
+    }, 40_000);
 
     return () => {
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("hardmoney_outbox_change", handleOutboxChange);
       clearInterval(interval);
     };
   }, [queryClient, updatePendingCount]);
@@ -124,20 +148,6 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
         pendingCount,
       }}
     >
-      {/* Top Banner when Offline */}
-      {!isOnline && (
-        <div
-          data-testid="offline-banner"
-          className="sticky top-0 z-50 w-full bg-amber-500/90 backdrop-blur-sm text-black text-xs font-medium py-1.5 px-4 text-center border-b border-amber-600/30 flex items-center justify-center gap-2"
-        >
-          <span>Offline mode — Showing cached reference data. Only transaction creation is available.</span>
-          {pendingCount > 0 && (
-            <span className="bg-black/10 px-1.5 py-0.5 rounded text-[10px] font-semibold">
-              {pendingCount} queued
-            </span>
-          )}
-        </div>
-      )}
       <div data-sync-state={syncState} className="contents">
         {children}
       </div>
@@ -261,6 +271,53 @@ export function useLoanPayments(): import("@/lib/db").LocalLoanPayment[] {
 }
 
 export function SyncIndicator({ isMobile }: { isMobile?: boolean }) {
-  // Sync indicators have been removed per user preference; return null
+  const { syncState, pendingCount, sync } = useSync();
+  const [isSyncing, setIsSyncing] = useState(false);
+
+  const handleManualSync = async () => {
+    if (isSyncing) return;
+    setIsSyncing(true);
+    try {
+      await sync();
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  if (syncState === "offline") {
+    return (
+      <div
+        data-testid="sync-status-offline"
+        title="Offline — viewing cached data"
+        className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-500/10 text-amber-500 border border-amber-500/25"
+      >
+        <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+        <span className="text-[11px]">Offline</span>
+        {pendingCount > 0 && (
+          <span className="ml-0.5 bg-amber-500/20 px-1 rounded text-[10px] font-bold">
+            {pendingCount}
+          </span>
+        )}
+      </div>
+    );
+  }
+
+  if (pendingCount > 0 || isSyncing) {
+    return (
+      <button
+        type="button"
+        onClick={handleManualSync}
+        data-testid="sync-status-pending"
+        title="Pending sync — click to sync now"
+        className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-[var(--accent)]/12 text-[var(--accent)] border border-[var(--accent)]/25 cursor-pointer hover:bg-[var(--accent)]/18 transition-colors"
+      >
+        <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent)] animate-pulse" />
+        <span className="text-[11px] font-medium">
+          {isSyncing ? "Syncing..." : `${pendingCount} queued`}
+        </span>
+      </button>
+    );
+  }
+
   return null;
 }
