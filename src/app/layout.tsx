@@ -8,6 +8,7 @@ import { QuickAddModal } from "@/components/transaction/quick-add-modal";
 import { Sidebar } from "@/components/navigation/sidebar";
 import { BottomNav } from "@/components/navigation/bottom-nav";
 import { PwaManager } from "@/components/pwa-manager";
+import { SplashScreen } from "@/components/splash-screen";
 import { ScrollContainer } from "@/components/navigation/scroll-container";
 import { QueryProvider } from "@/components/query-provider";
 import { TabNavigationProvider } from "@/components/navigation/tab-navigation-context";
@@ -81,6 +82,9 @@ export default function RootLayout({
 
                       {/* PWA Service Worker & Update Handler */}
                       <PwaManager />
+
+                      {/* PWA & Initial Load Animated Splash Screen */}
+                      <SplashScreen />
                     </div>
                   </TabNavigationProvider>
                 </QuickAddProvider>

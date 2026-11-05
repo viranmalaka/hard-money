@@ -7,6 +7,7 @@ import {
   Moon,
   Save,
   Smartphone,
+  Sparkles,
   Sun,
 } from "lucide-react";
 import { AppHeader } from "@/components/navigation/app-header";
@@ -380,6 +381,34 @@ export default function PreferencesPage() {
               className="h-10 px-4 text-xs rounded-2xl border border-[var(--border)] bg-[var(--bg)] font-semibold hover:bg-[var(--surface-hover)] text-[var(--text)] transition-colors cursor-pointer shrink-0"
             >
               {colorSwap ? "Reset Default" : "Swap Colors"}
+            </button>
+          </div>
+
+          <div className="flex items-center justify-between gap-4 p-4 sm:p-5 border-t border-[var(--border)]">
+            <div className="flex items-center gap-3.5 min-w-0">
+              <div className="w-11 h-11 rounded-2xl bg-[var(--bg)] border border-[var(--border)] flex items-center justify-center text-[var(--accent)] shrink-0">
+                <Sparkles size={18} />
+              </div>
+              <div className="min-w-0">
+                <span className="text-sm font-semibold text-[var(--text)] block">
+                  Launch & PWA Splash Animation
+                </span>
+                <span className="text-xs text-[var(--text-muted)] block mt-0.5">
+                  Dynamic 3D banknote flows and treasury loading screen
+                </span>
+              </div>
+            </div>
+            <button
+              type="button"
+              data-testid="preview-splash-btn"
+              onClick={() => {
+                if (typeof window !== "undefined") {
+                  window.dispatchEvent(new CustomEvent("hardmoney_trigger_splash"));
+                }
+              }}
+              className="h-10 px-4 text-xs rounded-2xl border border-[var(--accent)]/40 bg-[var(--accent)]/10 text-[var(--accent)] font-semibold hover:bg-[var(--accent)]/20 active:scale-95 transition-all cursor-pointer shrink-0"
+            >
+              Preview
             </button>
           </div>
         </div>
