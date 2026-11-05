@@ -8,7 +8,8 @@ import { QuickAddModal } from "@/components/transaction/quick-add-modal";
 import { Sidebar } from "@/components/navigation/sidebar";
 import { BottomNav } from "@/components/navigation/bottom-nav";
 import { PwaManager } from "@/components/pwa-manager";
-import { SplashScreen } from "@/components/splash-screen";
+import { ServerSplashScreen } from "@/components/server-splash-screen";
+import { SplashScreenClient } from "@/components/splash-screen-client";
 import { ScrollContainer } from "@/components/navigation/scroll-container";
 import { QueryProvider } from "@/components/query-provider";
 import { TabNavigationProvider } from "@/components/navigation/tab-navigation-context";
@@ -50,11 +51,15 @@ export default function RootLayout({
       <head>
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var t=localStorage.getItem("hardmoney-theme");var m=window.matchMedia("(prefers-color-scheme: dark)");var d=t==="dark"||(!t&&m.matches);if(d){document.documentElement.classList.add("dark");document.documentElement.setAttribute("data-theme","dark");}else{document.documentElement.classList.remove("dark");document.documentElement.setAttribute("data-theme","light");}if(localStorage.getItem("hardmoney-color-swap")==="true"){document.documentElement.setAttribute("data-color-swap","true");}document.documentElement.setAttribute("data-theme-pack","private-wealth");}catch(e){}})();`,
+            __html: `(function(){try{var t=localStorage.getItem("hardmoney-theme");var m=window.matchMedia("(prefers-color-scheme: dark)");var d=t==="dark"||(!t&&m.matches);if(d){document.documentElement.classList.add("dark");document.documentElement.setAttribute("data-theme","dark");}else{document.documentElement.classList.remove("dark");document.documentElement.setAttribute("data-theme","light");}if(localStorage.getItem("hardmoney-color-swap")==="true"){document.documentElement.setAttribute("data-color-swap","true");}document.documentElement.setAttribute("data-theme-pack","private-wealth");var isTest=Boolean(window.navigator.webdriver)||location.search.indexOf("nosplash")!==-1||location.search.indexOf("e2e=true")!==-1;var nav=window.navigator;var isPwa=Boolean(nav&&(nav.standalone||window.matchMedia("(display-mode: standalone)").matches||window.matchMedia("(display-mode: fullscreen)").matches));var shown=sessionStorage.getItem("hardmoney_splash_shown");if(isTest||(!isPwa&&shown&&location.search.indexOf("splash=1")===-1)){document.documentElement.classList.add("hm-splash-hidden");}}catch(e){}})();`,
           }}
         />
       </head>
       <body className="fixed inset-0 w-full overflow-hidden overscroll-none bg-app text-[var(--text)]">
+        {/* 1. First Server-Rendered Layer: Instant PWA & Cold Start Splash Screen (0ms first paint) */}
+        <ServerSplashScreen />
+        <SplashScreenClient />
+
         <ThemeProvider>
           <Suspense fallback={null}>
             <QueryProvider>
@@ -82,9 +87,6 @@ export default function RootLayout({
 
                       {/* PWA Service Worker & Update Handler */}
                       <PwaManager />
-
-                      {/* PWA & Initial Load Animated Splash Screen */}
-                      <SplashScreen />
                     </div>
                   </TabNavigationProvider>
                 </QuickAddProvider>
