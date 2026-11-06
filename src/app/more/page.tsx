@@ -65,13 +65,28 @@ export default function MorePage() {
     mutationFn: logout,
     onSettled: () => {
       queryClient.clear();
-      localStorage.removeItem("hardmoney_active_user");
-      router.push("/login");
+      try {
+        localStorage.removeItem("hardmoney_active_user");
+      } catch {
+        // ignore localStorage error
+      }
+      window.location.href = "/login";
     },
   });
 
   const handleLogout = async () => {
-    await logoutMutation.mutateAsync();
+    try {
+      await logoutMutation.mutateAsync();
+    } catch {
+      // Even if network call fails or server returns an error, complete client-side logout
+      queryClient.clear();
+      try {
+        localStorage.removeItem("hardmoney_active_user");
+      } catch {
+        // ignore localStorage error
+      }
+      window.location.href = "/login";
+    }
   };
 
   const sections: { title: string; items: MenuItem[] }[] = [

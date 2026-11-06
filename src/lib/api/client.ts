@@ -42,5 +42,38 @@ export const apiClient: AxiosInstance = axios.create({
 
 apiClient.interceptors.response.use(
   (response) => response,
-  (error: AxiosError) => Promise.reject(toApiError(error))
+  (error: AxiosError) => {
+    const apiError = toApiError(error);
+
+    // If unauthenticated (401), clean up session and redirect to /login
+    if (typeof window !== "undefined" && apiError.status === 401) {
+      const currentPath = window.location.pathname;
+      const isAuthPath =
+        currentPath === "/login" ||
+        currentPath === "/register" ||
+        currentPath === "/offline";
+
+      const requestUrl = error.config?.url || "";
+      const isLoginOrRegister =
+        requestUrl.includes("/auth/login") ||
+        requestUrl.includes("/auth/register");
+
+      if (!isAuthPath && !isLoginOrRegister) {
+        try {
+          localStorage.removeItem("hardmoney_active_user");
+        } catch {
+          // ignore localStorage error
+        }
+
+        const callbackParam =
+          currentPath && currentPath !== "/"
+            ? `?callbackUrl=${encodeURIComponent(currentPath)}`
+            : "";
+
+        window.location.href = `/login${callbackParam}`;
+      }
+    }
+
+    return Promise.reject(apiError);
+  }
 );

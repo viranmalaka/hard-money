@@ -53,6 +53,21 @@ async function pushSingleMutation(
       body: JSON.stringify({ mutations: [mutation] }),
     });
 
+    if (res.status === 401) {
+      if (typeof window !== "undefined") {
+        const currentPath = window.location.pathname;
+        if (currentPath !== "/login" && currentPath !== "/register" && currentPath !== "/offline") {
+          try {
+            localStorage.removeItem("hardmoney_active_user");
+          } catch {
+            // ignore localStorage error
+          }
+          window.location.href = `/login?callbackUrl=${encodeURIComponent(currentPath)}`;
+        }
+      }
+      return;
+    }
+
     if (!res.ok) {
       throw new Error(`Push failed with HTTP ${res.status}`);
     }

@@ -129,6 +129,21 @@ export async function flushOutboxQueue(): Promise<{
       body: JSON.stringify({ mutations: payloadMutations }),
     });
 
+    if (res.status === 401) {
+      if (typeof window !== "undefined") {
+        const currentPath = window.location.pathname;
+        if (currentPath !== "/login" && currentPath !== "/register" && currentPath !== "/offline") {
+          try {
+            localStorage.removeItem("hardmoney_active_user");
+          } catch {
+            // ignore localStorage error
+          }
+          window.location.href = `/login?callbackUrl=${encodeURIComponent(currentPath)}`;
+        }
+      }
+      return { successCount: 0, failedCount: queue.length };
+    }
+
     if (res.ok) {
       const data = await res.json().catch(() => ({ results: [] }));
       const results: Array<{ mutationId: string; status: "accepted" | "rejected"; reason?: string }> =
