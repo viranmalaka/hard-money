@@ -1,7 +1,9 @@
 // Hard Money Service Worker - Local-first PWA Shell & Push Notifications
-const CACHE_VERSION = "hardmoney-v6";
+const CACHE_VERSION = "hardmoney-v7";
 const PRECACHE_ASSETS = [
   "/",
+  "/login",
+  "/register",
   "/offline",
   "/manifest.json",
   "/icon-192.png",
@@ -67,7 +69,7 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Navigation & HTML document requests: Stale-While-Revalidate for instant native launch
+  // Navigation & HTML document requests: Stale-While-Revalidate for cached routes
   const isHtmlRequest =
     event.request.mode === "navigate" ||
     event.request.destination === "document" ||
@@ -76,12 +78,10 @@ self.addEventListener("fetch", (event) => {
   if (isHtmlRequest) {
     event.respondWith(
       (async () => {
-        // 1. Check local cache first: render cached HTML shell on frame 0 (0ms)
-        const cachedResponse =
-          (await caches.match(event.request, { ignoreSearch: true })) ||
-          (await caches.match("/", { ignoreSearch: true }));
+        // 1. Look up cached HTML for this specific requested URL
+        const cachedResponse = await caches.match(event.request, { ignoreSearch: true });
 
-        // 2. Fetch network in background to revalidate shell
+        // 2. Fetch fresh version from network in background to revalidate shell
         const networkFetchPromise = fetch(event.request)
           .then((networkResponse) => {
             if (networkResponse && networkResponse.status === 200) {
@@ -101,6 +101,8 @@ self.addEventListener("fetch", (event) => {
             });
           });
 
+        // If this URL is already cached, return it instantly (0ms);
+        // otherwise await the network fetch for the route HTML.
         return cachedResponse || networkFetchPromise;
       })()
     );
