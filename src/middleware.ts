@@ -47,6 +47,13 @@ export async function middleware(request: NextRequest) {
     }
   }
 
+  // Force parameter clears session cookie (e.g. from 401 redirect or explicit logout)
+  if (pathname === "/login" && request.nextUrl.searchParams.has("force")) {
+    const response = NextResponse.next();
+    response.cookies.delete(SESSION_COOKIE_NAME);
+    return response;
+  }
+
   const isPublicPath = PUBLIC_PATHS.some(
     (p) => pathname === p || pathname.startsWith(p + "/"),
   );

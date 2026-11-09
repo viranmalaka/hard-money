@@ -67,10 +67,10 @@ apiClient.interceptors.response.use(
 
         const callbackParam =
           currentPath && currentPath !== "/"
-            ? `?callbackUrl=${encodeURIComponent(currentPath)}`
+            ? `&callbackUrl=${encodeURIComponent(currentPath)}`
             : "";
 
-        window.location.href = `/login${callbackParam}`;
+        window.location.href = `/login?force=1${callbackParam}`;
       }
     }
 

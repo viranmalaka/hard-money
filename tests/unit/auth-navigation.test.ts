@@ -42,7 +42,7 @@ describe("Auth & 401 Navigation Handling", () => {
     });
 
     expect(localStorage.removeItem).toHaveBeenCalledWith("hardmoney_active_user");
-    expect(window.location.href).toBe("/login?callbackUrl=%2Fmore");
+    expect(window.location.href).toBe("/login?force=1&callbackUrl=%2Fmore");
   });
 
   it("does not redirect when 401 error is from /api/auth/login", async () => {
