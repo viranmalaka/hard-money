@@ -24,14 +24,22 @@ export default function OfflinePage() {
           This route hasn&apos;t been cached yet. Your already visited tabs and cached ledger data
           remain accessible even without an internet connection.
         </p>
-        <button
-          onClick={handleRetry}
-          data-testid="offline-retry-btn"
-          className="h-11 px-6 inline-flex items-center gap-2 rounded-2xl bg-[var(--accent)] text-white text-xs font-bold hover:opacity-95 active:scale-[0.98] transition-all cursor-pointer"
-        >
-          <RefreshCw size={15} />
-          <span>Try Again</span>
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleRetry}
+            data-testid="offline-retry-btn"
+            className="h-11 px-5 inline-flex items-center gap-2 rounded-2xl bg-[var(--accent)] text-white text-xs font-bold hover:opacity-95 active:scale-[0.98] transition-all cursor-pointer shadow-xs"
+          >
+            <RefreshCw size={15} />
+            <span>Try Again</span>
+          </button>
+          <a
+            href="/login"
+            className="h-11 px-5 inline-flex items-center justify-center rounded-2xl border border-[var(--border)] text-[var(--text)] text-xs font-bold hover:bg-[var(--surface-hover)] transition-all"
+          >
+            Sign In
+          </a>
+        </div>
       </div>
     </div>
   );

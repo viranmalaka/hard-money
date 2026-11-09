@@ -1,9 +1,6 @@
 // Hard Money Service Worker - Local-first PWA Shell & Push Notifications
-const CACHE_VERSION = "hardmoney-v7";
+const CACHE_VERSION = "hardmoney-v9";
 const PRECACHE_ASSETS = [
-  "/",
-  "/login",
-  "/register",
   "/offline",
   "/manifest.json",
   "/icon-192.png",
@@ -17,11 +14,11 @@ self.addEventListener("install", (event) => {
   self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE_VERSION).then(async (cache) => {
-      // Use individual puts so a failure on one dynamic page doesn't abort precaching
+      // Use individual puts so a failure on one asset doesn't abort precaching
       for (const asset of PRECACHE_ASSETS) {
         try {
           const res = await fetch(asset, { cache: "no-cache" });
-          if (res.ok) {
+          if (res.ok && !res.redirected) {
             await cache.put(asset, res);
           }
         } catch {
@@ -32,7 +29,7 @@ self.addEventListener("install", (event) => {
   );
 });
 
-// Activate Event: Cleanup old caches and claim clients
+// Activate Event: Cleanup old caches and claim clients immediately
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys().then((keys) => {
@@ -58,7 +55,7 @@ self.addEventListener("message", (event) => {
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
 
-  // Ignore API requests, Next.js assets/HMR sockets & hot updates
+  // Ignore API requests, Next.js internals/HMR sockets & hot updates
   if (
     url.pathname.startsWith("/api/") ||
     url.pathname.startsWith("/_next/") ||
@@ -69,7 +66,7 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Navigation & HTML document requests: Stale-While-Revalidate for cached routes
+  // Navigation & HTML document requests: Network-First with Cache fallback, then /offline
   const isHtmlRequest =
     event.request.mode === "navigate" ||
     event.request.destination === "document" ||
@@ -77,34 +74,32 @@ self.addEventListener("fetch", (event) => {
 
   if (isHtmlRequest) {
     event.respondWith(
-      (async () => {
-        // 1. Look up cached HTML for this specific requested URL
-        const cachedResponse = await caches.match(event.request, { ignoreSearch: true });
-
-        // 2. Fetch fresh version from network in background to revalidate shell
-        const networkFetchPromise = fetch(event.request)
-          .then((networkResponse) => {
-            if (networkResponse && networkResponse.status === 200) {
-              const responseClone = networkResponse.clone();
-              caches.open(CACHE_VERSION).then((cache) => {
-                cache.put(event.request, responseClone);
-              });
-            }
-            return networkResponse;
-          })
-          .catch(async () => {
-            if (cachedResponse) return cachedResponse;
-            const offlineFallback = await caches.match("/offline");
-            if (offlineFallback) return offlineFallback;
-            return new Response("You are currently offline.", {
-              headers: { "Content-Type": "text/html" },
-            });
+      fetch(event.request)
+        .then((networkResponse) => {
+          // Only cache non-redirected 200 responses to avoid corrupting cache with 302/307 redirects
+          if (networkResponse && networkResponse.status === 200 && !networkResponse.redirected) {
+            const responseClone = networkResponse.clone();
+            caches.open(CACHE_VERSION).then((cache) => {
+              cache.put(event.request, responseClone).catch(() => {});
+            }).catch(() => {});
+          }
+          return networkResponse;
+        })
+        .catch(async () => {
+          // Device is offline: try matching cached version of this exact URL
+          const cachedResponse = await caches.match(event.request, { ignoreSearch: true });
+          if (cachedResponse) {
+            return cachedResponse;
+          }
+          // If not cached, fall back to the precached offline page
+          const offlineFallback = await caches.match("/offline");
+          if (offlineFallback) {
+            return offlineFallback;
+          }
+          return new Response("You are currently offline.", {
+            headers: { "Content-Type": "text/html" },
           });
-
-        // If this URL is already cached, return it instantly (0ms);
-        // otherwise await the network fetch for the route HTML.
-        return cachedResponse || networkFetchPromise;
-      })()
+        })
     );
     return;
   }
@@ -115,11 +110,11 @@ self.addEventListener("fetch", (event) => {
       const cachedResponse = cached || (await caches.match(url.pathname, { ignoreSearch: true }));
       const fetchPromise = fetch(event.request)
         .then((networkResponse) => {
-          if (networkResponse && networkResponse.status === 200) {
+          if (networkResponse && networkResponse.status === 200 && !networkResponse.redirected) {
             const responseClone = networkResponse.clone();
             caches.open(CACHE_VERSION).then((cache) => {
-              cache.put(event.request, responseClone);
-            });
+              cache.put(event.request, responseClone).catch(() => {});
+            }).catch(() => {});
           }
           return networkResponse;
         })

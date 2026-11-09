@@ -36,7 +36,7 @@ export function PwaManager() {
     const primeAssetCache = async () => {
       if (!("caches" in window)) return;
       try {
-        const cache = await caches.open("hardmoney-v4");
+        const cache = await caches.open("hardmoney-v9");
         const urls = new Set<string>();
 
         document
@@ -82,8 +82,10 @@ export function PwaManager() {
       .register("/sw.js")
       .then((reg) => {
         hmWindow.__hardMoneySwRegistration = reg;
+        void reg.update().catch(() => {});
         void primeAssetCache();
-        navigator.serviceWorker.ready.then(() => {
+        navigator.serviceWorker.ready.then((activeReg) => {
+          void activeReg.update().catch(() => {});
           void primeAssetCache();
         });
 
